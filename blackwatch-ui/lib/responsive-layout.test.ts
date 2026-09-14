@@ -18,9 +18,9 @@ test("app shell keeps page overflow inside a shrinkable vertical content region"
 
 test("sidebar keeps its navigation background continuous through the scroll region", () => {
   const source = read("components/layout/SideNav.tsx");
-  assert.match(source, /component="nav"[\s\S]*bgcolor: "background\.paper"/);
-  assert.match(source, /<List[\s\S]*bgcolor: "background\.paper"/);
-  assert.match(source, /MuiDrawer-paper[\s\S]*bgcolor: "background\.paper"/);
+  assert.match(source, /component="nav"[\s\S]*bgcolor: "background\.default"/);
+  assert.match(source, /<List[\s\S]*bgcolor: "background\.default"/);
+  assert.match(source, /MuiDrawer-paper[\s\S]*bgcolor: "background\.default"/);
 });
 
 test("mobile card tables do not keep a desktop width or horizontal scrollbar", () => {
@@ -30,6 +30,16 @@ test("mobile card tables do not keep a desktop width or horizontal scrollbar", (
   assert.match(tableSource, /data-responsive={responsive \? "cards" : "scroll"}/);
   assert.match(css, /data-responsive="cards"/);
   assert.match(css, /overflow-x: hidden/);
+});
+
+test("shared tables promote semantic rows and cells to MUI components", () => {
+  const source = read("components/ui/Table.tsx");
+  assert.match(source, /MuiTableHead/);
+  assert.match(source, /MuiTableBody/);
+  assert.match(source, /MuiTableRow/);
+  assert.match(source, /MuiTableCell/);
+  assert.doesNotMatch(source, /className=\{clsx\("bw-table/);
+  assert.match(source, /withoutLegacyClassName/);
 });
 
 test("narrow table pagination can wrap its controls", () => {

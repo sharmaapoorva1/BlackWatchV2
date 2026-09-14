@@ -116,8 +116,8 @@ export function SideNav({
   }
 
   const content = (
-    <Box component="nav" id="mobile-navigation" aria-label="Primary" sx={{ display: "flex", minHeight: 0, height: "100%", flexDirection: "column", bgcolor: "background.paper" }}>
-      <List disablePadding sx={{ flex: 1, minHeight: 0, overflowY: "auto", py: 1, bgcolor: "background.paper" }}>
+    <Box component="nav" id="mobile-navigation" aria-label="Primary" sx={{ display: "flex", minHeight: 0, height: "100%", flexDirection: "column", overflowY: "auto", bgcolor: "background.default" }}>
+      <List disablePadding sx={{ py: 1, bgcolor: "background.default" }}>
           {primaryNav.map((item) => (
             <NavItem
               key={item.href}
@@ -137,7 +137,7 @@ export function SideNav({
           ))}
       </List>
 
-      <Box sx={{ display: { xs: "none", md: "flex" }, height: 40, borderTop: 1, borderColor: "divider", alignItems: "center", justifyContent: "center" }}>
+      <Box sx={{ display: { xs: "none", md: "flex" }, flexShrink: 0, height: 40, borderTop: 1, borderColor: "divider", alignItems: "center", justifyContent: "center", bgcolor: "background.default" }}>
         <IconButton onClick={toggle} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} size="small">
           {collapsed ? <ChevronsRight size={14} /> : <ChevronsLeft size={14} />}
         </IconButton>
@@ -146,10 +146,10 @@ export function SideNav({
   );
 
   if (!desktop) {
-    return <Drawer variant="temporary" open={mobileOpen} onClose={onCloseMobile} ModalProps={{ keepMounted: true }} sx={{ "& .MuiDrawer-paper": { width: 256, bgcolor: "background.paper", backgroundImage: "none" } }}>{content}</Drawer>;
+    return <Drawer variant="temporary" open={mobileOpen} onClose={onCloseMobile} ModalProps={{ keepMounted: true }} sx={{ "& .MuiDrawer-paper": { width: 256, bgcolor: "background.default", backgroundImage: "none" } }}>{content}</Drawer>;
   }
 
-  return <Drawer variant="permanent" open sx={{ width: collapsed ? 56 : 224, flexShrink: 0, "& .MuiDrawer-paper": { width: collapsed ? 56 : 224, position: "relative", height: "100%", overflow: "hidden", transition: appTheme.transitions.create("width", { duration: 200 }) } }}>{content}</Drawer>;
+  return <Drawer variant="permanent" open sx={{ width: collapsed ? 56 : 224, flexShrink: 0, "& .MuiDrawer-paper": { width: collapsed ? 56 : 224, position: "relative", height: "100%", overflow: "hidden", bgcolor: "background.default", backgroundImage: "none", transition: appTheme.transitions.create("width", { duration: 200 }) } }}>{content}</Drawer>;
 }
 
 function NavItem({

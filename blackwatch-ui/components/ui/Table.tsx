@@ -2,7 +2,11 @@
 
 import clsx from "clsx";
 import MuiTable from "@mui/material/Table";
+import MuiTableBody from "@mui/material/TableBody";
+import MuiTableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
+import MuiTableHead from "@mui/material/TableHead";
+import MuiTableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import {
@@ -205,11 +209,11 @@ export function Table({
         <MuiTable
           size="small"
           stickyHeader
-          className={clsx("bw-table text-sm", className)}
+          className={clsx("text-sm", className)}
           data-responsive={responsive ? "cards" : "scroll"}
           aria-label={ariaLabel}
         >
-          {paginatedParts}
+          {paginatedParts.map((part) => promoteTablePart(part))}
         </MuiTable>
       </TableContainer>
       <TablePagination
@@ -228,6 +232,61 @@ export function Table({
       />
     </div>
   );
+}
+
+/**
+ * Routes the semantic HTML accepted by the existing page tables through the
+ * actual MUI table primitives. This keeps page code readable while ensuring
+ * every table receives MUI's cell sizing, header, row, and theme contracts.
+ */
+function promoteTablePart(node: ReactNode): ReactNode {
+  if (!isValidElement(node)) return node;
+  const props = node.props as { children?: ReactNode; [key: string]: unknown };
+  const muiProps = withoutLegacyClassName(props);
+  if (node.type === "thead") {
+    return (
+      <MuiTableHead {...muiProps}>
+        {Children.map(props.children, (child) => promoteTableRow(child, true))}
+      </MuiTableHead>
+    );
+  }
+  if (node.type === "tbody") {
+    return (
+      <MuiTableBody {...muiProps}>
+        {Children.map(props.children, (child) => promoteTableRow(child, false))}
+      </MuiTableBody>
+    );
+  }
+  return node;
+}
+
+function promoteTableRow(node: ReactNode, header: boolean): ReactNode {
+  if (!isValidElement(node) || node.type !== "tr") return node;
+  const props = node.props as { children?: ReactNode; [key: string]: unknown };
+  const muiProps = withoutLegacyClassName(props);
+  return (
+    <MuiTableRow {...muiProps}>
+      {Children.map(props.children, (cell) => promoteTableCell(cell, header))}
+    </MuiTableRow>
+  );
+}
+
+function promoteTableCell(node: ReactNode, header: boolean): ReactNode {
+  if (!isValidElement(node) || (node.type !== "th" && node.type !== "td")) return node;
+  const props = node.props as { children?: ReactNode; [key: string]: unknown };
+  const muiProps = withoutLegacyClassName(props);
+  return (
+    <MuiTableCell {...muiProps} component={header ? "th" : "td"}>
+      {props.children}
+    </MuiTableCell>
+  );
+}
+
+function withoutLegacyClassName(
+  props: { children?: ReactNode; className?: unknown; [key: string]: unknown },
+) {
+  const { children: _children, className: _className, ...muiProps } = props;
+  return muiProps;
 }
 
 function isDataRow(row: ReactNode): row is ReactElement {
