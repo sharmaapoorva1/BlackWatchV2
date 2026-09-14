@@ -18,6 +18,7 @@ import {
   toggleConnectorAction,
   deleteConnectorAction,
 } from "./actions";
+import { Alert, AlertTitle, Box, Typography } from "@mui/material";
 
 type SearchParams = { msg?: string };
 
@@ -27,7 +28,16 @@ export default async function ConnectorsPage({
   searchParams: Promise<SearchParams>;
 }) {
   const { msg } = await searchParams;
-  const { count, connectors, scheduler } = await fetchConnectors();
+  let connectorData: Awaited<ReturnType<typeof fetchConnectors>> | null = null;
+  let loadError: unknown = null;
+  try {
+    connectorData = await fetchConnectors();
+  } catch (error) {
+    loadError = error;
+  }
+  const count = connectorData?.count ?? 0;
+  const connectors = connectorData?.connectors ?? [];
+  const scheduler = connectorData?.scheduler;
 
   return (
     <>
@@ -60,8 +70,26 @@ export default async function ConnectorsPage({
         </div>
       )}
 
+      {loadError && (
+        <Alert severity="error" variant="outlined" sx={{ mb: 2 }}>
+          <AlertTitle>Connector service unavailable</AlertTitle>
+          <Typography variant="body2">
+            The UI could not read connector data from the API. Existing connector data was not changed.
+          </Typography>
+          <Box component="code" sx={{ display: "block", mt: 1, fontSize: "0.75rem", opacity: 0.8 }}>
+            {loadError instanceof Error && /failed: \d{3}/.test(loadError.message)
+              ? loadError.message.replace(/^fetchConnectors failed: /, "API status: ")
+              : "Check the backend logs and confirm the database migrations completed."}
+          </Box>
+        </Alert>
+      )}
+
       <DataPanel className="overflow-hidden">
-        {connectors.length === 0 ? (
+        {loadError ? (
+          <div className="px-6 py-12 text-center text-sm text-fg-muted">
+            Connector records will appear here when the API is healthy.
+          </div>
+        ) : connectors.length === 0 ? (
           <div className="px-6 py-12 text-center text-sm text-fg-muted">
             No connectors yet.{" "}
             <Link href="/connectors/new" className="text-signal hover:underline">
