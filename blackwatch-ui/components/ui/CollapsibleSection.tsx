@@ -59,7 +59,7 @@ export function CollapsibleSection({
 
   return (
     <section className="mb-3 border border-line bg-surface">
-      <button type="button" onClick={toggle} aria-controls={panelId} aria-expanded={open} id={`${panelId}-header`} className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-surface-2">
+      <button type="button" onClick={toggle} aria-controls={panelId} aria-expanded={open} id={`${panelId}-header`} className="flex min-h-11 w-full cursor-pointer items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal/70 sm:min-h-10">
         {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}<span className="text-xs uppercase tracking-[0.1em]">{title}</span>
         {typeof count === "number" && <span className="ml-1 font-mono text-[10px] text-muted">[{count}]</span>}
         {subtitle && <span className="ml-1 text-[11px] text-subtle">{subtitle}</span>}

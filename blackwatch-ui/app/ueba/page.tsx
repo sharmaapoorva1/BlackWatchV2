@@ -5,6 +5,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { SectionLabel } from "@/components/layout/SectionLabel";
 import { Table, TableEmpty } from "@/components/ui/Table";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 import { UebaAnomalyRow } from "@/components/domain/UebaAnomalyRow";
 import { BaselineTable } from "@/components/domain/BaselineTable";
 import { fetchUebaAnomalies, fetchUebaBaselines } from "@/lib/api";
@@ -97,40 +99,40 @@ export default async function UebaPage({
             <input type="hidden" name="tab" value="baselines" />
             <label className="flex flex-col gap-1">
               <SectionLabel>principal type</SectionLabel>
-              <input
+              <Input
                 type="text"
                 name="principal_type"
                 defaultValue={params.principal_type ?? ""}
                 placeholder="user, role, service"
-                className="w-40 rounded border border-line-soft bg-canvas px-2 py-1"
+                className="w-40"
               />
             </label>
             <label className="flex flex-col gap-1">
               <SectionLabel>principal id</SectionLabel>
-              <input
+              <Input
                 type="text"
                 name="principal_id"
                 defaultValue={params.principal_id ?? ""}
                 placeholder="alice"
-                className="w-56 rounded border border-line-soft bg-canvas px-2 py-1"
+                className="w-56"
               />
             </label>
             <label className="flex flex-col gap-1">
               <SectionLabel>dimension</SectionLabel>
-              <input
+              <Input
                 type="text"
                 name="dimension"
                 defaultValue={params.dimension ?? ""}
                 placeholder="source_ip"
-                className="w-44 rounded border border-line-soft bg-canvas px-2 py-1"
+                className="w-44"
               />
             </label>
-            <button
+            <Button
               type="submit"
-              className="h-8 rounded border border-line-soft px-3 text-fg hover:bg-canvas-raised"
+              variant="secondary" size="sm"
             >
               Filter
-            </button>
+            </Button>
           </form>
           <DataPanel className="overflow-hidden">
             <BaselineTable rows={baselines.baselines} />

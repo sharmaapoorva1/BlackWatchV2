@@ -598,14 +598,14 @@ function TriggerStep({
               label={`Breach sensitivity — ${breachPct}%`}
               hint="Lower = looser (one spike is enough). Higher = strict (sustained breach)."
             >
-              <input
+              <Input
                 type="range"
                 min={30}
                 max={100}
                 step={5}
                 value={breachPct}
                 onChange={(e) => onBreachPct(Number(e.target.value))}
-                className="w-full accent-signal"
+                className="min-h-0 w-full accent-[var(--color-signal)]"
                 aria-label={`Breach sensitivity, ${breachPct} percent`}
               />
             </FieldStack>
@@ -728,13 +728,13 @@ function ScopeStep({
                 Instances ({instanceIds.length} selected)
               </p>
               {instances.length > 0 && (
-                <button
+                <Button size="sm" variant="ghost"
                   type="button"
                   onClick={() => onInstanceIdsSetAll(!allSelected)}
                   className="text-[11px] text-signal hover:underline"
                 >
                   {allSelected ? "Clear all" : "Select all"}
-                </button>
+                </Button>
               )}
             </div>
             {instances.length === 0 ? (

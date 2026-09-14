@@ -16,12 +16,12 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = "secondary", size = "md", asChild = false, className, color: _color, children, ...props }, ref) => {
     const styles = clsx(
-      "inline-flex items-center justify-center gap-2 whitespace-nowrap border font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal disabled:pointer-events-none disabled:opacity-50",
-      size === "sm" ? "min-h-7 px-2.5 text-xs" : "min-h-8 px-3 text-sm",
-      variant === "primary" && "border-signal bg-signal text-canvas hover:bg-signal/85",
-      variant === "secondary" && "border-line bg-surface-1 text-fg hover:border-signal hover:bg-surface-2",
-      variant === "ghost" && "border-transparent text-fg-muted hover:bg-surface-1 hover:text-fg",
-      variant === "danger" && "border-sev-critical/30 bg-sev-critical/10 text-sev-critical hover:bg-sev-critical/20",
+      "inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap border font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70 focus-visible:ring-offset-1 focus-visible:ring-offset-canvas active:translate-y-px disabled:pointer-events-none disabled:opacity-50 disabled:active:translate-y-0",
+      size === "sm" ? "min-h-11 px-2.5 text-xs sm:min-h-8" : "min-h-11 px-3 text-sm sm:min-h-9",
+      variant === "primary" && "border-signal bg-signal text-canvas hover:bg-signal/85 active:bg-signal/75",
+      variant === "secondary" && "border-line bg-surface-1 text-fg hover:border-signal hover:bg-surface-2 active:bg-surface-2",
+      variant === "ghost" && "border-transparent text-fg-muted hover:bg-surface-1 hover:text-fg active:bg-surface-2",
+      variant === "danger" && "border-sev-critical/30 bg-sev-critical/10 text-sev-critical hover:bg-sev-critical/20 active:bg-sev-critical/25",
       className,
     );
 

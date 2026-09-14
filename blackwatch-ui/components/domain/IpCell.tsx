@@ -9,6 +9,7 @@ import {
   investigationDetailHref,
   investigationStartHref,
 } from "@/lib/investigation-flow";
+import { Button } from "@/components/ui/Button";
 
 // Renders an IP (or hostname) with a right-click context menu offering
 // "Lookup IP" (opens a modal in-place) plus "Copy" and "Open in IP tool"
@@ -134,7 +135,8 @@ export function IpCell({ value, className, fallback = "—" }: IpCellProps) {
         >
           {value}
         </code>
-        <button
+        <Button
+          size="sm" variant="ghost"
           type="button"
           aria-label={`Open actions for ${value}`}
           onClick={openFromKeyboard}
@@ -142,7 +144,7 @@ export function IpCell({ value, className, fallback = "—" }: IpCellProps) {
           className="rounded p-0.5 text-fg-disabled transition-colors hover:bg-surface-2 hover:text-signal focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal"
         >
           <Search size={12} aria-hidden="true" />
-        </button>
+        </Button>
       </span>
 
       {menu && (
@@ -202,13 +204,14 @@ function MenuItem({
   children: React.ReactNode;
 }) {
   return (
-    <button
+    <Button
+      size="sm" variant="ghost"
       type="button"
       onClick={onClick}
       className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-fg-muted transition-colors hover:bg-surface-1 hover:text-fg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-signal"
     >
       <Icon size={12} strokeWidth={1.5} className="text-fg-subtle" aria-hidden="true" />
       <span>{children}</span>
-    </button>
+    </Button>
   );
 }

@@ -18,6 +18,8 @@ import type {
   InvestigationStatus,
 } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
+import { NativeSelect } from "@/components/ui/NativeSelect";
+import { Textarea } from "@/components/ui/Textarea";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { SectionLabel } from "@/components/layout/SectionLabel";
 import { TimestampCell } from "@/components/domain/TimestampCell";
@@ -179,12 +181,12 @@ export function InvestigationNotebook({
           <p className="mt-1 font-mono text-xs text-fg-subtle">{data.id}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <NativeSelect
             value={data.status}
             onChange={(event) =>
               changeStatus(event.target.value as InvestigationStatus)
             }
-            className="h-8 border border-line bg-surface-1 px-2 text-xs text-fg"
+            className="h-8 w-auto text-xs"
             disabled={busy}
             aria-label="Investigation status"
           >
@@ -193,7 +195,7 @@ export function InvestigationNotebook({
                 {formatStatus(status)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <Button
             type="button"
             variant="primary"
@@ -267,18 +269,18 @@ export function InvestigationNotebook({
             >
               timeline
             </label>
-            <select
+            <NativeSelect
               id="investigation-window"
-              value={windowDays}
+              value={String(windowDays)}
               onChange={(event) => changeWindow(Number(event.target.value))}
-              className="h-9 w-full border border-line bg-surface-1 px-2 text-xs text-fg"
+              className="h-9 text-xs"
             >
               <option value="1">Last 24 hours</option>
               <option value="7">Last 7 days</option>
               <option value="30">Last 30 days</option>
               <option value="90">Last 90 days</option>
               <option value="365">Last year</option>
-            </select>
+            </NativeSelect>
             <div className="text-xs text-fg-muted">
               {new Date(data.time_start).toLocaleString()} → {" "}
               {new Date(data.time_end).toLocaleString()}
@@ -287,13 +289,13 @@ export function InvestigationNotebook({
 
           <DataPanel className="space-y-3 p-4">
             <SectionLabel>analyst notes</SectionLabel>
-            <textarea
+            <Textarea
               value={note}
               onChange={(event) => setNote(event.target.value)}
               rows={4}
               maxLength={10000}
               placeholder="Record what you checked and why…"
-              className="w-full resize-y border border-line bg-surface-1 p-2 text-xs text-fg placeholder:text-fg-disabled focus-visible:border-signal focus-visible:outline-none"
+              className="text-xs"
             />
             <Button
               type="button"
@@ -424,14 +426,15 @@ function EvidenceChain({
                     <div className="break-words text-fg-muted">
                       <span className="text-fg-subtle">activity · </span>{module.topAction}
                     </div>
-                    <button
+                    <Button
+                      size="sm" variant="ghost"
                       type="button"
                       onClick={() => onReviewEvidence(module.name)}
                       aria-controls="evidence"
                       className="mt-3 inline-flex items-center gap-1 text-left text-xs text-signal hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal"
                     >
                       review evidence <ArrowRight size={12} aria-hidden="true" />
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 {index < summary.modules.length - 1 && (
@@ -516,15 +519,15 @@ function EvidenceExplorer({
         </div>
         <label className="flex items-center gap-2 text-[10px] uppercase tracking-[0.12em] text-fg-subtle">
           view
-          <select
+          <NativeSelect
             value={view}
             onChange={(event) => setView(event.target.value as EvidenceView)}
-            className="h-8 border border-line bg-surface-1 px-2 text-xs normal-case tracking-normal text-fg"
+            className="h-8 w-auto text-xs normal-case tracking-normal"
           >
             <option value="module">By module</option>
             <option value="timeline">Timeline</option>
             <option value="table">Evidence table</option>
-          </select>
+          </NativeSelect>
         </label>
       </div>
       <DataPanel className="overflow-hidden">

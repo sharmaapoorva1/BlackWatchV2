@@ -20,7 +20,7 @@ export const appTheme = {
     severity: { critical: "#F43F5E", high: "#FB923C", medium: "#FACC15", low: "#60A5FA", resolved: "#34D399" },
   },
   typography: { fontFamily: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif', fontSize: 14 },
-  breakpoints: { values: { xs: 0, sm: 600, md: 900, lg: 1200, xl: 1536 } },
+  breakpoints: { values: { xs: 0, sm: 640, md: 768, lg: 1024, xl: 1536 } },
 } as const;
 
 export { canvas, surface, elevated, foreground, muted, subtle, signal };

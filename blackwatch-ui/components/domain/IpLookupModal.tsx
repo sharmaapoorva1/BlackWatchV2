@@ -10,6 +10,7 @@ import {
   type IpApiResponse,
 } from "./IpLookupResult";
 import { investigationStartHref } from "@/lib/investigation-flow";
+import { Button } from "@/components/ui/Button";
 
 interface IpLookupModalProps {
   ip: string | null;
@@ -85,13 +86,13 @@ export function IpLookupModal({ ip, onClose }: IpLookupModalProps) {
                 </div>
               )}
               <Dialog.Close asChild>
-                <button
+                <Button size="sm" variant="ghost"
                   type="button"
                   aria-label="Close"
                   className="text-fg-subtle transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal"
                 >
                   <X size={14} />
-                </button>
+                </Button>
               </Dialog.Close>
             </div>
           </div>

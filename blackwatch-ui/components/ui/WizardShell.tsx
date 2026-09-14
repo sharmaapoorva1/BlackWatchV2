@@ -110,7 +110,7 @@ function WizardStepper({
         {steps.map((s) => {
           const active = current === s.n;
           const done = !!completed[s.n] && !active;
-          return <button type="button" key={s.n} onClick={() => onJump(s.n)} className="flex flex-1 flex-col items-center gap-2 text-xs text-muted"><span className={`flex h-6 w-6 items-center justify-center rounded-full border ${active ? "border-signal text-signal" : done ? "border-sev-resolved text-sev-resolved" : "border-line"}`}>{done ? <Check size={13} /> : s.n}</span><span>{s.label}</span></button>;
+          return <button type="button" key={s.n} onClick={() => onJump(s.n)} className="flex min-h-11 flex-1 cursor-pointer flex-col items-center gap-2 text-xs text-muted transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70 sm:min-h-8"><span className={`flex h-6 w-6 items-center justify-center rounded-full border ${active ? "border-signal text-signal" : done ? "border-sev-resolved text-sev-resolved" : "border-line"}`}>{done ? <Check size={13} /> : s.n}</span><span>{s.label}</span></button>;
         })}
     </div>
   );

@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { FlashToast } from "@/components/ui/FlashToast";
 import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
 import { ProfilePreview } from "@/components/domain/notifications/ProfilePreview";
 import { saveNotificationProfileAction, testNotificationProfileAction } from "../../profile-actions";
 
@@ -134,7 +135,7 @@ export default async function NotificationProfilePage({
                   <span>{field.label}</span>
                   <span className="ml-2 text-fg-subtle">{field.hint}</span>
                   {field.multiline ? (
-                    <textarea name={field.key} defaultValue={profile.content[field.key]} rows={3} className="mt-1 block w-full resize-y border border-line bg-surface-1 px-2.5 py-2 text-sm leading-5 text-fg placeholder:text-fg-disabled focus-visible:border-signal focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal" />
+                    <Textarea name={field.key} defaultValue={profile.content[field.key]} rows={3} className="mt-1 text-sm leading-5" />
                   ) : (
                     <Input name={field.key} defaultValue={profile.content[field.key]} className="mt-1" />
                   )}
@@ -155,7 +156,7 @@ export default async function NotificationProfilePage({
                 <ChevronDown size={14} className="text-fg-subtle" /> Advanced template (optional)
               </summary>
               <p className="mt-3 text-xs leading-5 text-fg-subtle">Leave this blank to use the guided fields. Advanced templates use the existing Jinja event context and are intended for experienced operators.</p>
-              <textarea name="advanced_template" defaultValue={profile.advanced_template ?? ""} rows={8} className="mt-3 block w-full resize-y border border-line bg-surface-1 px-2.5 py-2 font-mono text-xs leading-5 text-fg placeholder:text-fg-disabled focus-visible:border-signal focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal" placeholder="{{ event.action }} on {{ event.target.name }}" />
+              <Textarea name="advanced_template" defaultValue={profile.advanced_template ?? ""} rows={8} className="mt-3 font-mono text-xs leading-5" placeholder="{{ event.action }} on {{ event.target.name }}" />
             </details>
           </DataPanel>
 

@@ -41,7 +41,7 @@ export const NativeSelect = forwardRef<HTMLSelectElement, NativeSelectProps>(
         onChange={onChange}
         disabled={disabled}
         required={required}
-        className={`min-h-8 min-w-0 w-full border border-line bg-surface px-3 py-1.5 text-sm outline-none focus:border-signal focus:ring-1 focus:ring-signal disabled:cursor-not-allowed disabled:opacity-50 ${className ?? ""}`}
+        className={`min-h-11 min-w-0 w-full border border-line bg-surface px-3 py-1.5 text-sm outline-none focus:border-signal focus:ring-2 focus:ring-signal/70 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-8 ${className ?? ""}`}
         aria-label={props["aria-label"]}
         aria-labelledby={props["aria-labelledby"]}
         {...props}

@@ -12,6 +12,8 @@ import {
   type TemplatePreset,
 } from "@/lib/api";
 import { NativeSelect } from "@/components/ui/NativeSelect";
+import { Button } from "@/components/ui/Button";
+import { Textarea } from "@/components/ui/Textarea";
 
 const SAMPLE_EVENTS: Array<{ value: PreviewSampleKind; label: string }> = [
   { value: "vpn_failure", label: "VPN failed login" },
@@ -277,7 +279,7 @@ export function TemplateEditor({
           </p>
           <div className="flex flex-wrap gap-1.5">
             {presets.map((p) => (
-              <button
+              <Button size="sm" variant="ghost"
                 key={p.id}
                 type="button"
                 onClick={() => setValue(p.template)}
@@ -285,22 +287,22 @@ export function TemplateEditor({
                 className="border border-line bg-surface-1 px-2 py-1 text-xs text-fg-muted transition-colors hover:border-signal hover:bg-signal/10 hover:text-fg"
               >
                 {p.name}
-              </button>
+              </Button>
             ))}
-            <button
+            <Button size="sm" variant="ghost"
               type="button"
               onClick={() => setValue("")}
               className="border border-dashed border-line-soft px-2 py-1 text-xs text-fg-subtle transition-colors hover:border-line hover:text-fg"
             >
               Blank
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {/* Textarea */}
       <div>
-        <textarea
+        <Textarea
           id={`${name}-textarea`}
           name={name}
           rows={5}
@@ -320,7 +322,7 @@ export function TemplateEditor({
               ? "Write a Jinja template, or drag a variable in below"
               : "Pick a template above, or write your own"
           }
-          className="w-full border border-line bg-surface-1 px-2.5 py-2 font-mono text-xs text-fg placeholder:text-fg-disabled focus-visible:border-signal focus-visible:outline-none"
+          className="font-mono text-xs"
         />
       </div>
 
@@ -331,7 +333,7 @@ export function TemplateEditor({
         </p>
         <div className="flex flex-wrap gap-1.5">
           {variables.map((v) => (
-            <button
+            <Button size="sm" variant="ghost"
               key={v.path}
               type="button"
               draggable
@@ -347,7 +349,7 @@ export function TemplateEditor({
               <code className="font-mono text-[10px] text-fg-subtle">
                 {`{{ ${v.path} }}`}
               </code>
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -367,7 +369,7 @@ export function TemplateEditor({
                 Perf mode has only one canonical sample — hide the toggle. */}
             {contextKind !== "perf" && (
               <div className="flex overflow-hidden border border-line-soft">
-                <button
+                <Button size="sm" variant="ghost"
                   type="button"
                   onClick={() => setSampleSource("canned")}
                   className={
@@ -377,8 +379,8 @@ export function TemplateEditor({
                   }
                 >
                   canned sample
-                </button>
-                <button
+                </Button>
+                <Button size="sm" variant="ghost"
                   type="button"
                   onClick={() => setSampleSource("recent")}
                   className={
@@ -388,7 +390,7 @@ export function TemplateEditor({
                   }
                 >
                   real recent event
-                </button>
+                </Button>
               </div>
             )}
           </div>

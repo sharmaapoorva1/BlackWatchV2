@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { NativeSelect } from "@/components/ui/NativeSelect";
 import { FormRow } from "@/components/ui/FormRow";
+import { Textarea } from "@/components/ui/Textarea";
+import { Checkbox } from "@/components/ui/Checkbox";
 import type {
   Connector,
   ConnectorType,
@@ -481,14 +483,14 @@ function CertProbeForm({ existing }: { existing?: Connector }) {
         />
       </FormRow>
       <FormRow label="Targets" hint="one per line · name,host,port[,sni]">
-        <textarea
+        <Textarea
           name="targets_raw"
           rows={6}
           defaultValue={
             initialTargets ||
             "# one target per line\n# lightsail-nginx,blackwatch.example.com,443\n# api-alb,api.example.com,443"
           }
-          className="w-full border border-line bg-surface-1 px-2.5 py-2 font-mono text-xs text-fg placeholder:text-fg-disabled focus-visible:border-signal focus-visible:outline-none"
+          className="font-mono text-xs"
         />
       </FormRow>
       <FormRow label="Scan interval" hint="seconds · default 1h">
@@ -540,11 +542,9 @@ function Check({
 }) {
   return (
     <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-fg-muted hover:text-fg">
-      <input
-        type="checkbox"
+      <Checkbox
         name={name}
         defaultChecked={defaultChecked}
-        className="h-3.5 w-3.5 cursor-pointer appearance-none border border-line bg-surface-1 checked:border-signal checked:bg-signal/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal"
       />
       <span>{children}</span>
     </label>

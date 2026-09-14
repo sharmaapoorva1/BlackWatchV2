@@ -20,7 +20,19 @@ test("sidebar keeps its navigation background continuous through the scroll regi
   const source = read("components/layout/SideNav.tsx");
   assert.match(source, /<nav[\s\S]*bg-canvas/);
   assert.match(source, /overflow-y-auto/);
+  assert.match(source, /matchMedia\("\(min-width: 768px\)"\)/);
+  assert.match(source, /Close navigation/);
   assert.doesNotMatch(source, /MuiDrawer|@mui/);
+});
+
+test("shared controls provide mobile touch targets and consistent focus feedback", () => {
+  const button = read("components/ui/Button.tsx");
+  const input = read("components/ui/Input.tsx");
+  const select = read("components/ui/NativeSelect.tsx");
+  assert.match(button, /min-h-11[\s\S]*sm:min-h-8/);
+  assert.match(button, /focus-visible:ring-2/);
+  assert.match(input, /min-h-11[\s\S]*sm:min-h-8/);
+  assert.match(select, /min-h-11[\s\S]*sm:min-h-8/);
 });
 
 test("mobile card tables do not keep a desktop width or horizontal scrollbar", () => {

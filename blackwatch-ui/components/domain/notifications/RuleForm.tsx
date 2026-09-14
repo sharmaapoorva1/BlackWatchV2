@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/Input";
 import { NativeSelect } from "@/components/ui/NativeSelect";
 import { FormRow } from "@/components/ui/FormRow";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { Textarea } from "@/components/ui/Textarea";
 import type { NotificationChannel, NotificationRule } from "@/lib/types";
 import { saveRuleAction } from "@/app/notifications/actions";
 
@@ -247,12 +248,12 @@ export function RuleForm({
       </FormRow>
 
       <FormRow label="Message" hint="Jinja · overrides channel default when set">
-        <textarea
+        <Textarea
           name="message_template"
           rows={8}
           defaultValue={existing?.message_template ?? ""}
           placeholder={"*Something happened on {{ event.extra.display_name | default(event.target.id) }}*\nSeverity: {{ event.severity }}\nCheck: ..."}
-          className="w-full border border-line bg-surface-1 px-2.5 py-2 font-mono text-xs text-fg placeholder:text-fg-disabled focus-visible:border-signal focus-visible:outline-none"
+          className="font-mono text-xs"
         />
       </FormRow>
 
@@ -265,12 +266,12 @@ export function RuleForm({
           advanced · custom JSON criteria (overrides the simple form above)
         </summary>
         <div className="mt-3 space-y-2">
-          <textarea
+          <Textarea
             name="advanced_yaml"
             rows={6}
             defaultValue={init.advanced_yaml}
             placeholder={`{\n  "all": [\n    {"field": "severity", "in": ["critical"]},\n    {"field": "actor.principal", "regex": "ops-.*"}\n  ]\n}`}
-            className="w-full border border-line bg-surface-1 px-2.5 py-2 font-mono text-xs text-fg placeholder:text-fg-disabled focus-visible:border-signal focus-visible:outline-none"
+            className="font-mono text-xs"
           />
           <p className="text-[11px] text-fg-subtle">
             Same shape as detection rules · operators: equals, not_equals, in,
@@ -363,8 +364,7 @@ function Chip({
         subtle ? "opacity-60" : ""
       }`}
     >
-      <input
-        type="checkbox"
+      <Checkbox
         name={name}
         value={value}
         defaultChecked={defaultChecked}
@@ -374,4 +374,3 @@ function Chip({
     </label>
   );
 }
-

@@ -15,6 +15,7 @@ import {
 import { fetchHostMetrics } from "@/lib/api";
 import type { HostMetricsHourlyRow } from "@/lib/types";
 import { DataPanel } from "@/components/layout/DataPanel";
+import { Button } from "@/components/ui/Button";
 import { SectionLabel } from "@/components/layout/SectionLabel";
 import {
   TimezoneSelect,
@@ -127,7 +128,8 @@ export function HostMetricsChart({ instanceId }: { instanceId: string }) {
         <SectionLabel>resource metrics · hourly rollup</SectionLabel>
         <div className="flex items-center gap-1">
           {RANGES.map((r) => (
-            <button
+            <Button
+              size="sm" variant={r.hours === range ? "secondary" : "ghost"}
               key={r.hours}
               type="button"
               onClick={() => setRange(r.hours)}
@@ -138,7 +140,7 @@ export function HostMetricsChart({ instanceId }: { instanceId: string }) {
               }
             >
               {r.label}
-            </button>
+            </Button>
           ))}
           <div className="ml-1">
             <TimezoneSelect value={tz} onChange={setTz} storageKey={TZ_STORAGE_KEY} />
@@ -149,7 +151,8 @@ export function HostMetricsChart({ instanceId }: { instanceId: string }) {
       <DataPanel scrollX={false}>
         <div className="flex items-center gap-1 border-b border-line-soft px-4 pb-2 pt-3">
           {METRICS.map((m) => (
-            <button
+            <Button
+              size="sm" variant={m.key === metric ? "secondary" : "ghost"}
               key={m.key}
               type="button"
               onClick={() => setMetric(m.key)}
@@ -160,7 +163,7 @@ export function HostMetricsChart({ instanceId }: { instanceId: string }) {
               }
             >
               {m.label}
-            </button>
+            </Button>
           ))}
 
           {summary && (

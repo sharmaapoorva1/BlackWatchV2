@@ -164,7 +164,7 @@ export function Table({
       {columnLabels.length > 1 && (
         <div className="mb-2 flex justify-end">
           <details className="relative">
-            <summary className="cursor-pointer list-none rounded border border-line-soft px-2.5 py-1 text-[10px] uppercase tracking-wider text-fg-muted transition-colors hover:border-signal hover:text-fg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal">
+            <summary className="inline-flex min-h-11 cursor-pointer list-none items-center rounded border border-line-soft px-2.5 py-1 text-[10px] uppercase tracking-wider text-fg-muted transition-colors hover:border-signal hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70 sm:min-h-8">
               Columns
             </summary>
             <div className="absolute right-0 z-20 mt-1 min-w-48 border border-line bg-surface-2 p-2 shadow-lg">
@@ -190,7 +190,7 @@ export function Table({
                   setSortColumn(null);
                   setLiveMessage("All columns restored.");
                 }}
-                className="mt-2 w-full border-t border-line-soft pt-2 text-left text-[10px] uppercase tracking-wider text-fg-muted transition-colors hover:text-signal focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal"
+                className="mt-2 min-h-11 w-full cursor-pointer border-t border-line-soft pt-2 text-left text-[10px] uppercase tracking-wider text-fg-muted transition-colors hover:text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70 sm:min-h-8"
               >
                 Reset columns
               </button>
@@ -379,7 +379,7 @@ function enhanceHead(
       const SortIcon = active ? (sortDirection === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
       return cloneElement(cell as ReactElement<{ children?: ReactNode; "aria-sort"?: "none" | "ascending" | "descending" }>, {
         "aria-sort": active ? (sortDirection === "asc" ? "ascending" : "descending") : "none",
-      }, <button type="button" onClick={() => onSort(index, label, nextDirection)} aria-label={`Sort ${label} ${active ? ` ${nextDirection}` : ""}`} title={`Sort by ${label}`} className="inline-flex w-full items-center justify-between gap-2 text-left text-inherit focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal"><span>{(cell.props as { children?: ReactNode }).children}</span><SortIcon size={13} aria-hidden="true" className={active ? "text-signal" : "text-fg-subtle"} /></button>);
+      }, <button type="button" onClick={() => onSort(index, label, nextDirection)} aria-label={`Sort ${label} ${active ? ` ${nextDirection}` : ""}`} title={`Sort by ${label}`} className="inline-flex min-h-11 w-full cursor-pointer items-center justify-between gap-2 text-left text-inherit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal/70 sm:min-h-8"><span>{(cell.props as { children?: ReactNode }).children}</span><SortIcon size={13} aria-hidden="true" className={active ? "text-signal" : "text-fg-subtle"} /></button>);
     }));
   });
   return cloneElement(thead, undefined, headRows);

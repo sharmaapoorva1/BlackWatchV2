@@ -1,6 +1,8 @@
 import { apiFetch } from "@/lib/server-fetch";
 import { AuditRow, type AuditEntry } from "@/components/domain/AuditRow";
 import { Table } from "@/components/ui/Table";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 
 interface SearchParams {
   actor?: string;
@@ -40,39 +42,39 @@ export default async function AuditPage({
       </header>
 
       <form className="flex flex-wrap gap-2 text-sm" action="/audit" method="get">
-        <input
+        <Input
           type="text"
           name="actor"
           placeholder="actor"
           defaultValue={sp.actor ?? ""}
-          className="rounded border border-line-soft bg-canvas px-2 py-1"
+          className="w-auto"
         />
-        <input
+        <Input
           type="text"
           name="path"
           placeholder="path contains"
           defaultValue={sp.path ?? ""}
-          className="rounded border border-line-soft bg-canvas px-2 py-1"
+          className="w-auto"
         />
-        <input
+        <Input
           type="datetime-local"
           name="since"
           defaultValue={sp.since ?? ""}
-          className="rounded border border-line-soft bg-canvas px-2 py-1"
+          className="w-auto"
         />
-        <input
+        <Input
           type="number"
           name="limit"
           placeholder="limit"
           defaultValue={sp.limit ?? "200"}
-          className="w-24 rounded border border-line-soft bg-canvas px-2 py-1"
+          className="w-24"
         />
-        <button
+        <Button
           type="submit"
-          className="rounded border border-line-soft px-3 py-1 hover:border-signal"
+          variant="secondary" size="sm"
         >
           Filter
-        </button>
+        </Button>
       </form>
 
       <div className="overflow-hidden rounded border border-line-soft">

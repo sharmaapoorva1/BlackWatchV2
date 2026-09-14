@@ -27,6 +27,7 @@ import { TimestampCell } from "@/components/domain/TimestampCell";
 import { IpCell } from "@/components/domain/IpCell";
 import { FlashToast } from "@/components/ui/FlashToast";
 import { PendingButton } from "@/components/ui/PendingButton";
+import { Input } from "@/components/ui/Input";
 import { ConfirmSubmitButton } from "@/components/ui/ConfirmSubmitButton";
 import { NativeSelect } from "@/components/ui/NativeSelect";
 import {
@@ -397,11 +398,11 @@ function AllowlistManager({
       <DataPanel className="overflow-hidden">
         <form action={addAllowlistUserAction} className="border-b border-line-soft p-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <input
+            <Input
               name="username"
               placeholder="username (e.g. aravinda_jatavallabha)"
               aria-label="Allowlist username"
-              className="min-w-0 flex-1 rounded border border-line-soft bg-surface-1 px-3 py-1.5 font-mono text-xs text-fg placeholder:text-fg-disabled focus-visible:border-signal focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal"
+              className="min-w-0 flex-1 font-mono text-xs"
               required
             />
             <NativeSelect
@@ -413,11 +414,11 @@ function AllowlistManager({
               <option value="human">human</option>
               <option value="service">service</option>
             </NativeSelect>
-            <input
+            <Input
               name="note"
               placeholder="note (optional)"
               aria-label="Allowlist note"
-              className="min-w-0 flex-1 rounded border border-line-soft bg-surface-1 px-3 py-1.5 text-xs text-fg placeholder:text-fg-disabled focus-visible:border-signal focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal"
+              className="min-w-0 flex-1 text-xs"
             />
             <PendingButton className="rounded border border-signal bg-signal/10 px-3 py-1.5 text-xs text-signal hover:bg-signal/20">
               Add

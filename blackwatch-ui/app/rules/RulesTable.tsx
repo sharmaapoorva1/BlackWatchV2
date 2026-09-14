@@ -5,6 +5,7 @@ import clsx from "clsx";
 import { NativeSelect } from "@/components/ui/NativeSelect";
 import type { Rule } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { Table } from "@/components/ui/Table";
 import { SeverityBadge, severityBorderBg } from "@/components/domain/SeverityBadge";
 import { toggleRuleAction, setSeverityAction } from "./actions";
@@ -199,7 +200,7 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
             Filters
           </div>
           <SearchIcon />
-          <input
+          <Input
             ref={inputRef}
             type="text"
             value={q}
@@ -225,7 +226,8 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
               </>
             )}
           </span>
-          <button
+          <Button
+            size="sm" variant="ghost"
             type="button"
             onClick={() => setShowFacets((open) => !open)}
             aria-expanded={showFacets}
@@ -233,16 +235,16 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
           >
             {showFacets ? "Hide filters" : "More filters"}
             {activeFacetCount > 0 ? ` · ${activeFacetCount}` : ""}
-          </button>
+          </Button>
           {anyFilterActive && (
-            <button
+            <Button size="sm" variant="ghost"
               type="button"
               onClick={clearAll}
               className="rounded border border-line-soft px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-fg-subtle transition-colors hover:border-signal hover:text-signal"
               aria-label="Clear all filters"
             >
               Clear
-            </button>
+            </Button>
           )}
         </div>
 
@@ -490,7 +492,7 @@ function SeverityChip({
 }) {
   const dot = severityBorderBg(sev);
   return (
-    <button
+    <Button
       type="button"
       aria-pressed={active}
       onClick={onToggle}
@@ -504,7 +506,7 @@ function SeverityChip({
       />
       <span>{sev}</span>
       <span className="font-mono text-fg-disabled">{count}</span>
-    </button>
+    </Button>
   );
 }
 
@@ -522,7 +524,7 @@ function StateChip({
   onClick: () => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
       aria-pressed={active}
       onClick={onClick}
@@ -534,7 +536,7 @@ function StateChip({
       />
       <span>{label}</span>
       <span className="font-mono text-fg-disabled">{count}</span>
-    </button>
+    </Button>
   );
 }
 
@@ -550,7 +552,7 @@ function NotifyChip({
   onToggle: () => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
       aria-pressed={active}
       onClick={onToggle}
@@ -567,7 +569,7 @@ function NotifyChip({
       />
       <span>{tier}</span>
       <span className="font-mono text-fg-disabled">{count}</span>
-    </button>
+    </Button>
   );
 }
 
@@ -583,7 +585,7 @@ function SourceChip({
   onToggle: () => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
       aria-pressed={active}
       onClick={onToggle}
@@ -591,7 +593,7 @@ function SourceChip({
     >
       <span className="font-mono">{src}</span>
       <span className="font-mono text-fg-disabled">{count}</span>
-    </button>
+    </Button>
   );
 }
 
@@ -645,13 +647,13 @@ function EmptyState({
           : "You don't have any rules loaded — check rules/ on disk."}
       </p>
       {hasFilter && (
-        <button
+        <Button size="sm" variant="ghost"
           type="button"
           onClick={onClear}
           className="rounded border border-line-soft px-2 py-1 text-[11px] uppercase tracking-wider text-fg-subtle transition-colors hover:border-signal hover:text-signal"
         >
           Clear filters
-        </button>
+        </Button>
       )}
     </div>
   );

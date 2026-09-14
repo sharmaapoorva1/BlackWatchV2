@@ -64,7 +64,8 @@ export function HostDisplayNameEditor({
         <span className={saved ? "text-fg" : "text-fg-disabled"}>
           {saved ?? "(no name set)"}
         </span>
-        <button
+        <Button
+          size="sm" variant="ghost"
           type="button"
           onClick={begin}
           className="inline-flex items-center gap-1 border border-line-soft px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-fg-subtle transition-colors hover:border-line hover:text-fg"
@@ -72,7 +73,7 @@ export function HostDisplayNameEditor({
         >
           <Pencil size={10} strokeWidth={1.5} />
           Edit
-        </button>
+        </Button>
       </div>
     );
   }
