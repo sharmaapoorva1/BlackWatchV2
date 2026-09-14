@@ -138,7 +138,7 @@ _FAILURE_GUIDANCE = {
     ),
     "authentication": (
         "The provider rejected the configured identity or permission.",
-        "Verify the mounted profile and least-privilege permissions without entering secrets in BlackWatch.",
+        "Verify the EC2 instance role and least-privilege permissions without entering secrets in BlackWatch.",
     ),
     "rate_limited": (
         "The provider limited this request or account.",

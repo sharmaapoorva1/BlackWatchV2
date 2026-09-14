@@ -37,11 +37,11 @@ class AwsCloudtrailSqsConfig(BaseModel):
     """Generic SQS connector: poll a queue and feed each message to a target
     module. Used for CloudTrail (EventBridge->Lambda->SQS), EC2 host agents
     (reporter->SQS), and the OpenVPN agent (`target_module=vpn.openvpn`).
-    AWS creds come from a mounted profile (never stored by BlackWatch)."""
+    AWS credentials come from the standard boto3 credential chain, including
+    the EC2 instance role."""
 
     queue_url: str
     aws_region: str = "us-east-1"
-    aws_profile: str | None = None  # profile name in the mounted ~/.aws
     target_module: str = "aws.cloudtrail"
     interval_seconds: int = 60
     wait_seconds: int = 10  # SQS long-poll wait
@@ -59,7 +59,6 @@ class AwsEcsProbeSqsConfig(BaseModel):
 
     queue_url: str
     aws_region: str = "us-west-1"
-    aws_profile: str | None = None
     vpc: str                          # which VPC label this queue represents (stamped onto every report)
     # The connector also mirrors the per-VPC SSM targets parameter into the
     # probe_targets table on each drain cycle, so the UI and notification
@@ -80,7 +79,6 @@ class AwsEcsHealthConfig(BaseModel):
 
     vpc: str                                       # which VPC label this poll covers (matches probe_targets.vpc)
     aws_region: str = "us-west-1"
-    aws_profile: str | None = None                 # mounted ~/.aws profile name
     interval_seconds: int = 60
     # For ecs_running tier: how many consecutive minutes runningCount must
     # remain below desiredCount before declaring 'down'. Smooths Fargate Spot
@@ -99,7 +97,6 @@ class AwsS3AccessLogsConfig(BaseModel):
 
     bucket: str
     aws_region: str = "us-west-1"
-    aws_profile: str | None = None
     # How often to poll for new log files.
     interval_seconds: int = 300
     # Overlap window to catch files whose LastModified straddled the last run.
@@ -123,7 +120,6 @@ class AwsS3DriftConfig(BaseModel):
     minute. The bootstrap script (`scripts/s3_bucket_inventory.py`) is the same
     logic in CLI form for the very first scan."""
 
-    aws_profile: str | None = None                 # mounted ~/.aws profile name
     interval_seconds: int = 3600                   # 1 hour by default — these don't change fast
 
 
@@ -135,7 +131,6 @@ class AwsRdsSqsConfig(BaseModel):
 
     queue_url: str
     aws_region: str = "us-west-1"
-    aws_profile: str | None = None
     interval_seconds: int = 60
     wait_seconds: int = 10
     max_batches: int = 5
@@ -149,7 +144,6 @@ class AwsApiGwSqsConfig(BaseModel):
 
     queue_url: str
     aws_region: str = "us-west-1"
-    aws_profile: str | None = None
     interval_seconds: int = 60
     wait_seconds: int = 10
     max_batches: int = 5
@@ -160,7 +154,6 @@ class AwsPostureDriftConfig(BaseModel):
     posture problems. Per-check booleans let operators ramp up coverage
     incrementally. Empty `regions` = all enabled regions in the account."""
 
-    aws_profile: str | None = None
     regions: list[str] = []                        # empty = scan all enabled
     interval_seconds: int = 3600
     # Phase 2a — infrastructure posture (per-region):

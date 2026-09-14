@@ -149,6 +149,6 @@ Write-Host "  Lambda    : $LAMBDA_ARN"
 Write-Host "  Subscribed to $($groups.Count) log group(s)."
 Write-Host ""
 Write-Host "NEXT -- register the connector on BlackWatch (Lightsail):" -ForegroundColor Yellow
-Write-Host "  docker compose exec app python -c `"from blackwatch import db, storage; import uuid; db.init_pool(); storage.upsert_connector(str(uuid.uuid4()), 'RDS logs', 'aws_rds_sqs', {'queue_url': '$QUEUE_URL', 'aws_region': '$REGION', 'aws_profile': 'blackwatch', 'interval_seconds': 60, 'wait_seconds': 10, 'max_batches': 5})`""
+Write-Host "  docker compose exec app python -c `"from blackwatch import db, storage; import uuid; db.init_pool(); storage.upsert_connector(str(uuid.uuid4()), 'RDS logs', 'aws_rds_sqs', {'queue_url': '$QUEUE_URL', 'aws_region': '$REGION', 'interval_seconds': 60, 'wait_seconds': 10, 'max_batches': 5})`""
 Write-Host ""
 Write-Host "Then in the BW UI: Connectors -> Test -> Enable."

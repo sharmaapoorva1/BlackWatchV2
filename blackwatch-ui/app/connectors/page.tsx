@@ -240,7 +240,7 @@ function ConnectorDetails({ connector: c }: { connector: Connector }) {
     case "aws_s3_drift":
       return (
         <span>
-          all regions · profile={String(cfg.aws_profile ?? "(default)")}
+          all regions · instance role credentials
         </span>
       );
     case "aws_s3_access_logs":
@@ -253,8 +253,7 @@ function ConnectorDetails({ connector: c }: { connector: Connector }) {
       const regions = (cfg.regions as string[]) ?? [];
       return (
         <span>
-          {regions.length > 0 ? regions.join(",") : "all regions"} · profile=
-          {String(cfg.aws_profile ?? "(default)")}
+          {regions.length > 0 ? regions.join(",") : "all regions"} · instance role credentials
         </span>
       );
     }

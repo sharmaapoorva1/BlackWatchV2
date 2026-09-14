@@ -51,9 +51,7 @@ _log = logging.getLogger(__name__)
 def _session(cfg: AwsEcsProbeSqsConfig):
     import boto3  # lazy import — keeps the app runnable without boto3 installed
 
-    return boto3.session.Session(
-        profile_name=cfg.aws_profile or None, region_name=cfg.aws_region
-    )
+    return boto3.session.Session(region_name=cfg.aws_region)
 
 
 def _sync_targets_from_ssm(cfg: AwsEcsProbeSqsConfig, session) -> None:

@@ -41,9 +41,9 @@ _RISKY_PORTS = {
 }
 
 
-def _session(profile: str | None, region: str = "us-east-1"):
+def _session(region: str = "us-east-1"):
     import boto3
-    return boto3.session.Session(profile_name=profile or None, region_name=region)
+    return boto3.session.Session(region_name=region)
 
 
 def _account_id(session) -> str | None:
@@ -234,7 +234,7 @@ def _check_ec2_imdsv2(session, region: str) -> list[dict]:
 # ---------- Driver ----------------------------------------------------------
 
 def scan_account(cfg: AwsPostureDriftConfig) -> dict[str, Any]:
-    session = _session(cfg.aws_profile)
+    session = _session()
     account = _account_id(session)
     regions = cfg.regions or _enabled_regions(session)
 

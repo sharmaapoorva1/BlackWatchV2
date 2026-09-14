@@ -124,13 +124,6 @@ function CloudTrailSqsForm({ existing }: { existing?: Connector }) {
           className="w-48"
         />
       </FormRow>
-      <FormRow label="AWS profile" hint="in mounted ~/.aws">
-        <Input
-          name="aws_profile"
-          defaultValue={a.aws_profile ?? "blackwatch"}
-          className="w-48"
-        />
-      </FormRow>
       <FormRow label="Poll interval" hint="seconds">
         <Input
           name="interval_seconds"
@@ -142,9 +135,8 @@ function CloudTrailSqsForm({ existing }: { existing?: Connector }) {
       </FormRow>
       <FormActions isEdit={!!existing} />
       <FormNote>
-        Mount your AWS credentials read-only (
-        <code className="text-fg">~/.aws</code>) into the container and put the
-        profile name above. Creds are never stored by BlackWatch. The queue is
+        Credentials come from the EC2 instance role through boto3&apos;s default
+        credential chain. The queue is
         filled by the EventBridge → Lambda forwarder (see{" "}
         <code className="text-fg">deploy/iam/</code>). After saving, click{" "}
         <strong className="text-fg">Test</strong>.
@@ -183,13 +175,6 @@ function EcsHealthForm({ existing }: { existing?: Connector }) {
         <Input
           name="aws_region"
           defaultValue={c.aws_region ?? "us-west-1"}
-          className="w-48"
-        />
-      </FormRow>
-      <FormRow label="AWS profile">
-        <Input
-          name="aws_profile"
-          defaultValue={c.aws_profile ?? "blackwatch"}
           className="w-48"
         />
       </FormRow>
@@ -238,13 +223,6 @@ function S3DriftForm({ existing }: { existing?: Connector }) {
           required
           defaultValue={existing?.name ?? ""}
           placeholder="s3 inventory"
-        />
-      </FormRow>
-      <FormRow label="AWS profile">
-        <Input
-          name="aws_profile"
-          defaultValue={c.aws_profile ?? "blackwatch"}
-          className="w-48"
         />
       </FormRow>
       <FormRow label="Scan interval" hint="seconds">
@@ -311,14 +289,6 @@ function S3AccessLogsForm({ existing }: { existing?: Connector }) {
           className="w-48"
         />
       </FormRow>
-      <FormRow label="AWS profile" hint="optional; leave blank to use the EC2 IAM role">
-        <Input
-          name="aws_profile"
-          defaultValue={c.aws_profile ?? ""}
-          placeholder="optional — EC2 role uses default credentials"
-          className="w-48"
-        />
-      </FormRow>
       <FormRow label="Poll interval" hint="seconds">
         <Input
           name="interval_seconds"
@@ -369,13 +339,6 @@ function PostureDriftForm({ existing }: { existing?: Connector }) {
           required
           defaultValue={existing?.name ?? ""}
           placeholder="aws posture"
-        />
-      </FormRow>
-      <FormRow label="AWS profile">
-        <Input
-          name="aws_profile"
-          defaultValue={p.aws_profile ?? "blackwatch"}
-          className="w-48"
         />
       </FormRow>
       <FormRow label="Regions" hint="comma-separated; blank = all enabled">

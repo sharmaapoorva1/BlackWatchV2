@@ -145,7 +145,7 @@ Lambda: bw-rds-forwarder            (log_group prefix tells adapter to use proxy
 | Item | Notes |
 |---|---|
 | Connector | `aws_rds_sqs` type, name `RDS logs`. |
-| AWS profile | Reuses the existing `blackwatch` profile (same access keys as CloudTrail + ECS). |
+| AWS credentials | BlackWatch EC2 instance role (boto3 default credential chain). |
 
 ---
 
@@ -179,7 +179,7 @@ The script prints a connector-registration command at the end. Run it
 on Lightsail:
 
 ```bash
-docker compose exec app python -c "from blackwatch import db, storage; import uuid; db.init_pool(); storage.upsert_connector(str(uuid.uuid4()), 'RDS logs', 'aws_rds_sqs', {'queue_url': '<paste-from-setup>', 'aws_region': 'us-west-1', 'aws_profile': 'blackwatch', 'interval_seconds': 60, 'wait_seconds': 10, 'max_batches': 5})"
+docker compose exec app python -c "from blackwatch import db, storage; import uuid; db.init_pool(); storage.upsert_connector(str(uuid.uuid4()), 'RDS logs', 'aws_rds_sqs', {'queue_url': '<paste-from-setup>', 'aws_region': 'us-west-1', 'interval_seconds': 60, 'wait_seconds': 10, 'max_batches': 5})"
 ```
 
 Then in the BW UI → Connectors → **Test** → **Enable**.

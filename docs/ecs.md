@@ -143,7 +143,7 @@ Why this shape:
 
 | Item | Notes |
 |---|---|
-| AWS profile | `blackwatch` — mapped to access keys for IAM user `blackwatch-sqs-reader` (from the IAM module setup). |
+| AWS credentials | BlackWatch EC2 instance role (boto3 default credential chain). |
 | IAM perms needed | `sqs:ReceiveMessage` + `sqs:DeleteMessage` + `sqs:DeleteMessageBatch` + `sqs:GetQueueAttributes` on each probe queue ARN; `ssm:GetParameter` on each targets parameter ARN. Both granted via managed policy `bw-read-ecs-probe-queues`. |
 | Connectors | One per VPC: `aws_ecs_probe_sqs` type, name `ECS probe reports (<vpc>)`. |
 
@@ -186,7 +186,6 @@ python -m scripts.ecs_discover \
 {
   "queue_url": "https://sqs.us-west-1.amazonaws.com/095899260107/bw-ecs-probe-reports-dev",
   "aws_region": "us-west-1",
-  "aws_profile": "blackwatch",
   "vpc": "dev",
   "ssm_targets_param": null,
   "interval_seconds": 60,
@@ -240,7 +239,7 @@ access can't forge a report for a different VPC.
 4. **On the BlackWatch box**, register the per-VPC connector (once per VPC):
 
    ```bash
-   docker compose exec app python -c "from blackwatch import db, storage; import uuid; db.init_pool(); storage.upsert_connector(str(uuid.uuid4()), 'ECS probe reports (dev)', 'aws_ecs_probe_sqs', {'queue_url': 'https://sqs.us-west-1.amazonaws.com/<acct>/bw-ecs-probe-reports-dev', 'aws_region': 'us-west-1', 'aws_profile': 'blackwatch', 'vpc': 'dev', 'interval_seconds': 60, 'wait_seconds': 10, 'max_batches': 5})"
+   docker compose exec app python -c "from blackwatch import db, storage; import uuid; db.init_pool(); storage.upsert_connector(str(uuid.uuid4()), 'ECS probe reports (dev)', 'aws_ecs_probe_sqs', {'queue_url': 'https://sqs.us-west-1.amazonaws.com/<acct>/bw-ecs-probe-reports-dev', 'aws_region': 'us-west-1', 'vpc': 'dev', 'interval_seconds': 60, 'wait_seconds': 10, 'max_batches': 5})"
    ```
 
 5. In the BW UI's Connectors page, click **Test** on the new connector — it

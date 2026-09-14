@@ -33,9 +33,9 @@ from .. import pipeline
 from .models import AwsS3DriftConfig
 
 
-def _client(profile: str | None, region: str = "us-east-1"):
+def _client(region: str = "us-east-1"):
     import boto3
-    session = boto3.session.Session(profile_name=profile or None, region_name=region)
+    session = boto3.session.Session(region_name=region)
     return session.client("s3")
 
 
@@ -94,7 +94,7 @@ def _scan_one_bucket(s3_global, bucket: dict[str, Any]) -> dict[str, Any]:
     region = _bucket_region(s3_global, name)
     # Use a region-specific client for the per-bucket calls; some S3 APIs
     # require it (notably PublicAccessBlock).
-    s3 = _client(profile=getattr(s3_global, "_blackwatch_profile", None), region=region)
+    s3 = _client(region=region)
 
     errors: list[str] = []
     public_reasons: list[str] = []
@@ -214,12 +214,10 @@ def _scan_one_bucket(s3_global, bucket: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def scan_account(profile: str | None = None) -> dict[str, Any]:
+def scan_account() -> dict[str, Any]:
     """Run a full inventory scan. ListBuckets is GLOBAL — no need to iterate
     regions for that part. Per-bucket calls hit each bucket's home region."""
-    # Stash the profile name on the global client so per-bucket clients pick it up.
-    s3_global = _client(profile=profile, region="us-east-1")
-    s3_global._blackwatch_profile = profile
+    s3_global = _client(region="us-east-1")
 
     try:
         lb = s3_global.list_buckets()
@@ -258,7 +256,7 @@ def scan_account(profile: str | None = None) -> dict[str, Any]:
 def poll(cfg: AwsS3DriftConfig) -> dict[str, Any]:
     """Connector entry — called by the scheduler. Builds the snapshot and pipes
     it through the standard ingest pipeline as if it had been POSTed externally."""
-    report = scan_account(profile=cfg.aws_profile)
+    report = scan_account()
     stats = pipeline.ingest_payload("aws.s3", report, transport="poll")
     return {
         "ingested": stats.get("ingested", 0),

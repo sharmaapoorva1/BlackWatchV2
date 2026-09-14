@@ -572,14 +572,12 @@ def connector_save_aws(
     name: str = Form(...),
     queue_url: str = Form(...),
     aws_region: str = Form("us-east-1"),
-    aws_profile: str = Form(""),
     target_module: str = Form("aws.cloudtrail"),
     interval_seconds: int = Form(60),
 ) -> RedirectResponse:
     config = AwsCloudtrailSqsConfig(
         queue_url=queue_url,
         aws_region=aws_region,
-        aws_profile=aws_profile or None,
         target_module=target_module,
         interval_seconds=interval_seconds,
     ).model_dump()
@@ -594,14 +592,12 @@ def connector_save_aws_ecs(
     name: str = Form(...),
     vpc: str = Form(...),
     aws_region: str = Form("us-west-1"),
-    aws_profile: str = Form(""),
     interval_seconds: int = Form(60),
     running_smoothing_minutes: int = Form(5),
 ) -> RedirectResponse:
     config = AwsEcsHealthConfig(
         vpc=vpc,
         aws_region=aws_region,
-        aws_profile=aws_profile or None,
         interval_seconds=interval_seconds,
         running_smoothing_minutes=running_smoothing_minutes,
     ).model_dump()
@@ -829,11 +825,9 @@ def connector_save_cert_probe(
 def connector_save_aws_s3(
     connector_id: str = Form(""),
     name: str = Form(...),
-    aws_profile: str = Form("blackwatch"),
     interval_seconds: int = Form(3600),
 ) -> RedirectResponse:
     config = AwsS3DriftConfig(
-        aws_profile=aws_profile or None,
         interval_seconds=interval_seconds,
     ).model_dump()
     cid = connector_id or str(uuid.uuid4())
@@ -848,7 +842,6 @@ def connector_save_aws_s3_access(
     bucket: str = Form(...),
     prefix: str = Form(""),
     aws_region: str = Form("us-west-1"),
-    aws_profile: str = Form(""),
     interval_seconds: int = Form(300),
     max_files_per_run: int = Form(200),
 ) -> RedirectResponse:
@@ -856,7 +849,6 @@ def connector_save_aws_s3_access(
         bucket=bucket.strip(),
         prefix=prefix.strip(),
         aws_region=aws_region or "us-west-1",
-        aws_profile=aws_profile or None,
         interval_seconds=interval_seconds,
         max_files_per_run=max_files_per_run,
     ).model_dump()
@@ -869,7 +861,6 @@ def connector_save_aws_s3_access(
 def connector_save_aws_posture(
     connector_id: str = Form(""),
     name: str = Form(...),
-    aws_profile: str = Form("blackwatch"),
     regions: str = Form(""),
     interval_seconds: int = Form(3600),
     # Phase 2a (per-region infra checks)
@@ -895,7 +886,6 @@ def connector_save_aws_posture(
     region_list = [r.strip() for r in regions.split(",") if r.strip()]
     on = lambda v: v == "on"
     config = AwsPostureDriftConfig(
-        aws_profile=aws_profile or None,
         regions=region_list,
         interval_seconds=interval_seconds,
         check_sg_public_ingress=on(check_sg_public_ingress),

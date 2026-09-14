@@ -23,9 +23,7 @@ _log = logging.getLogger(__name__)
 
 def _client(cfg: AwsRdsSqsConfig):
     import boto3
-    session = boto3.session.Session(
-        profile_name=cfg.aws_profile or None, region_name=cfg.aws_region,
-    )
+    session = boto3.session.Session(region_name=cfg.aws_region)
     return session.client("sqs")
 
 

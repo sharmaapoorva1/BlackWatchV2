@@ -32,7 +32,7 @@ Verify: `journalctl -u blackwatch-agent -f` should show `reported instance=i-...
 Settings → **Add SQS connector**:
 - **Target module** = `ec2.host`
 - **SQS queue URL** = the agent queue URL
-- **Region** = `us-west-1`, **Profile** = `blackwatch`
+- **Region** = `us-west-1` (credentials come from the BlackWatch EC2 instance role)
 → **Test** → **Enable**.
 
 (The `blackwatch-sqs-reader` user already has read access from step 1, mounted as the

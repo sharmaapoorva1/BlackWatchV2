@@ -16,8 +16,8 @@
       <td class="muted">
         {% if c.type == 'aws_cloudtrail_sqs' %}{{ c.config.aws_region }} · {{ c.config.target_module or 'aws.cloudtrail' }}
         {% elif c.type == 'aws_ecs_health' %}{{ c.config.aws_region }} · vpc={{ c.config.vpc }}
-        {% elif c.type == 'aws_s3_drift' %}all regions · profile={{ c.config.aws_profile or '(default)' }}
-        {% elif c.type == 'aws_posture_drift' %}{{ c.config.regions|join(',') or 'all regions' }} · profile={{ c.config.aws_profile or '(default)' }}
+        {% elif c.type == 'aws_s3_drift' %}all regions · instance role credentials
+        {% elif c.type == 'aws_posture_drift' %}{{ c.config.regions|join(',') or 'all regions' }} · instance role credentials
         {% else %}-{% endif %}
       </td>
       <td>{% if c.verified %}<span class="up">verified</span>{% else %}<span class="muted">not tested</span>{% endif %}</td>
@@ -79,15 +79,13 @@
         </select></td></tr>
       <tr><th>SQS queue URL</th><td><input name="queue_url" required value="{{ a.queue_url if a else '' }}" placeholder="https://sqs.us-west-1.amazonaws.com/123/blackwatch-..."></td></tr>
       <tr><th>AWS region</th><td><input name="aws_region" value="{{ a.aws_region if a else 'us-west-1' }}"></td></tr>
-      <tr><th>AWS profile (in mounted ~/.aws)</th><td><input name="aws_profile" value="{{ a.aws_profile if a and a.aws_profile else 'blackwatch' }}"></td></tr>
       <tr><th>Poll interval (s)</th><td><input name="interval_seconds" type="number" value="{{ a.interval_seconds if a else 60 }}"></td></tr>
     </table>
     <p><button type="submit">{{ 'Save changes' if editing_aws else 'Add connector' }}</button>
     {% if editing_aws %}<a href="/ui/settings" style="margin-left:10px">cancel</a>{% endif %}</p>
   </form>
   <p class="muted" style="font-size:12px">
-    Mount your AWS credentials read-only (<code>~/.aws</code>) into the container and put the
-    profile name above. Creds are never stored by BlackWatch. The queue is filled by the
+    The app uses the EC2 instance role through boto3's default credential chain. The queue is filled by the
     EventBridge → Lambda forwarder (see <code>deploy/iam/</code>). After saving, click <b>Test</b>.
   </p>
 </div>
@@ -103,7 +101,6 @@
       <tr><th>Name</th><td><input name="name" required value="{{ editing.name if editing_ecs else '' }}" placeholder="ecs dev cluster"></td></tr>
       <tr><th>VPC label</th><td><input name="vpc" required value="{{ ec.vpc if ec else '' }}" placeholder="dev / prod"></td></tr>
       <tr><th>AWS region</th><td><input name="aws_region" value="{{ ec.aws_region if ec else 'us-west-1' }}"></td></tr>
-      <tr><th>AWS profile</th><td><input name="aws_profile" value="{{ ec.aws_profile if ec and ec.aws_profile else 'blackwatch' }}"></td></tr>
       <tr><th>Poll interval (s)</th><td><input name="interval_seconds" type="number" value="{{ ec.interval_seconds if ec else 60 }}"></td></tr>
       <tr><th>runningCount smoothing (min)</th><td><input name="running_smoothing_minutes" type="number" value="{{ ec.running_smoothing_minutes if ec else 5 }}"></td></tr>
     </table>
@@ -125,7 +122,6 @@
     <input type="hidden" name="connector_id" value="{{ editing.id if editing_s3 else '' }}">
     <table>
       <tr><th>Name</th><td><input name="name" required value="{{ editing.name if editing_s3 else '' }}" placeholder="s3 inventory"></td></tr>
-      <tr><th>AWS profile</th><td><input name="aws_profile" value="{{ s3.aws_profile if s3 and s3.aws_profile else 'blackwatch' }}"></td></tr>
       <tr><th>Scan interval (s)</th><td><input name="interval_seconds" type="number" value="{{ s3.interval_seconds if s3 else 3600 }}"></td></tr>
     </table>
     <p><button type="submit">{{ 'Save changes' if editing_s3 else 'Add connector' }}</button>
@@ -148,7 +144,6 @@
     <input type="hidden" name="connector_id" value="{{ editing.id if editing_post else '' }}">
     <table>
       <tr><th>Name</th><td><input name="name" required value="{{ editing.name if editing_post else '' }}" placeholder="aws posture"></td></tr>
-      <tr><th>AWS profile</th><td><input name="aws_profile" value="{{ po.aws_profile if po and po.aws_profile else 'blackwatch' }}"></td></tr>
       <tr><th>Regions (comma-separated; blank = all enabled)</th>
           <td><input name="regions" value="{{ po.regions|join(',') if po and po.regions else '' }}" placeholder="us-west-1,us-east-1"></td></tr>
       <tr><th>Scan interval (s)</th><td><input name="interval_seconds" type="number" value="{{ po.interval_seconds if po else 3600 }}"></td></tr>

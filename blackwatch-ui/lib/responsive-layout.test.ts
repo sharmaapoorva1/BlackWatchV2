@@ -16,6 +16,13 @@ test("app shell keeps page overflow inside a shrinkable vertical content region"
   assert.match(css, /html, body \{[\s\S]*overflow: hidden;/);
 });
 
+test("sidebar keeps its navigation background continuous through the scroll region", () => {
+  const source = read("components/layout/SideNav.tsx");
+  assert.match(source, /component="nav"[\s\S]*bgcolor: "background\.paper"/);
+  assert.match(source, /<List[\s\S]*bgcolor: "background\.paper"/);
+  assert.match(source, /MuiDrawer-paper[\s\S]*bgcolor: "background\.paper"/);
+});
+
 test("mobile card tables do not keep a desktop width or horizontal scrollbar", () => {
   const tableSource = read("components/ui/Table.tsx");
   const css = read("app/globals.css");

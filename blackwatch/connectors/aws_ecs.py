@@ -38,9 +38,7 @@ _running_windows: dict[str, list[tuple[float, bool]]] = defaultdict(list)
 
 def _client(cfg: AwsEcsHealthConfig):
     import boto3
-    session = boto3.session.Session(
-        profile_name=cfg.aws_profile or None, region_name=cfg.aws_region
-    )
+    session = boto3.session.Session(region_name=cfg.aws_region)
     return session.client("ecs")
 
 

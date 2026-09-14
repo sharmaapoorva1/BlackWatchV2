@@ -47,7 +47,7 @@ Enable → Run now. On success, the connector marks itself `verified` and the sc
 |---|---|---|
 | `bucket` | required | The central log bucket to poll. |
 | `aws_region` | `us-west-1` | Region the bucket lives in. |
-| `aws_profile` | none | Optional profile name if not using instance role. |
+| AWS credentials | — | Uses the BlackWatch EC2 instance role through boto3's default credential chain. |
 | `interval_seconds` | `300` | Poll cadence. 5 min is a good default — AWS delivers access logs in batches every few minutes anyway. |
 | `overlap_seconds` | `900` | Time-cursor overlap so files landing late still get processed. Dedupe handles the rest. |
 | `max_files_per_run` | `200` | Cap per tick so a burst of source-bucket traffic doesn't stall the tick loop. Unprocessed files are picked up on the next run. |

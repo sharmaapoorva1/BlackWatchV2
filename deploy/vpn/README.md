@@ -21,7 +21,7 @@ Prints:
 - **VPN queue URL** (`blackwatch-vpn-agents`)
 - **Agent send policy ARN** (`blackwatch-vpn-agent-send`)
 - Extends the existing `blackwatch-sqs-reader` user with read access to the new queue
-  (so the BlackWatch container's `blackwatch` profile already works — no new creds).
+  (so the BlackWatch container's EC2 instance role can read the queue).
 
 ## 2. Let the OpenVPN box send to the queue
 Attach the agent send policy to the OpenVPN box's instance role (in addition to
@@ -50,7 +50,7 @@ Verify: `journalctl -u blackwatch-vpn-agent -f` shows `reported server=openvpn s
 Settings → **Add SQS connector**:
 - **Target module** = `vpn.openvpn`
 - **SQS queue URL** = the VPN queue URL from step 1
-- **Region** = `us-west-1`, **Profile** = `blackwatch`
+- **Region** = `us-west-1` (credentials are taken from the BlackWatch EC2 instance role)
 → **Test** → **Enable**.
 
 ## 5. Parallel run, then cutover

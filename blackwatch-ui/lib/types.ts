@@ -1378,27 +1378,23 @@ export interface CloudTrailSqsConfig {
   target_module?: string;
   queue_url?: string;
   aws_region?: string;
-  aws_profile?: string;
   interval_seconds?: number;
 }
 
 export interface EcsHealthConfig {
   vpc?: string;
   aws_region?: string;
-  aws_profile?: string;
   interval_seconds?: number;
   running_smoothing_minutes?: number;
 }
 
 export interface S3DriftConfig {
-  aws_profile?: string;
   interval_seconds?: number;
 }
 
 export interface S3AccessLogsConfig {
   bucket?: string;
   aws_region?: string;
-  aws_profile?: string;
   interval_seconds?: number;
   overlap_seconds?: number;
   max_files_per_run?: number;
@@ -1419,7 +1415,6 @@ export interface CertProbeConfig {
 }
 
 export interface PostureDriftConfig {
-  aws_profile?: string;
   regions?: string[];
   interval_seconds?: number;
   check_sg_public_ingress?: boolean;

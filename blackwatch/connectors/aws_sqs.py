@@ -10,6 +10,7 @@ import json
 import logging
 from typing import Any
 
+
 from .. import pipeline
 from .models import AwsCloudtrailSqsConfig
 
@@ -18,11 +19,17 @@ _log = logging.getLogger(__name__)
 
 def _client(cfg: AwsCloudtrailSqsConfig):
     import boto3  # lazy import
+    from botocore.config import Config
 
-    session = boto3.session.Session(
-        profile_name=cfg.aws_profile or None, region_name=cfg.aws_region
+    session = boto3.session.Session(region_name=cfg.aws_region)
+    return session.client(
+        "sqs",
+        config=Config(
+            connect_timeout=10,
+            read_timeout=max(20, cfg.wait_seconds + 10),
+            retries={"max_attempts": 2, "mode": "standard"},
+        ),
     )
-    return session.client("sqs")
 
 
 def drain(cfg: AwsCloudtrailSqsConfig) -> dict[str, Any]:
