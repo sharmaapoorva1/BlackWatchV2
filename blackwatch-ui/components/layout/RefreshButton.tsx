@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { RefreshCw } from "lucide-react";
-import { Box, Button, CircularProgress, Typography } from "@mui/material";
+import { Button } from "@/components/ui/Button";
 
 import { refreshModulesAction } from "@/app/refresh-actions";
 
@@ -87,7 +87,7 @@ export function RefreshButton({
   }
 
   return (
-    <Box sx={{ display: "inline-flex", alignItems: "center", gap: 1 }}>
+    <div className="inline-flex items-center gap-2">
       <Button
         type="button"
         onClick={onClick}
@@ -99,23 +99,22 @@ export function RefreshButton({
             ? `Run ${connectorTypes.join(", ")} now, then reload`
             : "Reload page data"
         }
-        variant="outlined"
-        color="inherit"
-        size="small"
-        sx={{ gap: 0.75, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: active ? "text.secondary" : "text.secondary", borderColor: "divider" }}
+        variant="secondary"
+        size="sm"
+        className="gap-1.5 text-[11px] uppercase tracking-[0.08em]"
       >
-        {active ? <CircularProgress size={12} color="inherit" /> : <RefreshCw size={12} strokeWidth={1.75} />}
+        {active ? <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" /> : <RefreshCw size={12} strokeWidth={1.75} />}
         <span>{active ? "Running" : label}</span>
       </Button>
       {flash && (
-        <Typography
+        <span
           role="status"
           aria-live="polite"
-          sx={{ fontFamily: "monospace", fontSize: 11, color: flash.kind === "ok" ? "signal.main" : "error.main" }}
+          className={`font-mono text-[11px] ${flash.kind === "ok" ? "text-signal" : "text-danger"}`}
         >
           {flash.message}
-        </Typography>
+        </span>
       )}
-    </Box>
+    </div>
   );
 }

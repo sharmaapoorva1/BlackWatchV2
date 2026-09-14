@@ -1,5 +1,5 @@
 import { forwardRef } from "react";
-import InputBase from "@mui/material/InputBase";
+import clsx from "clsx";
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   mono?: boolean;
@@ -7,26 +7,7 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className, mono = false, color: _color, size: _size, ...props }, ref) => {
-    return (
-      <InputBase
-        ref={ref}
-        fullWidth
-        className={className}
-        sx={{
-          minHeight: 32,
-          px: 1.25,
-          border: 1,
-          borderColor: "divider",
-          bgcolor: "background.paper",
-          color: "text.primary",
-          fontFamily: mono ? "monospace" : undefined,
-          "&:hover": { borderColor: "signal.main" },
-          "&.Mui-focused": { borderColor: "signal.main" },
-          "& input::placeholder": { color: "text.disabled", opacity: 1 },
-        }}
-        {...props}
-      />
-    );
+    return <input ref={ref} className={clsx("min-h-8 w-full border border-line bg-surface-1 px-2.5 text-sm text-fg placeholder:text-fg-disabled focus:border-signal focus:outline-none", mono && "font-mono", className)} {...props} />;
   },
 );
 

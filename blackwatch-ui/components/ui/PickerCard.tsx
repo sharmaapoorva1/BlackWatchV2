@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Box, Link as MuiLink, Typography } from "@mui/material";
 
 export function PickerCard({
   href,
@@ -17,20 +16,15 @@ export function PickerCard({
   dashed?: boolean;
 }) {
   return (
-    <MuiLink
-      component={Link}
-      href={href}
-      underline="none"
-      sx={{ display: "flex", flexDirection: "column", gap: 1, px: 2, py: 2, border: 1, borderStyle: dashed ? "dashed" : "solid", borderColor: "divider", bgcolor: dashed ? "transparent" : "background.paper", color: "text.primary", "&:hover": { bgcolor: "background.default", borderColor: "text.secondary" } }}
-    >
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-        <Box sx={{ color: "text.secondary" }}>{icon}</Box>
-        <Typography variant="body2" color="text.primary">{title}</Typography>
+    <Link href={href} className={`flex flex-col gap-2 border px-4 py-4 text-fg transition-colors hover:border-fg-muted hover:bg-canvas ${dashed ? "border-dashed bg-transparent" : "border-line bg-surface"}`}>
+      <div className="flex items-center gap-2">
+        <span className="text-muted">{icon}</span>
+        <span className="text-sm">{title}</span>
         {badge && (
-          <Typography component="code" variant="caption" sx={{ ml: "auto", fontFamily: "monospace" }}>{badge}</Typography>
+          <code className="ml-auto font-mono text-[11px] text-subtle">{badge}</code>
         )}
-      </Box>
-      <Typography variant="caption">{blurb}</Typography>
-    </MuiLink>
+      </div>
+      <span className="text-[11px] text-subtle">{blurb}</span>
+    </Link>
   );
 }

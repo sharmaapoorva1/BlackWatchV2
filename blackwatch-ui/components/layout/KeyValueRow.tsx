@@ -1,5 +1,3 @@
-import { Box, Typography } from "@mui/material";
-
 // Two-column key/value row. Label left, value right. Used for status panels.
 export function KeyValueRow({
   label,
@@ -10,10 +8,8 @@ export function KeyValueRow({
   children: React.ReactNode;
   className?: string;
 }) {
-  return (
-    <Box component="div" className={className} sx={{ display: "grid", minWidth: 0, gridTemplateColumns: { xs: "1fr", sm: "minmax(140px,1fr) minmax(0,2fr)" }, alignItems: "baseline", gap: { xs: 0.5, sm: 2 }, borderBottom: 1, borderColor: "divider", px: 2, py: 1.25, "&:last-child": { borderBottom: 0 } }}>
-      <Typography component="dt" variant="caption" sx={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</Typography>
-      <Typography component="dd" variant="body2" sx={{ minWidth: 0, overflowWrap: "anywhere", color: "text.primary" }}>{children}</Typography>
-    </Box>
-  );
+  return <div className={`grid min-w-0 grid-cols-1 items-baseline gap-1 border-b border-line px-4 py-2.5 last:border-b-0 sm:grid-cols-[minmax(140px,1fr)_minmax(0,2fr)] sm:gap-4 ${className ?? ""}`}>
+    <dt className="text-xs uppercase tracking-[0.08em] text-muted">{label}</dt>
+    <dd className="min-w-0 overflow-wrap-anywhere text-sm">{children}</dd>
+  </div>;
 }

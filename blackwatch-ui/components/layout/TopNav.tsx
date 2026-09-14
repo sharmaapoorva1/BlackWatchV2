@@ -1,128 +1,13 @@
 "use client";
-
 import Link from "next/link";
 import { useState } from "react";
 import { LogOut, Menu as MenuIcon, Settings as SettingsIcon, X } from "lucide-react";
-import {
-  AppBar,
-  Avatar,
-  Box,
-  Chip,
-  Divider,
-  IconButton,
-  ListItemIcon,
-  Menu,
-  MenuItem,
-  Toolbar,
-  Typography,
-} from "@mui/material";
-
 import { LiveCounter } from "./LiveCounter";
 import { logoutAction } from "@/app/login/actions";
 import { useAuth } from "@/components/auth/AuthProvider";
 
-// Top navigation. On mobile the hamburger toggles the SideNav drawer; on
-// desktop it's hidden. The account pill opens a small popover with a
-// Sign out action; the Settings icon jumps to /settings.
-export function TopNav({
-  onMenuClick,
-  menuOpen = false,
-}: {
-  onMenuClick?: () => void;
-  menuOpen?: boolean;
-}) {
-  return (
-    <AppBar position="static">
-      <Toolbar variant="dense" sx={{ minHeight: 48, px: { xs: 1.5, md: 2 } }}>
-        <IconButton
-          color="inherit"
-          onClick={onMenuClick}
-          aria-label={menuOpen ? "Close menu" : "Open menu"}
-          aria-expanded={menuOpen}
-          aria-controls="mobile-navigation"
-          sx={{ display: { md: "none" }, mr: 1, color: "text.secondary" }}
-        >
-          {menuOpen ? <X size={16} /> : <MenuIcon size={16} />}
-        </IconButton>
-
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-        <Logo />
-        <Typography
-          component="span"
-          variant="caption"
-          sx={{ display: { xs: "none", sm: "inline" }, fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "0.18em" }}
-        >
-          blackwatch
-        </Typography>
-      </Box>
-
-      <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: { xs: 1, md: 2 } }}>
-        <LiveCounter />
-        <IconButton component={Link} href="/settings" aria-label="Settings" size="small" sx={{ color: "text.secondary" }}>
-          <SettingsIcon size={15} strokeWidth={1.5} />
-        </IconButton>
-        <AccountMenu />
-      </Box>
-      </Toolbar>
-    </AppBar>
-  );
+export function TopNav({ onMenuClick, menuOpen = false }: { onMenuClick?: () => void; menuOpen?: boolean }) {
+  return <header className="flex min-h-12 shrink-0 items-center border-b border-line bg-canvas px-1.5 md:px-2"><button type="button" onClick={onMenuClick} aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen} aria-controls="mobile-navigation" className="mr-2 inline-flex h-8 w-8 items-center justify-center text-fg-muted hover:bg-surface-1 hover:text-fg md:hidden">{menuOpen ? <X size={16} /> : <MenuIcon size={16} />}</button><div className="flex items-center gap-3"><Logo /><span className="hidden font-mono text-xs uppercase tracking-[0.18em] text-fg-muted sm:inline">blackwatch</span></div><div className="ml-auto flex items-center gap-2 md:gap-4"><LiveCounter /><Link href="/settings" aria-label="Settings" className="text-fg-muted hover:text-fg"><SettingsIcon size={15} strokeWidth={1.5} /></Link><AccountMenu /></div></header>;
 }
-
-function Logo() {
-  return (
-    <Box aria-hidden sx={{ display: "grid", placeItems: "center", width: 20, height: 20, border: 1, borderColor: "signal.main", color: "signal.main" }}>
-      <Typography component="span" sx={{ fontFamily: "monospace", fontSize: 9, fontWeight: 500, lineHeight: 1 }}>BW</Typography>
-    </Box>
-  );
-}
-
-function AccountMenu() {
-  const [open, setOpen] = useState(false);
-  const { user, role, loading } = useAuth();
-  const initials = (user ?? "??").slice(0, 2).toUpperCase();
-  const isViewer = !loading && role === "viewer";
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const openMenu = Boolean(anchorEl);
-
-  return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-      {isViewer && (
-        <Chip label="viewer" size="small" variant="outlined" title="Read-only role — mutations disabled" sx={{ display: { xs: "none", sm: "inline-flex" }, fontFamily: "monospace", fontSize: 9, textTransform: "uppercase" }} />
-      )}
-      <IconButton
-        onClick={(event) => setAnchorEl(event.currentTarget)}
-        aria-label="Account"
-        aria-haspopup="menu"
-        aria-expanded={openMenu ? "true" : undefined}
-        size="small"
-        sx={{ p: 0 }}
-      >
-        <Avatar sx={{ width: 26, height: 26, borderRadius: 1, bgcolor: "background.paper", border: 1, borderColor: "divider", color: "text.secondary", fontFamily: "monospace", fontSize: 10 }}>
-          {initials}
-        </Avatar>
-      </IconButton>
-      <Menu
-        anchorEl={anchorEl}
-        open={openMenu}
-        onClose={() => setAnchorEl(null)}
-        slotProps={{ paper: { sx: { minWidth: 210, mt: 1 } } }}
-      >
-        <Box sx={{ px: 2, py: 1 }}>
-          <Typography variant="body2" noWrap color="text.primary">{user ?? "unknown"}</Typography>
-          <Typography variant="caption" sx={{ fontFamily: "monospace" }}>{loading ? "…" : role}</Typography>
-        </Box>
-        <Divider />
-        <MenuItem component={Link} href="/settings" onClick={() => setAnchorEl(null)}>
-          <ListItemIcon><SettingsIcon size={15} /></ListItemIcon>
-          Settings
-        </MenuItem>
-        <Box component="form" action={logoutAction}>
-          <MenuItem component="button" type="submit" onClick={() => setAnchorEl(null)} sx={{ width: "100%" }}>
-            <ListItemIcon><LogOut size={15} /></ListItemIcon>
-            Sign out
-          </MenuItem>
-        </Box>
-      </Menu>
-    </Box>
-  );
-}
+function Logo() { return <span aria-hidden className="grid h-5 w-5 place-items-center border border-signal text-[9px] font-medium leading-none text-signal">BW</span>; }
+function AccountMenu() { const [open, setOpen] = useState(false); const { user, role, loading } = useAuth(); const initials = (user ?? "??").slice(0, 2).toUpperCase(); const viewer = !loading && role === "viewer"; return <div className="relative flex items-center gap-2">{viewer && <span className="hidden border border-line px-1.5 py-0.5 font-mono text-[9px] uppercase text-fg-muted sm:inline">viewer</span>}<button type="button" onClick={() => setOpen((value) => !value)} aria-label="Account" aria-haspopup="menu" aria-expanded={open} className="grid h-7 w-7 place-items-center rounded-sm border border-line bg-surface-1 font-mono text-[10px] text-fg-muted hover:border-signal">{initials}</button>{open && <div role="menu" className="absolute right-0 top-9 z-50 min-w-52 border border-line bg-surface-1 p-1 shadow-xl"><div className="px-3 py-2"><div className="truncate text-sm text-fg">{user ?? "unknown"}</div><div className="font-mono text-[10px] uppercase text-fg-subtle">{loading ? "…" : role}</div></div><Link href="/settings" onClick={() => setOpen(false)} className="flex items-center gap-2 px-3 py-2 text-sm text-fg-muted hover:bg-surface-2 hover:text-fg"><SettingsIcon size={15} /> Settings</Link><form action={logoutAction}><button type="submit" onClick={() => setOpen(false)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-fg-muted hover:bg-surface-2 hover:text-fg"><LogOut size={15} /> Sign out</button></form></div>}</div>; }

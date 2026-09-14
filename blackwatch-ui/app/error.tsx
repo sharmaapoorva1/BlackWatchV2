@@ -1,22 +1,19 @@
 "use client";
 
-import { Alert, AlertTitle, Box, Button, Stack, Typography } from "@mui/material";
+import { Button } from "@/components/ui/Button";
 
 export default function Error({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
-    <Box sx={{ maxWidth: 720, mx: "auto", py: { xs: 4, md: 8 }, px: 2 }}>
-      <Stack spacing={2}>
-        <Alert severity="error" variant="outlined">
-          <AlertTitle>This page could not load</AlertTitle>
+    <div className="mx-auto max-w-[720px] px-4 py-8 md:py-16">
+      <div className="flex flex-col gap-4">
+        <div className="border border-danger/50 bg-danger/5 px-4 py-3 text-sm"><h2 className="font-semibold text-danger">This page could not load</h2>
           The server returned an error while loading this view. Your data was not changed.
-        </Alert>
-        <Typography color="text.secondary" variant="body2">
+        </div>
+        <p className="text-sm text-muted">
           Try again. If the problem persists, check that the API is running and that your session is still valid.
-        </Typography>
-        <Box>
-          <Button variant="contained" onClick={reset}>Try again</Button>
-        </Box>
-      </Stack>
-    </Box>
+        </p>
+        <div><Button variant="primary" onClick={reset}>Try again</Button></div>
+      </div>
+    </div>
   );
 }

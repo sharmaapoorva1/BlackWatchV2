@@ -1,4 +1,4 @@
-import Chip from "@mui/material/Chip";
+import clsx from "clsx";
 
 type SeverityKey =
   | "critical"
@@ -9,11 +9,11 @@ type SeverityKey =
   | string;
 
 const CHIP_COLOR: Record<string, string> = {
-  critical: "severity.critical",
-  high: "severity.high",
-  medium: "severity.medium",
-  low: "severity.low",
-  informational: "text.secondary",
+  critical: "border-severity-critical/50 text-severity-critical",
+  high: "border-severity-high/50 text-severity-high",
+  medium: "border-severity-medium/50 text-severity-medium",
+  low: "border-severity-low/50 text-severity-low",
+  informational: "border-line text-muted",
 };
 
 const SHORT_LABEL: Record<string, string> = {
@@ -33,6 +33,6 @@ export function SeverityChip({
 }) {
   const label = SHORT_LABEL[severity] ?? severity;
   return (
-    <Chip label={label} size="small" variant="outlined" className={className} sx={{ borderColor: CHIP_COLOR[severity] ?? CHIP_COLOR.informational, color: CHIP_COLOR[severity] ?? CHIP_COLOR.informational, fontFamily: "monospace", fontSize: 10, height: 22 }} />
+    <span className={clsx("inline-flex h-[22px] items-center rounded border px-2 font-mono text-[10px]", severityChipClass(severity), className)}>{label}</span>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState, useId } from "react";
 import { ChevronRight } from "lucide-react";
-import { Box, Button, Collapse } from "@mui/material";
+import { Button } from "./Button";
 
 // Collapsible section with a caret + label trigger. Used anywhere a form
 // has an optional-detail area (advanced settings, custom message template,
@@ -28,27 +28,23 @@ export function Disclosure({
   const panelId = useId();
 
   return (
-    <Box>
+    <div>
       <Button
         type="button"
-        size="small"
-        variant="text"
-        color="inherit"
-        startIcon={<ChevronRight size={12} strokeWidth={2} />}
+        size="sm"
+        variant="ghost"
         onClick={() => !disabled && setOpen((s) => !s)}
         aria-expanded={open}
         aria-controls={panelId}
         disabled={disabled}
-        sx={{ px: 0, color: "text.secondary", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", minHeight: 24, "& .MuiButton-startIcon": { transform: open ? "rotate(90deg)" : "none", transition: "transform 150ms ease" }, "&:hover": { bgcolor: "transparent", color: "text.primary" } }}
+        className="min-h-6 px-0 text-[11px] uppercase tracking-[0.08em]"
       >
-        {label}
+        <ChevronRight size={12} className={`transition-transform ${open ? "rotate-90" : ""}`} />{label}
       </Button>
       {/* Keep children mounted when collapsed so form fields inside them
           still contribute to FormData on submit — hide visually via
           `hidden`. Screen readers get correct aria-expanded semantics. */}
-      <Collapse id={panelId} in={open} timeout="auto" unmountOnExit={false} sx={{ pl: 2 }}>
-        {children}
-      </Collapse>
-    </Box>
+      <div id={panelId} hidden={!open} className="pl-2">{children}</div>
+    </div>
   );
 }

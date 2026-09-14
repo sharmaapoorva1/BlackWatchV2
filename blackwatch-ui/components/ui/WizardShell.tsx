@@ -3,7 +3,7 @@
 import { ReactNode } from "react";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import Link from "next/link";
-import { Box, Button, Paper, Stack, Step, StepButton, StepLabel, Stepper, Typography } from "@mui/material";
+import { Button } from "./Button";
 
 export type WizardStepDef = { n: number; label: string };
 
@@ -39,10 +39,10 @@ export function Wizard({
   children: ReactNode;
 }) {
   return (
-    <Box sx={{ maxWidth: 960, mx: "auto" }}>
-      <Box sx={{ mb: 2 }}><Typography component={Link} href={backHref} sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, color: "text.secondary", fontSize: 12, textDecoration: "none" }}><ArrowLeft size={12} /> {backLabel}</Typography></Box>
+    <div className="mx-auto max-w-[960px]">
+      <div className="mb-4"><Link href={backHref} className="inline-flex items-center gap-1.5 text-xs text-muted"><ArrowLeft size={12} /> {backLabel}</Link></div>
 
-      <Box sx={{ mb: 4 }}><Typography component="h1" variant="h1">{title}</Typography>{subtitle && <Typography variant="body2" sx={{ mt: 0.5 }}>{subtitle}</Typography>}</Box>
+      <div className="mb-8"><h1 className="font-display text-2xl font-bold">{title}</h1>{subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}</div>
 
       <WizardStepper
         steps={steps}
@@ -51,14 +51,13 @@ export function Wizard({
         onJump={onJump}
       />
 
-      <Paper sx={{ border: 1, borderColor: "divider", p: { xs: 2, sm: 4 }, overflow: "hidden" }}>{children}</Paper>
+      <div className="overflow-hidden border border-line p-4 sm:p-8">{children}</div>
 
-      <Stack direction="row" sx={{ mt: 2, justifyContent: "space-between", alignItems: "center" }}>
+      <div className="mt-4 flex items-center justify-between">
         <Button
           type="button"
-          size="small"
-          variant="text"
-          color="inherit"
+          size="sm"
+          variant="ghost"
           disabled={current === steps[0].n}
           onClick={onBack}
         >
@@ -70,17 +69,16 @@ export function Wizard({
         ) : (
           <Button
             type="button"
-            size="small"
-            variant="contained"
-            color="primary"
+            size="sm"
+            variant="primary"
             disabled={!canAdvance}
             onClick={onNext}
           >
             Next <ArrowRight size={12} />
           </Button>
         )}
-      </Stack>
-    </Box>
+      </div>
+    </div>
   );
 }
 
@@ -92,7 +90,7 @@ export function WizardStepHeader({
   subtitle?: string;
 }) {
   return (
-    <Box sx={{ mb: 2.5 }}><Typography component="h2" variant="h3">{title}</Typography>{subtitle && <Typography variant="body2" sx={{ mt: 0.5 }}>{subtitle}</Typography>}</Box>
+    <div className="mb-6"><h2 className="text-lg font-semibold">{title}</h2>{subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}</div>
   );
 }
 
@@ -108,12 +106,12 @@ function WizardStepper({
   onJump: (n: number) => void;
 }) {
   return (
-    <Stepper activeStep={Math.max(0, steps.findIndex((step) => step.n === current))} alternativeLabel sx={{ mb: 4 }}>
+    <div className="mb-8 flex items-start">
         {steps.map((s) => {
           const active = current === s.n;
           const done = !!completed[s.n] && !active;
-          return <Step key={s.n} completed={done}><StepButton onClick={() => onJump(s.n)} color="inherit"><StepLabel>{s.label}</StepLabel></StepButton></Step>;
+          return <button type="button" key={s.n} onClick={() => onJump(s.n)} className="flex flex-1 flex-col items-center gap-2 text-xs text-muted"><span className={`flex h-6 w-6 items-center justify-center rounded-full border ${active ? "border-signal text-signal" : done ? "border-sev-resolved text-sev-resolved" : "border-line"}`}>{done ? <Check size={13} /> : s.n}</span><span>{s.label}</span></button>;
         })}
-    </Stepper>
+    </div>
   );
 }

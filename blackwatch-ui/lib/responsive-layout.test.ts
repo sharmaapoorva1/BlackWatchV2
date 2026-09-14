@@ -10,41 +10,43 @@ const read = (relativePath: string) =>
 test("app shell keeps page overflow inside a shrinkable vertical content region", () => {
   const source = read("components/layout/AppShell.tsx");
   const css = read("app/globals.css");
-  assert.match(source, /height: "100dvh"[\s\S]*flexDirection: "column"[\s\S]*overflow: "hidden"/);
-  assert.match(source, /minHeight: 0[\s\S]*flex: 1[\s\S]*overflow: "hidden"/);
-  assert.match(source, /minHeight: 0[\s\S]*flex: 1[\s\S]*overflowX: "hidden"[\s\S]*overflowY: "auto"/);
+  assert.match(source, /h-dvh[\s\S]*flex-col[\s\S]*overflow-hidden/);
+  assert.match(source, /min-h-0[\s\S]*flex-1[\s\S]*overflow-hidden/);
+  assert.match(source, /min-h-0[\s\S]*flex-1[\s\S]*overflow-x-hidden[\s\S]*overflow-y-auto/);
   assert.match(css, /html, body \{[\s\S]*overflow: hidden;/);
 });
 
 test("sidebar keeps its navigation background continuous through the scroll region", () => {
   const source = read("components/layout/SideNav.tsx");
-  assert.match(source, /component="nav"[\s\S]*bgcolor: "background\.default"/);
-  assert.match(source, /<List[\s\S]*bgcolor: "background\.default"/);
-  assert.match(source, /MuiDrawer-paper[\s\S]*bgcolor: "background\.default"/);
+  assert.match(source, /<nav[\s\S]*bg-canvas/);
+  assert.match(source, /overflow-y-auto/);
+  assert.doesNotMatch(source, /MuiDrawer|@mui/);
 });
 
 test("mobile card tables do not keep a desktop width or horizontal scrollbar", () => {
   const tableSource = read("components/ui/Table.tsx");
   const css = read("app/globals.css");
-  assert.match(tableSource, /TableContainer/);
+  assert.match(tableSource, /overflow-x-auto/);
   assert.match(tableSource, /data-responsive={responsive \? "cards" : "scroll"}/);
   assert.match(css, /data-responsive="cards"/);
   assert.match(css, /overflow-x: hidden/);
 });
 
-test("shared tables promote semantic rows and cells to MUI components", () => {
+test("shared tables promote semantic rows and cells to native styled primitives", () => {
   const source = read("components/ui/Table.tsx");
-  assert.match(source, /MuiTableHead/);
-  assert.match(source, /MuiTableBody/);
-  assert.match(source, /MuiTableRow/);
-  assert.match(source, /MuiTableCell/);
-  assert.doesNotMatch(source, /className=\{clsx\("bw-table/);
+  assert.match(source, /<thead/);
+  assert.match(source, /<tbody/);
+  assert.match(source, /<tr/);
+  assert.match(source, /<th/);
+  assert.match(source, /<td/);
+  assert.doesNotMatch(source, /@mui/);
   assert.match(source, /withoutLegacyClassName/);
 });
 
 test("narrow table pagination can wrap its controls", () => {
   const source = read("components/ui/Pagination.tsx");
-  assert.match(source, /display: "flex"[\s\S]*width: \{ xs: "100%", sm: "auto" \}[\s\S]*flexWrap: "wrap"/);
+  assert.match(source, /flex flex-wrap/);
+  assert.match(source, /w-full flex-wrap[\s\S]*sm:w-auto/);
 });
 
 test("shared form rows and notification summary rows collapse on narrow screens", () => {
@@ -52,8 +54,8 @@ test("shared form rows and notification summary rows collapse on narrow screens"
   const keyValue = read("components/layout/KeyValueRow.tsx");
   const channelForm = read("components/domain/notifications/ChannelForm.tsx");
   const notifications = read("app/notifications/page.tsx");
-  assert.match(formRow, /gridTemplateColumns: \{ xs: "1fr", sm: "minmax\(140px,200px\) minmax\(0,1fr\)" \}/);
-  assert.match(keyValue, /gridTemplateColumns: \{ xs: "1fr", sm: "minmax\(140px,1fr\) minmax\(0,2fr\)" \}/);
+  assert.match(formRow, /grid-cols-1[\s\S]*sm:grid-cols-\[minmax\(140px,200px\)_minmax\(0,1fr\)\]/);
+  assert.match(keyValue, /grid-cols-1[\s\S]*sm:grid-cols-\[minmax\(140px,1fr\)_minmax\(0,2fr\)\]/);
   assert.match(channelForm, /grid-cols-1[^\n]*sm:grid-cols-\[minmax\(0,1fr\)_auto\]/);
   assert.match(notifications, /grid-cols-1[^\n]*sm:grid-cols-\[minmax\(0,1fr\)_220px_80px\]/);
 });

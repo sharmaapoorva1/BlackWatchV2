@@ -2,7 +2,6 @@
 
 import { useEffect, useId, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { Accordion, AccordionDetails, AccordionSummary, Badge, Typography } from "@mui/material";
 
 // Collapsible group wrapper. Persists open/closed per `storageKey` in
 // localStorage so operator's grouping state survives navigations.
@@ -59,13 +58,13 @@ export function CollapsibleSection({
   }
 
   return (
-    <Accordion expanded={open} onChange={toggle} disableGutters sx={{ mb: 1.5, border: 1, borderColor: "divider", bgcolor: "background.paper", "&:before": { display: "none" } }}>
-      <AccordionSummary expandIcon={open ? <ChevronDown size={14} /> : <ChevronRight size={14} />} aria-controls={panelId} id={`${panelId}-header`}>
-        <Typography sx={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.1em" }}>{title}</Typography>
-        {typeof count === "number" && <Typography component="span" sx={{ ml: 1, fontFamily: "monospace", fontSize: 10, color: "text.secondary" }}>[{count}]</Typography>}
-        {subtitle && <Typography component="span" variant="caption" sx={{ ml: 1 }}>{subtitle}</Typography>}
-      </AccordionSummary>
-      <AccordionDetails id={panelId}>{children}</AccordionDetails>
-    </Accordion>
+    <section className="mb-3 border border-line bg-surface">
+      <button type="button" onClick={toggle} aria-controls={panelId} aria-expanded={open} id={`${panelId}-header`} className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-surface-2">
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}<span className="text-xs uppercase tracking-[0.1em]">{title}</span>
+        {typeof count === "number" && <span className="ml-1 font-mono text-[10px] text-muted">[{count}]</span>}
+        {subtitle && <span className="ml-1 text-[11px] text-subtle">{subtitle}</span>}
+      </button>
+      <div id={panelId} hidden={!open} className="px-3 pb-3">{children}</div>
+    </section>
   );
 }

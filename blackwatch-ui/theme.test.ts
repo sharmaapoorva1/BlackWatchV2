@@ -9,5 +9,5 @@ test("BlackWatch theme centralizes dark surfaces, responsive breakpoints, and se
   assert.equal(appTheme.palette.severity.critical, "#F43F5E");
   assert.equal(appTheme.breakpoints.values.md, 900);
   assert.equal(appTheme.typography.fontFamily, '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif');
-  assert.equal(appTheme.components?.MuiButton?.defaultProps?.disableElevation, true);
+  assert.equal(appTheme.typography.fontSize, 14);
 });

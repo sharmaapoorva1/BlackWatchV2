@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, AlertTriangle, XCircle, Info, X } from "lucide-react";
-import { Alert, Box, IconButton } from "@mui/material";
 
 type Kind = "success" | "error" | "warning" | "info";
 
@@ -83,23 +82,21 @@ export function FlashToast({
   if (!visible) return null;
 
   return (
-    <Alert
+    <div
       role="status"
       aria-live="polite"
-      severity={style.severity}
-      icon={<Icon size={16} aria-hidden />}
-      sx={{ mb: 2, alignItems: "flex-start", borderRadius: 0, py: 1.25 }}
+      className={`mb-4 flex items-start gap-2 border px-3 py-2.5 text-sm ${kind === "error" ? "border-danger/50 text-danger" : kind === "success" ? "border-sev-resolved/50 text-sev-resolved" : kind === "warning" ? "border-sev-high/50 text-sev-high" : "border-signal/50 text-signal"}`}
     >
-      <Box sx={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+      <Icon size={16} aria-hidden />
+      <div className="flex w-full items-center justify-between gap-2">
         <span>{message}</span>
-        <IconButton
+        <button
           type="button"
         onClick={() => setVisible(false)}
         aria-label="Dismiss"
-          size="small"
-          sx={{ flexShrink: 0, color: "inherit" }}
-        ><X size={14} /></IconButton>
-      </Box>
-    </Alert>
+          className="shrink-0 p-1 text-current"
+        ><X size={14} /></button>
+      </div>
+    </div>
   );
 }

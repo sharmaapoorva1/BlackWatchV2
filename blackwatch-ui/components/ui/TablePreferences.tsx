@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Box, FormControl, MenuItem, Select, Stack, Typography } from "@mui/material";
+import { NativeSelect } from "./NativeSelect";
 
 export const TABLE_PAGE_SIZE_KEY = "bw.table.defaultPageSize";
 export const TABLE_PAGE_SIZE_EVENT = "bw:table-page-size";
@@ -37,23 +37,17 @@ export function TablePageSizeSetting() {
   }
 
   return (
-    <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}>
-      <Box>
-        <Typography variant="body2" color="text.primary">Default table rows</Typography>
-        <Typography variant="caption" sx={{ display: "block", mt: 0.5 }}>
+    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+      <div>
+        <p className="text-sm">Default table rows</p>
+        <p className="mt-0.5 text-[11px] text-subtle">
           Applies to every table in this browser. You can still change an
           individual table temporarily from its footer.
-        </Typography>
-      </Box>
-      <FormControl size="small" sx={{ minWidth: 120 }}>
-        <Select
-          value={value}
-          onChange={(event) => onChange(Number(event.target.value))}
-          aria-label="Default rows per table"
-        >
-          {TABLE_PAGE_SIZES.map((size) => <MenuItem key={size} value={size}>{size} rows</MenuItem>)}
-        </Select>
-      </FormControl>
-    </Stack>
+        </p>
+      </div>
+      <NativeSelect value={String(value)} onChange={(event) => onChange(Number(event.target.value))} aria-label="Default rows per table" className="w-[120px]">
+        {TABLE_PAGE_SIZES.map((size) => <option key={size} value={size}>{size} rows</option>)}
+      </NativeSelect>
+    </div>
   );
 }

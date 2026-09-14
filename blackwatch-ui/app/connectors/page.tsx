@@ -18,7 +18,6 @@ import {
   toggleConnectorAction,
   deleteConnectorAction,
 } from "./actions";
-import { Alert, AlertTitle, Box, Typography } from "@mui/material";
 
 type SearchParams = { msg?: string };
 
@@ -71,17 +70,17 @@ export default async function ConnectorsPage({
       )}
 
       {loadError && (
-        <Alert severity="error" variant="outlined" sx={{ mb: 2 }}>
-          <AlertTitle>Connector service unavailable</AlertTitle>
-          <Typography variant="body2">
+        <div className="mb-4 border border-danger/50 bg-danger/5 px-4 py-3 text-sm">
+          <h2 className="font-semibold text-danger">Connector service unavailable</h2>
+          <p className="mt-1 text-muted">
             The UI could not read connector data from the API. Existing connector data was not changed.
-          </Typography>
-          <Box component="code" sx={{ display: "block", mt: 1, fontSize: "0.75rem", opacity: 0.8 }}>
+          </p>
+          <code className="mt-2 block text-xs opacity-80">
             {loadError instanceof Error && /failed: \d{3}/.test(loadError.message)
               ? loadError.message.replace(/^fetchConnectors failed: /, "API status: ")
               : "Check the backend logs and confirm the database migrations completed."}
-          </Box>
-        </Alert>
+          </code>
+        </div>
       )}
 
       <DataPanel className="overflow-hidden">

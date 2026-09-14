@@ -1,13 +1,12 @@
 import { StatusDot } from "./StatusDot";
-import { Box, Typography } from "@mui/material";
 
 type EmptyStateSize = "sm" | "md" | "lg";
 type EmptyStateTone = "neutral" | "ok";
 
-const SIZE_PADDING: Record<EmptyStateSize, number> = {
-  sm: 4,
-  md: 5,
-  lg: 8,
+const SIZE_PADDING: Record<EmptyStateSize, string> = {
+  sm: "py-4",
+  md: "py-5",
+  lg: "py-8",
 };
 
 /** Shared empty content treatment for panels and data views. */
@@ -23,9 +22,9 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <Box className={className} sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, px: 3, py: SIZE_PADDING[size], textAlign: "center" }}>
+    <div className={`flex items-center justify-center gap-2 px-6 text-center ${SIZE_PADDING[size]} ${className ?? ""}`}>
       {tone === "ok" && <StatusDot severity="resolved" />}
-      <Typography variant="body2">{children}</Typography>
-    </Box>
+      <p className="text-sm">{children}</p>
+    </div>
   );
 }

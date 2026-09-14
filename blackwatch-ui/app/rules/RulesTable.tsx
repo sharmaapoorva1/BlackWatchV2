@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import clsx from "clsx";
-import { FormControl, MenuItem, Select as MuiSelect } from "@mui/material";
+import { NativeSelect } from "@/components/ui/NativeSelect";
 import type { Rule } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Table } from "@/components/ui/Table";
@@ -701,20 +701,12 @@ function SeverityPicker({
       <span className="pointer-events-none">
         {current ? <SeverityBadge severity={current} /> : null}
       </span>
-      <FormControl size="small" sx={{ minWidth: 108 }}>
-        <MuiSelect
-          name="severity"
-          defaultValue={current ?? "default"}
-          aria-label={`Set severity for ${ruleId}`}
-          onChange={() => {
-          setTimeout(() => formRef.current?.requestSubmit(), 0);
-          }}
-          sx={{ fontSize: "0.72rem", height: 32 }}
-        >
-          <MenuItem value="default">— clear override —</MenuItem>
-          {SEVERITY_OPTIONS.map((s) => <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>)}
-        </MuiSelect>
-      </FormControl>
+      <NativeSelect name="severity" defaultValue={current ?? "default"} aria-label={`Set severity for ${ruleId}`} className="min-h-8 w-[108px] text-xs" onChange={() => {
+           setTimeout(() => formRef.current?.requestSubmit(), 0);
+          }}>
+        <option value="default">— clear override —</option>
+        {SEVERITY_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+      </NativeSelect>
     </form>
   );
 }

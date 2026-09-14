@@ -1,4 +1,3 @@
-import { Box, Stack, Typography } from "@mui/material";
 import { Breadcrumbs, type BreadcrumbItem } from "./Breadcrumbs";
 
 // Page-level header. MUI owns the responsive stacking so actions never force
@@ -14,14 +13,12 @@ export function PageHeader({
   actions?: React.ReactNode;
   breadcrumbs?: BreadcrumbItem[];
 }) {
-  return (
-    <Box component="header" sx={{ mb: 3, display: "flex", minWidth: 0, flexDirection: { xs: "column", md: "row" }, alignItems: { md: "flex-end" }, justifyContent: "space-between", gap: { xs: 1.5, md: 2 } }}>
-      <Box sx={{ minWidth: 0 }}>
+  return <header className="mb-6 flex min-w-0 flex-col justify-between gap-3 md:flex-row md:items-end md:gap-4">
+      <div className="min-w-0">
         {breadcrumbs && <Breadcrumbs items={breadcrumbs} />}
-        <Typography component="h1" variant="h1" sx={{ overflowWrap: "anywhere" }}>{title}</Typography>
-        {subtitle && <Typography variant="body2" sx={{ mt: 0.5 }}>{subtitle}</Typography>}
-      </Box>
-      {actions && <Stack direction="row" useFlexGap spacing={1} sx={{ flexShrink: 0, flexWrap: "wrap" }}>{actions}</Stack>}
-    </Box>
-  );
+        <h1 className="overflow-wrap-anywhere font-display text-2xl font-bold tracking-tight">{title}</h1>
+        {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
+      </div>
+      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+    </header>;
 }

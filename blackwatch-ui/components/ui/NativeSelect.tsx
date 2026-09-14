@@ -1,6 +1,5 @@
 "use client";
 
-import MuiNativeSelect from "@mui/material/NativeSelect";
 import { forwardRef, type ChangeEvent, type SelectHTMLAttributes } from "react";
 
 export interface NativeSelectProps
@@ -12,9 +11,7 @@ export interface NativeSelectProps
 }
 
 /**
- * Custom select with the old NativeSelect API, so forms can migrate without
- * changing their option definitions. It keeps a hidden input for server
- * actions while Radix provides reliable keyboard and pointer behavior.
+ * Shared native select with a stable API for server actions and forms.
  */
 export const NativeSelect = forwardRef<HTMLSelectElement, NativeSelectProps>(
   (
@@ -35,8 +32,8 @@ export const NativeSelect = forwardRef<HTMLSelectElement, NativeSelectProps>(
     ref,
   ) => {
     return (
-      <MuiNativeSelect
-        inputRef={ref}
+      <select
+        ref={ref}
         id={id}
         name={name}
         value={value}
@@ -44,13 +41,13 @@ export const NativeSelect = forwardRef<HTMLSelectElement, NativeSelectProps>(
         onChange={onChange}
         disabled={disabled}
         required={required}
-        inputProps={{ "aria-label": props["aria-label"], "aria-labelledby": props["aria-labelledby"] }}
-        sx={{ minWidth: 0, width: "100%", minHeight: 32, bgcolor: "background.paper", "& .MuiNativeSelect-select": { py: 0.75, px: 1.25, fontSize: 14 } }}
-        className={className}
-        {...(props as unknown as Record<string, unknown>)}
+        className={`min-h-8 min-w-0 w-full border border-line bg-surface px-3 py-1.5 text-sm outline-none focus:border-signal focus:ring-1 focus:ring-signal disabled:cursor-not-allowed disabled:opacity-50 ${className ?? ""}`}
+        aria-label={props["aria-label"]}
+        aria-labelledby={props["aria-labelledby"]}
+        {...props}
       >
         {children}
-      </MuiNativeSelect>
+      </select>
     );
   },
 );

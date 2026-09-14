@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { muteAction, unmuteAction } from "./actions";
 import { RulesTable } from "./RulesTable";
-import { Alert, Box, Button as MuiButton, Paper, Stack, TextField, Typography } from "@mui/material";
 
 type SearchParams = { msg?: string };
 
@@ -28,28 +27,23 @@ export default async function RulesPage({
 
       {msg && <MessageBar message={msg} />}
 
-      <Stack spacing={1.5} component="section">
-        <Box sx={{ display: "flex", alignItems: "end", justifyContent: "space-between", gap: 2 }}>
-          <Box>
-            <Typography variant="subtitle2" sx={{ letterSpacing: "0.04em" }}>Rule catalog</Typography>
-            <Typography variant="caption" color="text.secondary">
+      <section className="flex flex-col gap-3">
+        <div className="flex items-end justify-between gap-4"><div>
+            <h2 className="text-sm tracking-[0.04em]">Rule catalog</h2>
+            <p className="text-[11px] text-muted">
               Search, filter, and adjust runtime rule behavior.
-            </Typography>
-          </Box>
-          <Typography variant="caption" color="text.secondary">{count} loaded</Typography>
-        </Box>
+            </p>
+          </div><span className="text-[11px] text-muted">{count} loaded</span></div>
         <DataPanel className="overflow-hidden">
           <RulesTable rules={rules} />
         </DataPanel>
-      </Stack>
+      </section>
 
-      <Stack spacing={1.5} component="section" sx={{ mt: 4 }}>
-        <Box>
-          <Typography variant="subtitle2" sx={{ letterSpacing: "0.04em" }}>Muted event filters</Typography>
-          <Typography variant="caption" color="text.secondary">Dropped at ingest before events are stored.</Typography>
-        </Box>
-        <Paper variant="outlined" sx={{ p: 2 }}>
-          <Typography variant="body2" color="text.secondary">
+      <section className="mt-8 flex flex-col gap-3">
+        <div><h2 className="text-sm tracking-[0.04em]">Muted event filters</h2>
+          <p className="text-[11px] text-muted">Dropped at ingest before events are stored.</p></div>
+        <div className="border border-line p-4 text-sm text-muted">
+          <p>
             Muted events are discarded before storage. Leave the filter
             fields empty to mute an entire action; fill them in to silence
             only a specific combo — e.g. mute{" "}
@@ -62,12 +56,12 @@ export default async function RulesPage({
             cluttering BlackWatch but does <strong>not</strong> reduce AWS
             cost — to cut cost, also drop the event from the EventBridge
             pattern in <code className="text-fg">deploy/iam/</code>.
-          </Typography>
+          </p>
 
           {muted.length > 0 ? (
             <MutedTable muted={muted} />
           ) : (
-            <Typography sx={{ mt: 2 }} variant="body2" color="text.secondary">Nothing muted.</Typography>
+            <p className="mt-2 text-sm text-muted">Nothing muted.</p>
           )}
 
           <form
@@ -75,47 +69,42 @@ export default async function RulesPage({
             className="mt-4 space-y-2 border-t border-line-soft pt-4"
           >
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
-              <TextField
+              <Input
                 name="action"
                 placeholder="action (required)"
                 required
                 aria-label="action"
-                size="small"
               />
-              <TextField
+              <Input
                 name="source_type"
                 placeholder="source_type (optional)"
                 aria-label="source_type"
-                size="small"
               />
-              <TextField
+              <Input
                 name="username"
                 placeholder="username (optional)"
                 aria-label="username"
-                size="small"
               />
-              <TextField
+              <Input
                 name="reason"
                 placeholder="reason (optional)"
                 aria-label="reason"
-                size="small"
               />
             </div>
             <div className="flex items-center gap-2">
-              <TextField
+              <Input
                 name="note"
                 placeholder="note — why this is muted, unblock condition (optional)"
                 aria-label="note"
                 className="flex-1"
-                size="small"
               />
-              <MuiButton type="submit" variant="contained" size="small">
+              <Button type="submit" variant="primary" size="sm">
                 Mute
-              </MuiButton>
+              </Button>
             </div>
           </form>
-        </Paper>
-      </Stack>
+        </div>
+      </section>
     </>
   );
 }

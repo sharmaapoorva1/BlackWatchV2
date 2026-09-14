@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Children, forwardRef, isValidElement } from "react";
-import MuiButton from "@mui/material/Button";
+import clsx from "clsx";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md";
@@ -15,24 +15,15 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = "secondary", size = "md", asChild = false, className, color: _color, children, ...props }, ref) => {
-    const buttonColor: "primary" | "error" | "inherit" = variant === "danger" ? "error" : variant === "primary" ? "primary" : "inherit";
-    const muiProps = {
-      variant: variant === "primary" ? "contained" as const : variant === "ghost" ? "text" as const : "outlined" as const,
-      color: buttonColor,
-      size: size === "sm" ? "small" as const : "medium" as const,
+    const styles = clsx(
+      "inline-flex items-center justify-center gap-2 whitespace-nowrap border font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal disabled:pointer-events-none disabled:opacity-50",
+      size === "sm" ? "min-h-7 px-2.5 text-xs" : "min-h-8 px-3 text-sm",
+      variant === "primary" && "border-signal bg-signal text-canvas hover:bg-signal/85",
+      variant === "secondary" && "border-line bg-surface-1 text-fg hover:border-signal hover:bg-surface-2",
+      variant === "ghost" && "border-transparent text-fg-muted hover:bg-surface-1 hover:text-fg",
+      variant === "danger" && "border-sev-critical/30 bg-sev-critical/10 text-sev-critical hover:bg-sev-critical/20",
       className,
-      sx: {
-        minHeight: size === "sm" ? 28 : 32,
-        px: size === "sm" ? 1.25 : 1.5,
-        gap: 1,
-        whiteSpace: "nowrap",
-        fontSize: size === "sm" ? 12 : 14,
-        borderColor: variant === "danger" ? "rgba(244,63,94,0.3)" : "divider",
-        bgcolor: variant === "secondary" ? "background.paper" : variant === "danger" ? "rgba(244,63,94,0.1)" : undefined,
-        color: variant === "ghost" ? "text.secondary" : undefined,
-        "&:hover": { bgcolor: variant === "ghost" ? "background.paper" : undefined },
-      },
-    };
+    );
 
     if (asChild) {
       const child = Children.only(children);
@@ -40,26 +31,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         throw new Error("Button asChild requires one link child.");
       }
       const { children: linkChildren, ...linkProps } = child.props as React.ComponentProps<typeof Link>;
-      // MUI's polymorphic overload cannot infer Next's Url type here, but
-      // this branch is intentionally a Next Link button (all asChild calls
-      // pass one). Keep the component decision inside this client module.
-      const LinkButton = MuiButton as React.ElementType;
-      return (
-        <LinkButton ref={ref} component={Link} {...linkProps} {...muiProps} {...props}>
-          {linkChildren}
-        </LinkButton>
-      );
+      return <Link {...linkProps} className={styles}>{linkChildren}</Link>;
     }
 
     return (
-      <MuiButton
-        ref={ref}
-        component="button"
-        {...muiProps}
-        {...props}
-      >
+      <button ref={ref} className={styles} {...props}>
         {children}
-      </MuiButton>
+      </button>
     );
   },
 );

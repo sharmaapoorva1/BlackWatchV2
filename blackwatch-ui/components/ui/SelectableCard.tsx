@@ -1,6 +1,5 @@
 "use client";
 
-import { Box, FormControlLabel, Radio, Checkbox, Typography } from "@mui/material";
 
 // Radio-as-card and checkbox-as-card in one primitive. Used anywhere a
 // form asks "pick one of these things" (metric, scope, channel) — the
@@ -38,13 +37,11 @@ export function SelectableCard({
   error?: boolean;
 }) {
   return (
-    <Box component="label" sx={{ position: "relative", display: "block", cursor: disabled ? "not-allowed" : "pointer", border: 1, borderColor: error ? "error.main" : checked ? "signal.main" : "divider", bgcolor: checked ? "background.paper" : "background.default", p: 1.5, opacity: disabled ? 0.5 : 1, transition: "border-color 150ms ease, background-color 150ms ease", "&:hover": { borderColor: disabled ? "divider" : "text.secondary" } }}>
-      <FormControlLabel
-        sx={{ m: 0, width: "100%", alignItems: "flex-start", gap: 1 }}
-        control={type === "radio" ? <Radio size="small" checked={checked} onChange={(e) => onChange(e.target.checked)} /> : <Checkbox size="small" checked={checked} onChange={(e) => onChange(e.target.checked)} />}
-        label={<Box sx={{ minWidth: 0 }}><Typography variant="body2" color={checked ? "text.primary" : "text.secondary"}>{title}</Typography>{description && <Typography variant="caption" sx={{ display: "block", mt: 0.5 }}>{description}</Typography>}</Box>}
-      />
-      {checked && <input type="hidden" name={name} value={value} />}
-    </Box>
+    <label className={`relative block border p-3 transition-colors ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:border-fg-muted"} ${error ? "border-danger" : checked ? "border-signal bg-surface" : "border-line bg-canvas"}`}>
+      <span className="flex w-full items-start gap-2">
+        <input type={type} name={name} value={value} checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--color-signal)]" />
+        <span className={`min-w-0 text-sm ${checked ? "text-fg" : "text-muted"}`}><span className="block">{title}</span>{description && <span className="mt-1 block text-[11px] text-subtle">{description}</span>}</span>
+      </span>
+    </label>
   );
 }

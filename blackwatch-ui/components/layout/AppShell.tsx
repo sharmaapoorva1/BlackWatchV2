@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { TopNav } from "./TopNav";
 import { SideNav } from "./SideNav";
-import { Box, Container } from "@mui/material";
 
 // Root layout. Desktop = fixed sidebar + scrollable main; mobile = drawer
 // nav opened via the TopNav hamburger. The auth pages (/login and any
@@ -31,26 +30,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [chromeless, pathname]);
 
   if (chromeless) {
-    return <Box sx={{ minHeight: "100dvh", minWidth: 0, maxWidth: "100%", overflowX: "hidden" }}>{children}</Box>;
+    return <div className="min-h-dvh min-w-0 max-w-full overflow-x-hidden">{children}</div>;
   }
 
   return (
-    <Box sx={{ display: "flex", height: "100dvh", minWidth: 0, maxWidth: "100%", flexDirection: "column", overflow: "hidden" }}>
+    <div className="flex h-dvh min-w-0 max-w-full flex-col overflow-hidden">
       <TopNav onMenuClick={() => setNavOpen((v) => !v)} menuOpen={navOpen} />
-      <Box sx={{ display: "flex", minHeight: 0, minWidth: 0, flex: 1, overflow: "hidden" }}>
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <SideNav mobileOpen={navOpen} onCloseMobile={() => setNavOpen(false)} />
-        <Box component="main" id="main-content" tabIndex={-1} aria-label="Main content" sx={{ minHeight: 0, minWidth: 0, flex: 1, overflowX: "hidden", overflowY: "auto", px: { xs: 1.5, md: 4 }, py: { xs: 2, md: 3 } }}>
+        <main id="main-content" tabIndex={-1} aria-label="Main content" className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-1.5 py-2 md:px-4 md:py-3">
           <div data-impeccable-variants="e6f6884f" data-impeccable-variant-count="3" style={{ display: "contents" }}>
             {/* impeccable-variants-start e6f6884f */}
             {/* Original */}
             <div data-impeccable-variant="original">
-              <Container maxWidth={false} disableGutters sx={{ width: "100%", maxWidth: 1280, minWidth: 0, mx: "auto" }}>{children}</Container>
+              <div className="mx-auto min-w-0 w-full max-w-[1280px]">{children}</div>
             </div>
             {/* Variants: insert below this line */}
             {/* impeccable-variants-end e6f6884f */}
           </div>
-        </Box>
-      </Box>
-    </Box>
+        </main>
+      </div>
+    </div>
   );
 }

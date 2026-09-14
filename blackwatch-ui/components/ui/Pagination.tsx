@@ -3,7 +3,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "./Button";
 import { TABLE_PAGE_SIZES } from "./TablePreferences";
-import { Box, FormControl, InputLabel, MenuItem, Select, Typography } from "@mui/material";
+import { NativeSelect } from "./NativeSelect";
 
 export function TablePagination({
   page,
@@ -23,29 +23,17 @@ export function TablePagination({
   const last = Math.min(total, (page + 1) * pageSize);
 
   return (
-    <Box
-      component="nav"
-      aria-label="Table pagination"
-      sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 1.5, borderTop: 1, borderColor: "divider", bgcolor: "background.paper", px: 1.5, py: 1.25 }}
-    >
-      <Typography aria-live="polite" variant="caption" sx={{ fontFamily: "monospace" }}>
-        {first}–{last} <Box component="span" sx={{ color: "text.disabled" }}>of</Box> {total}
-      </Typography>
-      <Box sx={{ display: "flex", width: { xs: "100%", sm: "auto" }, flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: 1 }}>
-        <FormControl size="small" sx={{ minWidth: 78 }}>
-          <InputLabel id="rows-per-page-label">Rows</InputLabel>
-          <Select
-            labelId="rows-per-page-label"
-            label="Rows"
-            value={pageSize}
-            onChange={(event) => onPageSizeChange(Number(event.target.value))}
-          >
-            {TABLE_PAGE_SIZES.map((size) => <MenuItem key={size} value={size}>{size}</MenuItem>)}
-          </Select>
-        </FormControl>
-        <Typography sx={{ minWidth: 64, textAlign: "center", fontFamily: "monospace", fontSize: 11, color: "text.secondary" }}>
+    <nav aria-label="Table pagination" className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-surface px-3 py-2.5">
+      <span aria-live="polite" className="font-mono text-[11px] text-muted">
+        {first}–{last} <span className="text-fg-disabled">of</span> {total}
+      </span>
+      <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+        <label className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted">Rows <NativeSelect value={String(pageSize)} onChange={(event) => onPageSizeChange(Number(event.target.value))} className="w-[78px]" aria-label="Rows per page">
+          {TABLE_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
+        </NativeSelect></label>
+        <span className="min-w-16 text-center font-mono text-[11px] text-muted">
           {page + 1} / {pageCount}
-        </Typography>
+        </span>
         <Button
           type="button"
           size="sm"
@@ -66,7 +54,7 @@ export function TablePagination({
         >
           <ChevronRight size={14} aria-hidden="true" />
         </Button>
-      </Box>
-    </Box>
+      </div>
+    </nav>
   );
 }

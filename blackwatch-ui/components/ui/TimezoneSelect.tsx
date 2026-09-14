@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FormControl, MenuItem, Select } from "@mui/material";
+import { NativeSelect } from "./NativeSelect";
 
 export type TzKey = "UTC" | "PST" | "IST";
 
@@ -35,11 +35,9 @@ export function TimezoneSelect({
   }
 
   return (
-    <FormControl size="small" sx={{ minWidth: 76 }}>
-      <Select value={value} onChange={(event) => select(event.target.value as TzKey)} inputProps={{ "aria-label": "Timezone" }} sx={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", "& .MuiSelect-select": { py: 0.5, px: 1 } }}>
-        {TZ_OPTIONS.map((tz) => <MenuItem key={tz} value={tz} sx={{ fontSize: 10 }}>{tz}</MenuItem>)}
-      </Select>
-    </FormControl>
+    <NativeSelect value={value} onChange={(event) => select(event.target.value as TzKey)} aria-label="Timezone" className="min-h-7 w-[76px] px-2 py-1 text-[10px] uppercase tracking-[0.08em]">
+      {TZ_OPTIONS.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+    </NativeSelect>
   );
 }
 
