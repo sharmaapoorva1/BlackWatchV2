@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import clsx from "clsx";
-import * as Select from "@radix-ui/react-select";
+import { FormControl, MenuItem, Select as MuiSelect } from "@mui/material";
 import type { Rule } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Table } from "@/components/ui/Table";
@@ -701,82 +701,20 @@ function SeverityPicker({
       <span className="pointer-events-none">
         {current ? <SeverityBadge severity={current} /> : null}
       </span>
-      <Select.Root
-        name="severity"
-        defaultValue={current ?? "default"}
-        onValueChange={() => {
-          setTimeout(() => formRef.current?.requestSubmit(), 0);
-        }}
-      >
-        <Select.Trigger
+      <FormControl size="small" sx={{ minWidth: 108 }}>
+        <MuiSelect
+          name="severity"
+          defaultValue={current ?? "default"}
           aria-label={`Set severity for ${ruleId}`}
-          className={clsx(
-            "inline-flex cursor-pointer items-center gap-1.5 rounded border border-line-soft bg-surface-1 px-1.5 py-1 text-[11px] text-fg-muted transition-colors",
-            "focus-visible:border-signal focus-visible:outline-none",
-            "hover:bg-surface-2 hover:text-fg",
-          )}
+          onChange={() => {
+          setTimeout(() => formRef.current?.requestSubmit(), 0);
+          }}
+          sx={{ fontSize: "0.72rem", height: 32 }}
         >
-          <Select.Value />
-          <Select.Icon>
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <path
-                d="M2 4l3 3 3-3"
-                stroke="currentColor"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </Select.Icon>
-        </Select.Trigger>
-        <Select.Portal>
-          <Select.Content
-            className="z-50 overflow-hidden rounded border border-line-soft bg-surface-1 shadow-xl"
-            position="popper"
-            sideOffset={4}
-          >
-            <Select.Viewport className="p-1">
-              <Select.Item
-                value="default"
-                className="relative flex cursor-pointer select-none items-center rounded px-6 py-1.5 text-[11px] text-fg-muted outline-none data-[highlighted]:bg-surface-2 data-[highlighted]:text-fg"
-              >
-                <Select.ItemText>— clear override —</Select.ItemText>
-                <Select.ItemIndicator className="absolute left-1 inline-flex w-4 items-center justify-center">
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                    <path
-                      d="M2 5l2 2 4-4"
-                      stroke="currentColor"
-                      strokeWidth="1.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </Select.ItemIndicator>
-              </Select.Item>
-              {SEVERITY_OPTIONS.map((s) => (
-                <Select.Item
-                  key={s.value}
-                  value={s.value}
-                  className="relative flex cursor-pointer select-none items-center rounded px-6 py-1.5 text-[11px] text-fg outline-none data-[highlighted]:bg-surface-2"
-                >
-                  <Select.ItemText>{s.label}</Select.ItemText>
-                  <Select.ItemIndicator className="absolute left-1 inline-flex w-4 items-center justify-center">
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                      <path
-                        d="M2 5l2 2 4-4"
-                        stroke="currentColor"
-                        strokeWidth="1.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </Select.ItemIndicator>
-                </Select.Item>
-              ))}
-            </Select.Viewport>
-          </Select.Content>
-        </Select.Portal>
-      </Select.Root>
+          <MenuItem value="default">— clear override —</MenuItem>
+          {SEVERITY_OPTIONS.map((s) => <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>)}
+        </MuiSelect>
+      </FormControl>
     </form>
   );
 }

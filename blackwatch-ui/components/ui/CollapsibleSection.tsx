@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { Accordion, AccordionDetails, AccordionSummary, Badge, Typography } from "@mui/material";
 
 // Collapsible group wrapper. Persists open/closed per `storageKey` in
 // localStorage so operator's grouping state survives navigations.
@@ -58,34 +59,13 @@ export function CollapsibleSection({
   }
 
   return (
-    <div className="mb-3 border border-line-soft bg-surface-1">
-      <button
-        type="button"
-        onClick={toggle}
-        className="flex w-full items-center gap-2 border-b border-line-soft px-3 py-2 text-left transition-colors hover:bg-surface-2"
-        aria-expanded={open}
-        aria-controls={panelId}
-      >
-        {open ? (
-          <ChevronDown size={12} className="text-fg-subtle" />
-        ) : (
-          <ChevronRight size={12} className="text-fg-subtle" />
-        )}
-        <span className="text-xs uppercase tracking-[0.1em] text-fg">
-          {title}
-        </span>
-        {typeof count === "number" && (
-          <span className="font-mono text-[10px] text-fg-subtle">
-            [{count}]
-          </span>
-        )}
-        {subtitle && (
-          <span className="ml-2 text-[11px] text-fg-subtle">{subtitle}</span>
-        )}
-      </button>
-      <div id={panelId} hidden={!open}>
-        {children}
-      </div>
-    </div>
+    <Accordion expanded={open} onChange={toggle} disableGutters sx={{ mb: 1.5, border: 1, borderColor: "divider", bgcolor: "background.paper", "&:before": { display: "none" } }}>
+      <AccordionSummary expandIcon={open ? <ChevronDown size={14} /> : <ChevronRight size={14} />} aria-controls={panelId} id={`${panelId}-header`}>
+        <Typography sx={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.1em" }}>{title}</Typography>
+        {typeof count === "number" && <Typography component="span" sx={{ ml: 1, fontFamily: "monospace", fontSize: 10, color: "text.secondary" }}>[{count}]</Typography>}
+        {subtitle && <Typography component="span" variant="caption" sx={{ ml: 1 }}>{subtitle}</Typography>}
+      </AccordionSummary>
+      <AccordionDetails id={panelId}>{children}</AccordionDetails>
+    </Accordion>
   );
 }

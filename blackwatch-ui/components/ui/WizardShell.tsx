@@ -1,12 +1,9 @@
 "use client";
 
-import clsx from "clsx";
 import { ReactNode } from "react";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
-
-import { Button } from "@/components/ui/Button";
-import { BackLink } from "@/components/ui/BackLink";
-import { DataPanel } from "@/components/layout/DataPanel";
+import Link from "next/link";
+import { Box, Button, Paper, Stack, Step, StepButton, StepLabel, Stepper, Typography } from "@mui/material";
 
 export type WizardStepDef = { n: number; label: string };
 
@@ -42,13 +39,10 @@ export function Wizard({
   children: ReactNode;
 }) {
   return (
-    <div className="mx-auto max-w-3xl">
-      <BackLink href={backHref} label={backLabel} />
+    <Box sx={{ maxWidth: 960, mx: "auto" }}>
+      <Box sx={{ mb: 2 }}><Typography component={Link} href={backHref} sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, color: "text.secondary", fontSize: 12, textDecoration: "none" }}><ArrowLeft size={12} /> {backLabel}</Typography></Box>
 
-      <div className="mb-8">
-        <h1 className="text-xl text-fg">{title}</h1>
-        {subtitle && <p className="mt-1 text-xs text-fg-muted">{subtitle}</p>}
-      </div>
+      <Box sx={{ mb: 4 }}><Typography component="h1" variant="h1">{title}</Typography>{subtitle && <Typography variant="body2" sx={{ mt: 0.5 }}>{subtitle}</Typography>}</Box>
 
       <WizardStepper
         steps={steps}
@@ -57,15 +51,14 @@ export function Wizard({
         onJump={onJump}
       />
 
-      <DataPanel scrollX={false}>
-        <div className="p-8">{children}</div>
-      </DataPanel>
+      <Paper sx={{ border: 1, borderColor: "divider", p: { xs: 2, sm: 4 }, overflow: "hidden" }}>{children}</Paper>
 
-      <div className="mt-4 flex items-center justify-between">
+      <Stack direction="row" sx={{ mt: 2, justifyContent: "space-between", alignItems: "center" }}>
         <Button
           type="button"
-          size="sm"
-          variant="ghost"
+          size="small"
+          variant="text"
+          color="inherit"
           disabled={current === steps[0].n}
           onClick={onBack}
         >
@@ -77,16 +70,17 @@ export function Wizard({
         ) : (
           <Button
             type="button"
-            size="sm"
-            variant="primary"
+            size="small"
+            variant="contained"
+            color="primary"
             disabled={!canAdvance}
             onClick={onNext}
           >
             Next <ArrowRight size={12} />
           </Button>
         )}
-      </div>
-    </div>
+      </Stack>
+    </Box>
   );
 }
 
@@ -98,10 +92,7 @@ export function WizardStepHeader({
   subtitle?: string;
 }) {
   return (
-    <div className="mb-5">
-      <h2 className="text-sm text-fg">{title}</h2>
-      {subtitle && <p className="mt-1 text-xs text-fg-muted">{subtitle}</p>}
-    </div>
+    <Box sx={{ mb: 2.5 }}><Typography component="h2" variant="h3">{title}</Typography>{subtitle && <Typography variant="body2" sx={{ mt: 0.5 }}>{subtitle}</Typography>}</Box>
   );
 }
 
@@ -117,61 +108,12 @@ function WizardStepper({
   onJump: (n: number) => void;
 }) {
   return (
-    <nav aria-label="Progress" className="mb-8">
-      <ol className="flex items-start">
-        {steps.map((s, i) => {
+    <Stepper activeStep={Math.max(0, steps.findIndex((step) => step.n === current))} alternativeLabel sx={{ mb: 4 }}>
+        {steps.map((s) => {
           const active = current === s.n;
           const done = !!completed[s.n] && !active;
-          const isLast = i === steps.length - 1;
-
-          return (
-            <li
-              key={s.n}
-              className={clsx("flex items-start", !isLast && "flex-1")}
-            >
-              <button
-                type="button"
-                onClick={() => onJump(s.n)}
-                className="group flex flex-col items-center gap-1.5"
-                aria-current={active ? "step" : undefined}
-              >
-                <span
-                  className={clsx(
-                    "flex h-7 w-7 items-center justify-center rounded-full border-2 font-mono text-[11px] transition-colors",
-                    active
-                      ? "border-signal bg-signal text-canvas"
-                      : done
-                        ? "border-signal/50 bg-signal/10 text-signal"
-                        : "border-line-soft text-fg-subtle group-hover:border-line",
-                  )}
-                >
-                  {done ? <Check size={11} strokeWidth={2.5} /> : s.n}
-                </span>
-                <span
-                  className={clsx(
-                    "text-[10px] uppercase tracking-[0.08em]",
-                    active
-                      ? "text-fg"
-                      : done
-                        ? "text-fg-muted"
-                        : "text-fg-subtle",
-                  )}
-                >
-                  {s.label}
-                </span>
-              </button>
-              {!isLast && (
-                <div
-                  className={clsx(
-                    "mx-1.5 mt-3.5 h-px flex-1 transition-colors",
-                    done ? "bg-signal/30" : "bg-line-soft",
-                  )}
-                />
-              )}
-            </li>
-          );
+          return <Step key={s.n} completed={done}><StepButton onClick={() => onJump(s.n)} color="inherit"><StepLabel>{s.label}</StepLabel></StepButton></Step>;
         })}
-      </ol>
-    </nav>
+    </Stepper>
   );
 }

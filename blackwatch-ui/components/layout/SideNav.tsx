@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import clsx from "clsx";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Server,
@@ -29,6 +28,18 @@ import {
   ChevronsRight,
   type LucideIcon,
 } from "lucide-react";
+import {
+  Box,
+  Drawer,
+  IconButton,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Tooltip,
+  useMediaQuery,
+} from "@mui/material";
+import { appTheme } from "@/theme";
 
 type NavEntry = {
   href: string;
@@ -77,7 +88,7 @@ export function SideNav({
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const navRef = useRef<HTMLElement>(null);
+  const desktop = useMediaQuery(appTheme.breakpoints.up("md"), { noSsr: true });
 
   useEffect(() => {
     const stored =
@@ -92,37 +103,6 @@ export function SideNav({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const nav = navRef.current;
-    if (!nav) return;
-    const focusable = () =>
-      Array.from(nav.querySelectorAll<HTMLElement>("a, button")).filter(
-        (el) => !el.hasAttribute("disabled"),
-      );
-    focusable()[0]?.focus();
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onCloseMobile?.();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const items = focusable();
-      if (items.length === 0) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-    nav.addEventListener("keydown", onKeyDown);
-    return () => nav.removeEventListener("keydown", onKeyDown);
-  }, [mobileOpen, onCloseMobile]);
-
   function toggle() {
     setCollapsed((prev) => {
       const next = !prev;
@@ -135,34 +115,9 @@ export function SideNav({
     });
   }
 
-  return (
-    <>
-      {/* Mobile backdrop — click to dismiss */}
-      {mobileOpen && (
-        <button
-          type="button"
-          aria-label="Close menu"
-          onClick={onCloseMobile}
-          className="fixed inset-0 z-30 bg-canvas/70 md:hidden"
-        />
-      )}
-
-      <nav
-        ref={navRef}
-        id="mobile-navigation"
-        aria-label="Primary"
-        aria-modal={mobileOpen ? true : undefined}
-        className={clsx(
-          "flex min-h-0 shrink-0 flex-col border-r border-line-soft bg-canvas transition-[width,transform] duration-200 ease-out",
-          // Desktop
-          "hidden md:flex",
-          collapsed ? "md:w-12" : "md:w-56",
-          // Mobile drawer (only visible when open)
-          mobileOpen &&
-            "!fixed !inset-y-0 !left-0 z-40 !flex w-64 !transition-transform md:!static md:!w-56",
-        )}
-      >
-        <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto py-2">
+  const content = (
+    <Box component="nav" id="mobile-navigation" aria-label="Primary" sx={{ display: "flex", minHeight: 0, height: "100%", flexDirection: "column" }}>
+      <List disablePadding sx={{ flex: 1, minHeight: 0, overflowY: "auto", py: 1 }}>
           {primaryNav.map((item) => (
             <NavItem
               key={item.href}
@@ -171,7 +126,7 @@ export function SideNav({
               collapsed={collapsed && !mobileOpen}
             />
           ))}
-          <div className="mx-3 my-2 h-px bg-line-soft" />
+          <Box sx={{ height: 1, bgcolor: "divider", mx: 2, my: 1 }} />
           {secondaryNav.map((item) => (
             <NavItem
               key={item.href}
@@ -180,20 +135,21 @@ export function SideNav({
               collapsed={collapsed && !mobileOpen}
             />
           ))}
-        </div>
+      </List>
 
-        {/* Desktop-only collapse toggle. Mobile drawer closes via backdrop. */}
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="hidden h-9 items-center justify-center border-t border-line-soft text-fg-subtle transition-colors hover:text-fg md:flex"
-        >
+      <Box sx={{ display: { xs: "none", md: "flex" }, height: 40, borderTop: 1, borderColor: "divider", alignItems: "center", justifyContent: "center" }}>
+        <IconButton onClick={toggle} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} size="small">
           {collapsed ? <ChevronsRight size={14} /> : <ChevronsLeft size={14} />}
-        </button>
-      </nav>
-    </>
+        </IconButton>
+      </Box>
+    </Box>
   );
+
+  if (!desktop) {
+    return <Drawer variant="temporary" open={mobileOpen} onClose={onCloseMobile} ModalProps={{ keepMounted: true }} sx={{ "& .MuiDrawer-paper": { width: 256 } }}>{content}</Drawer>;
+  }
+
+  return <Drawer variant="permanent" open sx={{ width: collapsed ? 56 : 224, flexShrink: 0, "& .MuiDrawer-paper": { width: collapsed ? 56 : 224, position: "relative", height: "100%", overflow: "hidden", transition: appTheme.transitions.create("width", { duration: 200 }) } }}>{content}</Drawer>;
 }
 
 function NavItem({
@@ -206,26 +162,13 @@ function NavItem({
   collapsed: boolean;
 }) {
   const Icon = item.icon;
-  return (
-    <Link
-      href={item.href}
-      title={collapsed ? item.label : undefined}
-      className={clsx(
-        "relative mx-2 flex h-10 items-center gap-3 px-2 text-sm transition-colors md:h-8",
-        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal",
-        active ? "text-fg" : "text-fg-subtle hover:text-fg",
-      )}
-    >
-      {active && (
-        <span
-          aria-hidden
-          className="absolute -left-2 top-1/2 h-4 w-0.5 -translate-y-1/2 bg-signal"
-        />
-      )}
-      <Icon size={14} strokeWidth={1.5} className="shrink-0" />
-      {!collapsed && <span className="truncate">{item.label}</span>}
-    </Link>
+  const button = (
+    <ListItemButton component={Link} href={item.href} selected={active} sx={{ minHeight: 40, mx: 1, px: 1.25, gap: 1.5, borderRadius: 1, justifyContent: collapsed ? "center" : "initial", "&.Mui-selected": { color: "text.primary", bgcolor: "rgba(72, 212, 232, 0.08)", borderLeft: 2, borderColor: "signal.main" }, "&:hover": { bgcolor: "rgba(255,255,255,0.04)" } }}>
+      <ListItemIcon sx={{ minWidth: 20, color: active ? "signal.main" : "text.secondary" }}><Icon size={14} strokeWidth={1.5} /></ListItemIcon>
+      {!collapsed && <ListItemText primary={item.label} slotProps={{ primary: { noWrap: true, sx: { fontSize: 14 } } }} />}
+    </ListItemButton>
   );
+  return collapsed ? <Tooltip title={item.label} placement="right">{button}</Tooltip> : button;
 }
 
 function isActive(pathname: string, href: string): boolean {

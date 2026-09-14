@@ -2,8 +2,8 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import clsx from "clsx";
 import { RefreshCw } from "lucide-react";
+import { Box, Button, CircularProgress, Typography } from "@mui/material";
 
 import { refreshModulesAction } from "@/app/refresh-actions";
 
@@ -87,8 +87,8 @@ export function RefreshButton({
   }
 
   return (
-    <div className="inline-flex items-center gap-2">
-      <button
+    <Box sx={{ display: "inline-flex", alignItems: "center", gap: 1 }}>
+      <Button
         type="button"
         onClick={onClick}
         disabled={active}
@@ -99,33 +99,23 @@ export function RefreshButton({
             ? `Run ${connectorTypes.join(", ")} now, then reload`
             : "Reload page data"
         }
-        className={clsx(
-          "inline-flex items-center gap-1.5 rounded border px-2 py-1 text-[11px] uppercase tracking-wider transition-colors",
-          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal",
-          active
-            ? "cursor-wait border-line-soft text-fg-subtle"
-            : "border-line-soft text-fg-muted hover:border-signal hover:text-signal",
-        )}
+        variant="outlined"
+        color="inherit"
+        size="small"
+        sx={{ gap: 0.75, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: active ? "text.secondary" : "text.secondary", borderColor: "divider" }}
       >
-        <RefreshCw
-          size={12}
-          strokeWidth={1.75}
-          className={clsx(active && "animate-spin")}
-        />
+        {active ? <CircularProgress size={12} color="inherit" /> : <RefreshCw size={12} strokeWidth={1.75} />}
         <span>{active ? "Running" : label}</span>
-      </button>
+      </Button>
       {flash && (
-        <span
+        <Typography
           role="status"
           aria-live="polite"
-          className={clsx(
-            "font-mono text-[11px] transition-opacity",
-            flash.kind === "ok" ? "text-signal" : "text-sev-critical",
-          )}
+          sx={{ fontFamily: "monospace", fontSize: 11, color: flash.kind === "ok" ? "signal.main" : "error.main" }}
         >
           {flash.message}
-        </span>
+        </Typography>
       )}
-    </div>
+    </Box>
   );
 }

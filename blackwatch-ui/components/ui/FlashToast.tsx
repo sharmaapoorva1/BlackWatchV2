@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import clsx from "clsx";
 import { CheckCircle2, AlertTriangle, XCircle, Info, X } from "lucide-react";
+import { Alert, Box, IconButton } from "@mui/material";
 
 type Kind = "success" | "error" | "warning" | "info";
 
@@ -26,26 +26,22 @@ function classify(msg: string): Kind {
   return "info";
 }
 
-const STYLES: Record<Kind, { bar: string; icon: React.ComponentType<{ size?: number; className?: string }>; iconClass: string }> = {
+const STYLES: Record<Kind, { severity: "success" | "error" | "warning" | "info"; icon: React.ComponentType<{ size?: number }> }> = {
   success: {
-    bar: "border-sev-resolved/40 bg-sev-resolved/10",
     icon: CheckCircle2,
-    iconClass: "text-sev-resolved",
+    severity: "success",
   },
   error: {
-    bar: "border-sev-critical/50 bg-sev-critical/10",
     icon: XCircle,
-    iconClass: "text-sev-critical",
+    severity: "error",
   },
   warning: {
-    bar: "border-sev-medium/50 bg-sev-medium/10",
     icon: AlertTriangle,
-    iconClass: "text-sev-medium",
+    severity: "warning",
   },
   info: {
-    bar: "border-signal/40 bg-signal/10",
     icon: Info,
-    iconClass: "text-signal",
+    severity: "info",
   },
 };
 
@@ -87,30 +83,23 @@ export function FlashToast({
   if (!visible) return null;
 
   return (
-    <div
+    <Alert
       role="status"
       aria-live="polite"
-      className={clsx(
-        "mb-4 flex items-start justify-between gap-3 border-l-4 border px-4 py-3 text-sm",
-        style.bar,
-      )}
+      severity={style.severity}
+      icon={<Icon size={16} aria-hidden />}
+      sx={{ mb: 2, alignItems: "flex-start", borderRadius: 0, py: 1.25 }}
     >
-      <div className="flex items-start gap-2.5">
-        <Icon
-          size={16}
-          className={clsx("mt-0.5 shrink-0", style.iconClass)}
-          aria-hidden
-        />
-        <span className="text-fg">{message}</span>
-      </div>
-      <button
-        type="button"
+      <Box sx={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+        <span>{message}</span>
+        <IconButton
+          type="button"
         onClick={() => setVisible(false)}
-        className="shrink-0 text-fg-subtle transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal"
         aria-label="Dismiss"
-      >
-        <X size={14} />
-      </button>
-    </div>
+          size="small"
+          sx={{ flexShrink: 0, color: "inherit" }}
+        ><X size={14} /></IconButton>
+      </Box>
+    </Alert>
   );
 }

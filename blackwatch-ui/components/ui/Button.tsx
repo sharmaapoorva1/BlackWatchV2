@@ -1,6 +1,6 @@
-import { Slot } from "@radix-ui/react-slot";
 import { forwardRef } from "react";
-import clsx from "clsx";
+import MuiButton from "@mui/material/Button";
+import { Slot } from "@radix-ui/react-slot";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md";
@@ -12,34 +12,27 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = "secondary", size = "md", asChild = false, className, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
+  ({ variant = "secondary", size = "md", asChild = false, className, color: _color, ...props }, ref) => {
+    const buttonColor: "primary" | "error" | "inherit" = variant === "danger" ? "error" : variant === "primary" ? "primary" : "inherit";
     return (
-      <Comp
+      <MuiButton
         ref={ref}
-        className={clsx(
-          // base
-          "inline-flex select-none items-center justify-center gap-2 whitespace-nowrap border font-medium cursor-pointer",
-          "transition-colors duration-100",
-          "focus-visible:outline-none focus-visible:border-signal",
-          "disabled:cursor-not-allowed disabled:opacity-40",
-
-          // sizes
-          size === "sm" && "h-7 px-2.5 text-xs",
-          size === "md" && "h-8 px-3 text-sm",
-
-          // variants
-          variant === "primary" &&
-            "border-signal bg-signal text-canvas hover:bg-signal/90",
-          variant === "secondary" &&
-            "border-line bg-surface-1 text-fg hover:bg-surface-2",
-          variant === "ghost" &&
-            "border-transparent bg-transparent text-fg-muted hover:bg-surface-1 hover:text-fg",
-          variant === "danger" &&
-            "border-sev-critical/30 bg-sev-critical/10 text-sev-critical hover:bg-sev-critical hover:text-canvas hover:border-sev-critical",
-
-          className,
-        )}
+        component={asChild ? Slot : "button"}
+        variant={variant === "primary" ? "contained" : variant === "ghost" ? "text" : "outlined"}
+        color={buttonColor}
+        size={size === "sm" ? "small" : "medium"}
+        className={className}
+        sx={{
+          minHeight: size === "sm" ? 28 : 32,
+          px: size === "sm" ? 1.25 : 1.5,
+          gap: 1,
+          whiteSpace: "nowrap",
+          fontSize: size === "sm" ? 12 : 14,
+          borderColor: variant === "danger" ? "rgba(244,63,94,0.3)" : "divider",
+          bgcolor: variant === "secondary" ? "background.paper" : variant === "danger" ? "rgba(244,63,94,0.1)" : undefined,
+          color: variant === "ghost" ? "text.secondary" : undefined,
+          "&:hover": { bgcolor: variant === "ghost" ? "background.paper" : undefined },
+        }}
         {...props}
       />
     );

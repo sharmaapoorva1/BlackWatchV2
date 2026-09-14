@@ -1,7 +1,8 @@
-// Page-level header. Title stays h1 for a11y; subtitle now accepts any
-// ReactNode so callers can embed colored counts, links, etc. On narrow
-// screens actions wrap below the title-block rather than fighting for
-// horizontal space.
+import { Box, Stack, Typography } from "@mui/material";
+import { Breadcrumbs, type BreadcrumbItem } from "./Breadcrumbs";
+
+// Page-level header. MUI owns the responsive stacking so actions never force
+// a narrow page wider than its viewport.
 export function PageHeader({
   title,
   subtitle,
@@ -14,20 +15,13 @@ export function PageHeader({
   breadcrumbs?: BreadcrumbItem[];
 }) {
   return (
-    <header className="mb-6 flex flex-col gap-3 md:mb-6 md:flex-row md:items-end md:justify-between md:gap-4">
-      <div className="min-w-0">
+    <Box component="header" sx={{ mb: 3, display: "flex", minWidth: 0, flexDirection: { xs: "column", md: "row" }, alignItems: { md: "flex-end" }, justifyContent: "space-between", gap: { xs: 1.5, md: 2 } }}>
+      <Box sx={{ minWidth: 0 }}>
         {breadcrumbs && <Breadcrumbs items={breadcrumbs} />}
-        <h1 className="break-words text-pretty text-xl font-medium tracking-tight text-fg">
-          {title}
-        </h1>
-        {subtitle && (
-          <div className="mt-1 text-sm text-fg-muted">{subtitle}</div>
-        )}
-      </div>
-      {actions && (
-        <div className="flex flex-wrap gap-2 md:shrink-0">{actions}</div>
-      )}
-    </header>
+        <Typography component="h1" variant="h1" sx={{ overflowWrap: "anywhere" }}>{title}</Typography>
+        {subtitle && <Typography variant="body2" sx={{ mt: 0.5 }}>{subtitle}</Typography>}
+      </Box>
+      {actions && <Stack direction="row" useFlexGap spacing={1} sx={{ flexShrink: 0, flexWrap: "wrap" }}>{actions}</Stack>}
+    </Box>
   );
 }
-import { Breadcrumbs, type BreadcrumbItem } from "./Breadcrumbs";

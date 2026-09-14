@@ -1,14 +1,14 @@
-import clsx from "clsx";
+import Box from "@mui/material/Box";
 
 export type Severity = "critical" | "high" | "medium" | "low" | "resolved" | "neutral";
 
 const COLOR_MAP: Record<Severity, string> = {
-  critical: "bg-sev-critical",
-  high: "bg-sev-high",
-  medium: "bg-sev-medium",
-  low: "bg-sev-low",
-  resolved: "bg-sev-resolved",
-  neutral: "bg-fg-subtle",
+  critical: "severity.critical",
+  high: "severity.high",
+  medium: "severity.medium",
+  low: "severity.low",
+  resolved: "severity.resolved",
+  neutral: "text.disabled",
 };
 
 export function StatusDot({
@@ -19,13 +19,10 @@ export function StatusDot({
   className?: string;
 }) {
   return (
-    <span
+    <Box
       aria-hidden
-      className={clsx(
-        "inline-block h-1.5 w-1.5 shrink-0 rounded-full",
-        COLOR_MAP[severity],
-        className,
-      )}
+      className={className}
+      sx={{ display: "inline-block", width: 6, height: 6, flexShrink: 0, borderRadius: "50%", bgcolor: COLOR_MAP[severity] }}
     />
   );
 }

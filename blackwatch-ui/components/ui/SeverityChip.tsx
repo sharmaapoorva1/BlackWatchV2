@@ -1,4 +1,4 @@
-import clsx from "clsx";
+import Chip from "@mui/material/Chip";
 
 type SeverityKey =
   | "critical"
@@ -8,12 +8,12 @@ type SeverityKey =
   | "informational"
   | string;
 
-const CHIP_CLASS: Record<string, string> = {
-  critical: "bg-sev-critical/15 text-sev-critical border-sev-critical/40",
-  high: "bg-sev-high/15 text-sev-high border-sev-high/40",
-  medium: "bg-sev-medium/15 text-sev-medium border-sev-medium/40",
-  low: "bg-sev-low/15 text-sev-low border-sev-low/40",
-  informational: "bg-fg-subtle/15 text-fg-muted border-fg-subtle/40",
+const CHIP_COLOR: Record<string, string> = {
+  critical: "severity.critical",
+  high: "severity.high",
+  medium: "severity.medium",
+  low: "severity.low",
+  informational: "text.secondary",
 };
 
 const SHORT_LABEL: Record<string, string> = {
@@ -21,7 +21,7 @@ const SHORT_LABEL: Record<string, string> = {
 };
 
 export function severityChipClass(severity: string): string {
-  return CHIP_CLASS[severity] ?? CHIP_CLASS.informational;
+  return CHIP_COLOR[severity] ?? CHIP_COLOR.informational;
 }
 
 export function SeverityChip({
@@ -33,14 +33,6 @@ export function SeverityChip({
 }) {
   const label = SHORT_LABEL[severity] ?? severity;
   return (
-    <span
-      className={clsx(
-        "border px-1.5 py-0.5 font-mono text-[10px]",
-        severityChipClass(severity),
-        className,
-      )}
-    >
-      {label}
-    </span>
+    <Chip label={label} size="small" variant="outlined" className={className} sx={{ borderColor: CHIP_COLOR[severity] ?? CHIP_COLOR.informational, color: CHIP_COLOR[severity] ?? CHIP_COLOR.informational, fontFamily: "monospace", fontSize: 10, height: 22 }} />
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { TopNav } from "./TopNav";
 import { SideNav } from "./SideNav";
+import { Box, Container } from "@mui/material";
 
 // Root layout. Desktop = fixed sidebar + scrollable main; mobile = drawer
 // nav opened via the TopNav hamburger. The auth pages (/login and any
@@ -30,26 +31,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [chromeless, pathname]);
 
   if (chromeless) {
-    return <div className="min-h-dvh min-w-0 max-w-full overflow-x-hidden">{children}</div>;
+    return <Box sx={{ minHeight: "100dvh", minWidth: 0, maxWidth: "100%", overflowX: "hidden" }}>{children}</Box>;
   }
 
   return (
-    <div className="flex h-dvh min-w-0 max-w-full flex-col overflow-hidden">
+    <Box sx={{ display: "flex", height: "100dvh", minWidth: 0, maxWidth: "100%", flexDirection: "column", overflow: "hidden" }}>
       <TopNav onMenuClick={() => setNavOpen((v) => !v)} menuOpen={navOpen} />
-      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+      <Box sx={{ display: "flex", minHeight: 0, minWidth: 0, flex: 1, overflow: "hidden" }}>
         <SideNav mobileOpen={navOpen} onCloseMobile={() => setNavOpen(false)} />
-        <main id="main-content" tabIndex={-1} aria-label="Main content" className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 md:px-8 md:py-6">
+        <Box component="main" id="main-content" tabIndex={-1} aria-label="Main content" sx={{ minHeight: 0, minWidth: 0, flex: 1, overflowX: "hidden", overflowY: "auto", px: { xs: 1.5, md: 4 }, py: { xs: 2, md: 3 } }}>
           <div data-impeccable-variants="e6f6884f" data-impeccable-variant-count="3" style={{ display: "contents" }}>
             {/* impeccable-variants-start e6f6884f */}
             {/* Original */}
             <div data-impeccable-variant="original">
-              <div className="mx-auto min-w-0 w-full max-w-[1280px]">{children}</div>
+              <Container maxWidth={false} disableGutters sx={{ width: "100%", maxWidth: 1280, minWidth: 0, mx: "auto" }}>{children}</Container>
             </div>
             {/* Variants: insert below this line */}
             {/* impeccable-variants-end e6f6884f */}
           </div>
-        </main>
-      </div>
-    </div>
+        </Box>
+      </Box>
+    </Box>
   );
 }

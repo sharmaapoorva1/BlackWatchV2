@@ -1,4 +1,4 @@
-import clsx from "clsx";
+import { Box, Typography } from "@mui/material";
 
 export function ReviewGrid({
   children,
@@ -8,22 +8,15 @@ export function ReviewGrid({
   className?: string;
 }) {
   return (
-    <dl
-      className={clsx(
-        "grid min-w-0 grid-cols-1 gap-y-2 text-sm sm:grid-cols-[minmax(140px,1fr)_minmax(0,2fr)] sm:gap-y-3",
-        className,
-      )}
-    >
+    <Box component="dl" className={className} sx={{ display: "grid", minWidth: 0, gridTemplateColumns: { xs: "1fr", sm: "minmax(140px,1fr) minmax(0,2fr)" }, rowGap: { xs: 1, sm: 1.5 }, fontSize: 14 }}>
       {children}
-    </dl>
+    </Box>
   );
 }
 
 export function ReviewLabel({ children }: { children: React.ReactNode }) {
   return (
-    <dt className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-      {children}
-    </dt>
+    <Typography component="dt" sx={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "text.secondary" }}>{children}</Typography>
   );
 }
 
@@ -34,5 +27,5 @@ export function ReviewValue({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <dd className={className}>{children}</dd>;
+  return <Typography component="dd" className={className} sx={{ minWidth: 0, overflowWrap: "anywhere" }}>{children}</Typography>;
 }

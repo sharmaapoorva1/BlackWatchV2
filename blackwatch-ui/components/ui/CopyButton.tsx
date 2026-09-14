@@ -2,6 +2,8 @@
 
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
 
 export function CopyButton({ value, label = "Copy value" }: { value: string; label?: string }) {
   const [copied, setCopied] = useState(false);
@@ -17,15 +19,17 @@ export function CopyButton({ value, label = "Copy value" }: { value: string; lab
   }
 
   return (
-    <button
-      type="button"
+    <Tooltip title={copied ? "Copied" : label}>
+      <IconButton
+        type="button"
       onClick={copy}
       aria-label={copied ? "Copied" : label}
       title={copied ? "Copied" : label}
-      className="inline-flex shrink-0 items-center rounded p-1 text-fg-subtle transition-colors hover:bg-surface-2 hover:text-signal focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal"
-    >
-      {copied ? <Check size={12} aria-hidden="true" /> : <Copy size={12} aria-hidden="true" />}
-      <span className="sr-only">{copied ? "Copied" : label}</span>
-    </button>
+        size="small"
+        sx={{ flexShrink: 0, color: copied ? "signal.main" : "text.secondary", p: 0.5 }}
+      >
+        {copied ? <Check size={12} aria-hidden="true" /> : <Copy size={12} aria-hidden="true" />}
+      </IconButton>
+    </Tooltip>
   );
 }

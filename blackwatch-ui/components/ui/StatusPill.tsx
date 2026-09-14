@@ -1,5 +1,5 @@
-import clsx from "clsx";
 import { StatusDot, type Severity } from "./StatusDot";
+import { Box, Typography } from "@mui/material";
 
 /** Inline status label used in tables and compact summaries. */
 export function StatusPill({
@@ -14,12 +14,13 @@ export function StatusPill({
   className?: string;
 }) {
   return (
-    <span
+    <Box
       title={title}
-      className={clsx("inline-flex items-center gap-1.5 text-xs", className)}
+      className={className}
+      sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}
     >
       <StatusDot severity={severity} />
-      <span className="text-fg-muted">{label}</span>
-    </span>
+      <Typography variant="body2" component="span">{label}</Typography>
+    </Box>
   );
 }

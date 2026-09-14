@@ -1,6 +1,9 @@
 "use client";
 
 import clsx from "clsx";
+import MuiTable from "@mui/material/Table";
+import TableContainer from "@mui/material/TableContainer";
+import Paper from "@mui/material/Paper";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import {
   Children,
@@ -13,7 +16,6 @@ import {
   type ReactNode,
   useId,
 } from "react";
-import { ResizableTable } from "./ResizableTable";
 import { TablePagination } from "./Pagination";
 import { LiveRegion } from "./LiveRegion";
 import {
@@ -199,15 +201,17 @@ export function Table({
           </details>
         </div>
       )}
-      <ResizableTable tableId={tableId}>
-        <table
+      <TableContainer component={Paper} sx={{ maxWidth: "100%", overflowX: "auto", bgcolor: "background.paper", borderRadius: 0 }}>
+        <MuiTable
+          size="small"
+          stickyHeader
           className={clsx("bw-table text-sm", className)}
           data-responsive={responsive ? "cards" : "scroll"}
           aria-label={ariaLabel}
         >
           {paginatedParts}
-        </table>
-      </ResizableTable>
+        </MuiTable>
+      </TableContainer>
       <TablePagination
         page={page}
         pageSize={pageSize}

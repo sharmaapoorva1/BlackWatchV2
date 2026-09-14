@@ -1,4 +1,4 @@
-import clsx from "clsx";
+import Typography from "@mui/material/Typography";
 
 // Small uppercase label above tables / panels.
 // Spec: 11px, uppercase, letter-spacing 0.08em, tertiary text color.
@@ -10,13 +10,8 @@ export function SectionLabel({
   className?: string;
 }) {
   return (
-    <h2
-      className={clsx(
-        "text-[11px] uppercase tracking-[0.08em] text-fg-subtle",
-        className,
-      )}
-    >
+    <Typography component="h2" className={className} sx={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "text.secondary" }}>
       {children}
-    </h2>
+    </Typography>
   );
 }

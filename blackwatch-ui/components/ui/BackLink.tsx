@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { Box, Link as MuiLink } from "@mui/material";
 
 export function BackLink({
   href,
@@ -9,13 +10,15 @@ export function BackLink({
   label: string;
 }) {
   return (
-    <div className="mb-4">
-      <Link
+    <Box sx={{ mb: 2 }}>
+      <MuiLink
+        component={Link}
         href={href}
-        className="inline-flex items-center gap-1.5 text-xs text-fg-muted transition-colors hover:text-fg"
+        underline="hover"
+        sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, fontSize: 12, color: "text.secondary" }}
       >
         <ArrowLeft size={12} /> {label}
-      </Link>
-    </div>
+      </MuiLink>
+    </Box>
   );
 }

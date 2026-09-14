@@ -10,6 +10,7 @@ import "@fontsource/jetbrains-mono/500.css";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import { AppThemeProvider } from "@/components/providers/AppThemeProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -36,9 +37,11 @@ export default function RootLayout({
         >
           Skip to main content
         </a>
-        <AuthProvider>
-          <AppShell>{children}</AppShell>
-        </AuthProvider>
+        <AppThemeProvider>
+          <AuthProvider>
+            <AppShell>{children}</AppShell>
+          </AuthProvider>
+        </AppThemeProvider>
       </body>
     </html>
   );

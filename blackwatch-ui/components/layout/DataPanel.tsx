@@ -1,4 +1,4 @@
-import clsx from "clsx";
+import Paper from "@mui/material/Paper";
 
 // The bordered/tinted section every table sits inside. Overflow belongs on
 // the panel itself so layout classes such as `grid`, `flex`, and `p-*` apply
@@ -13,14 +13,8 @@ export function DataPanel({
   scrollX?: boolean;
 }) {
   return (
-    <section
-      className={clsx(
-        "min-w-0 border border-line-soft bg-surface-1",
-        scrollX && "max-w-full overflow-x-auto",
-        className,
-      )}
-    >
+    <Paper component="section" className={className} sx={{ minWidth: 0, maxWidth: "100%", border: 1, borderColor: "divider", bgcolor: "background.paper", overflowX: scrollX ? "auto" : "visible" }}>
       {children}
-    </section>
+    </Paper>
   );
 }

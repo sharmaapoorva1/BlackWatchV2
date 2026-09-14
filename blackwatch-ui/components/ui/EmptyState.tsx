@@ -1,13 +1,13 @@
-import clsx from "clsx";
 import { StatusDot } from "./StatusDot";
+import { Box, Typography } from "@mui/material";
 
 type EmptyStateSize = "sm" | "md" | "lg";
 type EmptyStateTone = "neutral" | "ok";
 
-const SIZE_CLASS: Record<EmptyStateSize, string> = {
-  sm: "px-6 py-8",
-  md: "px-6 py-10",
-  lg: "px-6 py-16",
+const SIZE_PADDING: Record<EmptyStateSize, number> = {
+  sm: 4,
+  md: 5,
+  lg: 8,
 };
 
 /** Shared empty content treatment for panels and data views. */
@@ -23,16 +23,9 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div
-      className={clsx(
-        "flex items-center justify-center gap-2 text-center text-sm",
-        SIZE_CLASS[size],
-        "text-fg-muted",
-        className,
-      )}
-    >
+    <Box className={className} sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, px: 3, py: SIZE_PADDING[size], textAlign: "center" }}>
       {tone === "ok" && <StatusDot severity="resolved" />}
-      {children}
-    </div>
+      <Typography variant="body2">{children}</Typography>
+    </Box>
   );
 }

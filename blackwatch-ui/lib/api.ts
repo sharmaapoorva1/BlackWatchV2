@@ -54,6 +54,7 @@ import type {
   InvestigationDetail,
   InvestigationsResponse,
 } from "./types";
+import { redirect } from "next/navigation";
 
 export const API_BASE = process.env.BW_API_URL ?? "http://localhost:8000";
 
@@ -89,7 +90,7 @@ export async function bwFetch(pathOrUrl: string, init?: RequestInit): Promise<Re
   // matters because some callers build query strings on top of API_BASE
   // and pass the full URL — we want them to work through bwFetch too.
   const url = pathOrUrl.startsWith("http") ? pathOrUrl : `${API_BASE}${pathOrUrl}`;
-  return fetch(url, {
+  const response = await fetch(url, {
     ...init,
     cache: init?.cache ?? "no-store",
     headers: {
@@ -97,6 +98,18 @@ export async function bwFetch(pathOrUrl: string, init?: RequestInit): Promise<Re
       ...auth,
     },
   });
+
+  // Middleware only checks that the cookie exists. If the session expired or
+  // was revoked, page Server Components otherwise fail with Next's opaque
+  // production "Server Components render" error. Send the operator through
+  // the normal login flow instead of rendering a broken route.
+  if (response.status === 401 && typeof window === "undefined") {
+    // The API path is not the page path; use the safe dashboard landing page
+    // rather than sending the browser to /api/... after authentication.
+    redirect("/login?next=/");
+  }
+
+  return response;
 }
 
 export interface EventsQuery {

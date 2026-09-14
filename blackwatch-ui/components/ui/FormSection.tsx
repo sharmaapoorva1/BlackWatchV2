@@ -1,4 +1,4 @@
-import { SectionLabel } from "@/components/layout/SectionLabel";
+import { Box, Stack, Typography } from "@mui/material";
 
 export function FormSection({
   label,
@@ -10,17 +10,13 @@ export function FormSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-3">
+    <Stack component="section" spacing={1.5}>
       <div>
-        <SectionLabel>{label}</SectionLabel>
-        {hint && (
-          <p className="mt-0.5 text-[11px] leading-snug text-fg-subtle">
-            {hint}
-          </p>
-        )}
+        <Typography component="h2" sx={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "text.secondary" }}>{label}</Typography>
+        {hint && <Typography variant="caption" sx={{ display: "block", mt: 0.25, lineHeight: 1.35 }}>{hint}</Typography>}
       </div>
       {children}
-    </section>
+    </Stack>
   );
 }
 
@@ -34,16 +30,10 @@ export function FieldStack({
   children: React.ReactNode;
 }) {
   return (
-    <label className="block space-y-1">
-      <span className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-        {label}
-      </span>
+    <Box component="label" sx={{ display: "block" }}>
+      <Typography component="span" sx={{ display: "block", mb: 0.5, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "text.secondary" }}>{label}</Typography>
       {children}
-      {hint && (
-        <span className="block text-[10px] leading-tight text-fg-subtle">
-          {hint}
-        </span>
-      )}
-    </label>
+      {hint && <Typography component="span" variant="caption" sx={{ display: "block", mt: 0.5, lineHeight: 1.2 }}>{hint}</Typography>}
+    </Box>
   );
 }

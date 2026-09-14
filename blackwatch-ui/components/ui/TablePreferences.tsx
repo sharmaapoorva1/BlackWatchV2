@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Box, FormControl, MenuItem, Select, Stack, Typography } from "@mui/material";
 
 export const TABLE_PAGE_SIZE_KEY = "bw.table.defaultPageSize";
 export const TABLE_PAGE_SIZE_EVENT = "bw:table-page-size";
@@ -36,27 +37,23 @@ export function TablePageSizeSetting() {
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <p className="text-sm text-fg">Default table rows</p>
-        <p className="mt-1 text-xs text-fg-muted">
+    <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}>
+      <Box>
+        <Typography variant="body2" color="text.primary">Default table rows</Typography>
+        <Typography variant="caption" sx={{ display: "block", mt: 0.5 }}>
           Applies to every table in this browser. You can still change an
           individual table temporarily from its footer.
-        </p>
-      </div>
-      <label className="flex items-center gap-2 text-xs text-fg-muted">
-        <span className="sr-only">Default rows per table</span>
-        <select
+        </Typography>
+      </Box>
+      <FormControl size="small" sx={{ minWidth: 120 }}>
+        <Select
           value={value}
           onChange={(event) => onChange(Number(event.target.value))}
-          className="h-8 border border-line bg-surface-1 px-2 text-xs text-fg"
           aria-label="Default rows per table"
         >
-          {TABLE_PAGE_SIZES.map((size) => (
-            <option key={size} value={size}>{size} rows</option>
-          ))}
-        </select>
-      </label>
-    </div>
+          {TABLE_PAGE_SIZES.map((size) => <MenuItem key={size} value={size}>{size} rows</MenuItem>)}
+        </Select>
+      </FormControl>
+    </Stack>
   );
 }

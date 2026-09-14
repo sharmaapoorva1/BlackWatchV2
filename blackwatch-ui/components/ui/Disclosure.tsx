@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useId } from "react";
-import clsx from "clsx";
 import { ChevronRight } from "lucide-react";
+import { Box, Button, Collapse } from "@mui/material";
 
 // Collapsible section with a caret + label trigger. Used anywhere a form
 // has an optional-detail area (advanced settings, custom message template,
@@ -28,37 +28,27 @@ export function Disclosure({
   const panelId = useId();
 
   return (
-    <div className="space-y-2">
-      <button
+    <Box>
+      <Button
         type="button"
+        size="small"
+        variant="text"
+        color="inherit"
+        startIcon={<ChevronRight size={12} strokeWidth={2} />}
         onClick={() => !disabled && setOpen((s) => !s)}
         aria-expanded={open}
         aria-controls={panelId}
         disabled={disabled}
-        className={clsx(
-          "group inline-flex items-center gap-1.5 rounded text-[11px] uppercase tracking-[0.08em] transition-colors",
-          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-canvas",
-          disabled
-            ? "cursor-not-allowed text-fg-disabled"
-            : "text-fg-subtle hover:text-fg active:text-fg",
-        )}
+        sx={{ px: 0, color: "text.secondary", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", minHeight: 24, "& .MuiButton-startIcon": { transform: open ? "rotate(90deg)" : "none", transition: "transform 150ms ease" }, "&:hover": { bgcolor: "transparent", color: "text.primary" } }}
       >
-        <ChevronRight
-          size={12}
-          strokeWidth={2}
-          className={clsx(
-            "transition-transform duration-150",
-            open && "rotate-90",
-          )}
-        />
-        <span>{label}</span>
-      </button>
+        {label}
+      </Button>
       {/* Keep children mounted when collapsed so form fields inside them
           still contribute to FormData on submit — hide visually via
           `hidden`. Screen readers get correct aria-expanded semantics. */}
-      <div id={panelId} className="pl-4" hidden={!open}>
+      <Collapse id={panelId} in={open} timeout="auto" unmountOnExit={false} sx={{ pl: 2 }}>
         {children}
-      </div>
-    </div>
+      </Collapse>
+    </Box>
   );
 }

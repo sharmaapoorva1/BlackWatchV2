@@ -1,6 +1,6 @@
 "use client";
 
-import clsx from "clsx";
+import { Box, FormControlLabel, Radio, Checkbox, Typography } from "@mui/material";
 
 // Radio-as-card and checkbox-as-card in one primitive. Used anywhere a
 // form asks "pick one of these things" (metric, scope, channel) — the
@@ -38,54 +38,13 @@ export function SelectableCard({
   error?: boolean;
 }) {
   return (
-    <label
-      className={clsx(
-        "group relative block cursor-pointer rounded border p-3 transition-colors",
-        "focus-within:outline-none focus-within:ring-1 focus-within:ring-signal focus-within:ring-offset-2 focus-within:ring-offset-canvas",
-        disabled && "cursor-not-allowed opacity-50",
-        error
-          ? "border-sev-critical"
-          : checked
-            ? "border-signal bg-surface-2"
-            : "border-line-soft bg-canvas hover:border-fg-subtle",
-      )}
-    >
-      <input
-        type={type}
-        name={name}
-        value={value}
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-        className="sr-only"
+    <Box component="label" sx={{ position: "relative", display: "block", cursor: disabled ? "not-allowed" : "pointer", border: 1, borderColor: error ? "error.main" : checked ? "signal.main" : "divider", bgcolor: checked ? "background.paper" : "background.default", p: 1.5, opacity: disabled ? 0.5 : 1, transition: "border-color 150ms ease, background-color 150ms ease", "&:hover": { borderColor: disabled ? "divider" : "text.secondary" } }}>
+      <FormControlLabel
+        sx={{ m: 0, width: "100%", alignItems: "flex-start", gap: 1 }}
+        control={type === "radio" ? <Radio size="small" checked={checked} onChange={(e) => onChange(e.target.checked)} /> : <Checkbox size="small" checked={checked} onChange={(e) => onChange(e.target.checked)} />}
+        label={<Box sx={{ minWidth: 0 }}><Typography variant="body2" color={checked ? "text.primary" : "text.secondary"}>{title}</Typography>{description && <Typography variant="caption" sx={{ display: "block", mt: 0.5 }}>{description}</Typography>}</Box>}
       />
-      <div className="flex items-start gap-2">
-        <span
-          aria-hidden
-          className={clsx(
-            "mt-1 inline-block h-2 w-2 shrink-0 rounded-full border transition-colors",
-            type === "radio" ? "rounded-full" : "rounded-sm",
-            checked
-              ? "border-signal bg-signal"
-              : "border-fg-subtle bg-transparent group-hover:border-fg",
-          )}
-        />
-        <div className="min-w-0 flex-1">
-          <div
-            className={clsx(
-              "text-sm leading-tight",
-              checked ? "text-fg" : "text-fg-muted",
-            )}
-          >
-            {title}
-          </div>
-          {description && (
-            <div className="mt-1 text-[11px] leading-snug text-fg-subtle">
-              {description}
-            </div>
-          )}
-        </div>
-      </div>
-    </label>
+      {checked && <input type="hidden" name={name} value={value} />}
+    </Box>
   );
 }
