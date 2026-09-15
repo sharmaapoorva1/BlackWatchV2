@@ -569,6 +569,8 @@ def modules_refresh(body: ModulesRefreshBody) -> dict[str, Any]:
 def connectors_list() -> dict[str, Any]:
     """All configured connectors with their schedule/status. The Next.js UI
     renders this at /connectors with Test / Run / Toggle / Delete actions."""
+    from .connectors import scheduler as connector_scheduler
+    connector_scheduler.start()
     rows = storage.list_connectors()
     latest = connector_operations.get_latest_connector_operations([r["id"] for r in rows])
     out = []
@@ -600,6 +602,7 @@ def connectors_list() -> dict[str, Any]:
         } | {
             "active_operations": connector_operations.active_operation_count(),
             "max_concurrent_operations": connector_operations.MAX_CONCURRENT_OPERATIONS,
+            "scheduler_running": connector_scheduler.is_running(),
         },
     }
 
@@ -690,6 +693,8 @@ def connectors_retry_all(
 
 @router.get("/connectors/scheduler")
 def connectors_scheduler_status() -> dict[str, Any]:
+    from .connectors import scheduler as connector_scheduler
+    connector_scheduler.start()
     state = storage.get_connector_scheduler_state()
     return {
         key: value.isoformat() if isinstance(value, datetime) else value
@@ -697,6 +702,7 @@ def connectors_scheduler_status() -> dict[str, Any]:
     } | {
         "active_operations": connector_operations.active_operation_count(),
         "max_concurrent_operations": connector_operations.MAX_CONCURRENT_OPERATIONS,
+        "scheduler_running": connector_scheduler.is_running(),
     }
 
 

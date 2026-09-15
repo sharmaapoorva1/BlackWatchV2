@@ -4,6 +4,7 @@ on their configured interval. Deliberately simple — a tick loop, not a cron.""
 from __future__ import annotations
 
 import threading
+import logging
 from datetime import datetime, timedelta, timezone
 
 from .. import storage
@@ -17,6 +18,7 @@ _TICK_SECONDS = 10
 
 _thread: threading.Thread | None = None
 _stop = threading.Event()
+_log = logging.getLogger(__name__)
 
 
 def connector_health_state(connector: dict, *, now: datetime | None = None) -> str:
@@ -204,11 +206,25 @@ def _loop() -> None:
 
 def start() -> None:
     global _thread
-    if _thread is not None:
+    if _thread is not None and _thread.is_alive():
         return
     _stop.clear()
-    _thread = threading.Thread(target=_loop, name="connector-scheduler", daemon=True)
+    _thread = threading.Thread(target=_thread_main, name="connector-scheduler", daemon=True)
     _thread.start()
+
+
+def _thread_main() -> None:
+    global _thread
+    try:
+        _loop()
+    except Exception:
+        _log.exception("connector scheduler stopped unexpectedly")
+    finally:
+        _thread = None
+
+
+def is_running() -> bool:
+    return _thread is not None and _thread.is_alive()
 
 
 def stop() -> None:

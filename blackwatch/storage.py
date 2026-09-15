@@ -437,11 +437,13 @@ def severity_counts() -> dict[str, int]:
 
 def get_vpn_status(server: str) -> dict[str, Any] | None:
     with get_pool().connection() as conn:
-        row = conn.execute(
-            "SELECT server, updated_at, active, clients, certs "
-            "FROM vpn_status WHERE server = %s",
-            (server,),
-        ).fetchone()
+        with conn.transaction():
+            conn.execute("SET LOCAL statement_timeout = '5000ms'")
+            row = conn.execute(
+                "SELECT server, updated_at, active, clients, certs "
+                "FROM vpn_status WHERE server = %s",
+                (server,),
+            ).fetchone()
     if row is None:
         return None
     return {
@@ -452,10 +454,12 @@ def get_vpn_status(server: str) -> dict[str, Any] | None:
 
 def list_vpn_status() -> list[dict[str, Any]]:
     with get_pool().connection() as conn:
-        rows = conn.execute(
-            "SELECT server, updated_at, active, clients, certs "
-            "FROM vpn_status ORDER BY server"
-        ).fetchall()
+        with conn.transaction():
+            conn.execute("SET LOCAL statement_timeout = '5000ms'")
+            rows = conn.execute(
+                "SELECT server, updated_at, active, clients, certs "
+                "FROM vpn_status ORDER BY server"
+            ).fetchall()
     return [
         {
             "server": r[0], "updated_at": r[1], "active": r[2],
@@ -478,43 +482,49 @@ def upsert_vpn_certs(
     """Replace the cert inventory for a server. Called by the projection on
     every vpn.cert.snapshot event from the agent's heartbeat."""
     with get_pool().connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO vpn_status (server, updated_at, active, clients, certs)
-            VALUES (%s, %s, NULL, NULL, %s)
-            ON CONFLICT (server) DO UPDATE
-              SET certs = EXCLUDED.certs, updated_at = EXCLUDED.updated_at
-            """,
-            (server, updated_at, Jsonb(certs)),
-        )
+        with conn.transaction():
+            conn.execute("SET LOCAL statement_timeout = '5000ms'")
+            conn.execute(
+                """
+                INSERT INTO vpn_status (server, updated_at, active, clients, certs)
+                VALUES (%s, %s, NULL, NULL, %s)
+                ON CONFLICT (server) DO UPDATE
+                  SET certs = EXCLUDED.certs, updated_at = EXCLUDED.updated_at
+                """,
+                (server, updated_at, Jsonb(certs)),
+            )
 
 
 def upsert_vpn_health(server: str, active: bool, updated_at: datetime) -> None:
     with get_pool().connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO vpn_status (server, updated_at, active, clients)
-            VALUES (%s, %s, %s, NULL)
-            ON CONFLICT (server) DO UPDATE
-              SET active = EXCLUDED.active, updated_at = EXCLUDED.updated_at
-            """,
-            (server, updated_at, active),
-        )
+        with conn.transaction():
+            conn.execute("SET LOCAL statement_timeout = '5000ms'")
+            conn.execute(
+                """
+                INSERT INTO vpn_status (server, updated_at, active, clients)
+                VALUES (%s, %s, %s, NULL)
+                ON CONFLICT (server) DO UPDATE
+                  SET active = EXCLUDED.active, updated_at = EXCLUDED.updated_at
+                """,
+                (server, updated_at, active),
+            )
 
 
 def upsert_vpn_clients(
     server: str, clients: list[dict[str, Any]], updated_at: datetime
 ) -> None:
     with get_pool().connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO vpn_status (server, updated_at, active, clients)
-            VALUES (%s, %s, NULL, %s)
-            ON CONFLICT (server) DO UPDATE
-              SET clients = EXCLUDED.clients, updated_at = EXCLUDED.updated_at
-            """,
-            (server, updated_at, Jsonb(clients)),
-        )
+        with conn.transaction():
+            conn.execute("SET LOCAL statement_timeout = '5000ms'")
+            conn.execute(
+                """
+                INSERT INTO vpn_status (server, updated_at, active, clients)
+                VALUES (%s, %s, NULL, %s)
+                ON CONFLICT (server) DO UPDATE
+                  SET clients = EXCLUDED.clients, updated_at = EXCLUDED.updated_at
+                """,
+                (server, updated_at, Jsonb(clients)),
+            )
 
 
 # --- Connectors ----------------------------------------------------------------
@@ -715,10 +725,12 @@ def create_connector_operation(
 
 def get_connector_operation(operation_id: str) -> dict[str, Any] | None:
     with get_pool().connection() as conn:
-        row = conn.execute(
-            f"SELECT {_OPERATION_COLS} FROM connector_operations WHERE operation_id=%s",
-            (operation_id,),
-        ).fetchone()
+        with conn.transaction():
+            conn.execute("SET LOCAL statement_timeout = '5000ms'")
+            row = conn.execute(
+                f"SELECT {_OPERATION_COLS} FROM connector_operations WHERE operation_id=%s",
+                (operation_id,),
+            ).fetchone()
     return _operation_row(row) if row else None
 
 
@@ -748,11 +760,13 @@ def list_connector_operations(
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
     params.append(limit)
     with get_pool().connection() as conn:
-        rows = conn.execute(
-            f"SELECT {_OPERATION_COLS} FROM connector_operations{where} "
-            "ORDER BY requested_at DESC LIMIT %s",
-            tuple(params),
-        ).fetchall()
+        with conn.transaction():
+            conn.execute("SET LOCAL statement_timeout = '5000ms'")
+            rows = conn.execute(
+                f"SELECT {_OPERATION_COLS} FROM connector_operations{where} "
+                "ORDER BY requested_at DESC LIMIT %s",
+                tuple(params),
+            ).fetchall()
     return [_operation_row(row) for row in rows]
 
 
@@ -764,23 +778,25 @@ def list_stale_connector_operations(before: datetime) -> list[dict[str, Any]]:
     filled the normal 100-row diagnostics window.
     """
     with get_pool().connection() as conn:
-        rows = conn.execute(
-            f"""
-            SELECT {_OPERATION_COLS}
-              FROM connector_operations
-             WHERE (
-                     status = 'running'
-                 AND started_at IS NOT NULL
-                 AND started_at <= %s
-                   )
-                OR (
-                     status = 'queued'
-                 AND requested_at <= %s
-                   )
-             ORDER BY requested_at
-            """,
-            (before, before),
-        ).fetchall()
+        with conn.transaction():
+            conn.execute("SET LOCAL statement_timeout = '5000ms'")
+            rows = conn.execute(
+                f"""
+                SELECT {_OPERATION_COLS}
+                  FROM connector_operations
+                 WHERE (
+                         status = 'running'
+                     AND started_at IS NOT NULL
+                     AND started_at <= %s
+                       )
+                    OR (
+                         status = 'queued'
+                     AND requested_at <= %s
+                       )
+                 ORDER BY requested_at
+                """,
+                (before, before),
+            ).fetchall()
     return [_operation_row(row) for row in rows]
 
 
