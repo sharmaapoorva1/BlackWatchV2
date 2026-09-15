@@ -24,12 +24,15 @@ services:
     environment:
       DATABASE_URL: postgresql://blackwatch:blackwatch@db:5432/blackwatch
       BLACKWATCH_TOKENS: devtoken:generic,vpntoken:vpn.openvpn,s3token:aws.s3
+      BW_UEBA_DB: /app/data/baseline.db
     ports:
       - "8000:8000"
     volumes:
       # Mount operator-editable config so changes only need `restart`, not rebuild.
       - ./rules:/app/rules:ro
       - ./notifications.yaml:/app/notifications.yaml:ro
+      # Persist UEBA baseline state outside the application image.
+      - ./data/ueba:/app/data
       # Mount your AWS credentials (read-only) for the SQS connectors (CloudTrail /
       # EC2 host agent / OpenVPN agent — all three drain via target_module=…).
       # Reference the profile name in Settings → Connectors. Uncomment & adjust:
