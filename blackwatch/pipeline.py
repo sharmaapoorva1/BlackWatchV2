@@ -6,7 +6,7 @@ how it arrived. The event core stays a pure sink — this function is the seam."
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from . import correlation, noise, storage
 from .intel import enrich as intel_enrich
@@ -132,18 +132,25 @@ def ingest_payload(
     transport: str = "webhook",
     account: str | None = None,
     region: str | None = None,
+    progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     ctx = IngestContext(module=module, transport=transport, account=account, region=region)
     adapter = registry.resolve(module)
+    if progress:
+        progress({"stage": "parsing", "module": module})
     try:
         events = adapter.parse(raw, ctx)
     except Exception as exc:
         raise NormalizationError(str(exc)) from exc
 
+    if progress:
+        progress({"stage": "parsed", "module": module, "event_count": len(events)})
     summaries: list[dict[str, Any]] = []
     muted = 0
     transient = 0
     for event in events:
+        if progress:
+            progress({"stage": "processing", "module": module, "action": event.action})
         try:
             intel_enrich.enrich_event(event)
         except Exception:  # enrichment must never drop events
@@ -155,13 +162,19 @@ def ingest_payload(
             transient += 1  # feed projection, don't store/notify
         else:
             summaries.append(_process(event))
+        if progress:
+            progress({"stage": "processed", "module": module, "action": event.action})
         # Stateful projections may derive further events: transitions
         # (vpn.service.down, host.agent.recovered) and diffs (host.port.opened,
         # vpn.session.start, …). Those ARE stored — they're the signal.
         derived: list[Event] = []
         for project in _PROJECTIONS:
             try:
+                if progress:
+                    progress({"stage": "projecting", "module": module, "action": event.action, "projection": getattr(project, "__module__", "unknown")})
                 derived.extend(project(event))
+                if progress:
+                    progress({"stage": "projected", "module": module, "action": event.action, "derived_count": len(derived)})
             except Exception as exc:
                 summaries.append({"action": "projection.error", "detail": str(exc)})
         for derived_event in derived:

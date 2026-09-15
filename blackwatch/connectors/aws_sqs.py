@@ -113,7 +113,9 @@ def drain(
                           "ingested": total_ingested, "failed": total_failed,
                           "deleted": total_deleted, "action": action})
             try:
-                result = pipeline.ingest_payload(cfg.target_module, body, transport="queue")
+                result = pipeline.ingest_payload(
+                    cfg.target_module, body, transport="queue", progress=progress,
+                )
                 total_ingested += result.get("ingested", 0)
                 to_delete.append(
                     {"Id": message["MessageId"], "ReceiptHandle": message["ReceiptHandle"]}
