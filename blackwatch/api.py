@@ -657,13 +657,24 @@ def connector_operation_get(operation_id: str) -> dict[str, Any]:
 def connector_operations_list(
     limit: int = Query(default=100, ge=1, le=100),
     connector_id: str | None = Query(default=None),
-    status: Literal["queued", "running", "succeeded", "failed", "skipped", "timed_out"] | None = Query(default=None),
+    status: Literal["queued", "running", "succeeded", "failed", "skipped", "timed_out", "cancelled"] | None = Query(default=None),
     kind: str | None = Query(default=None),
 ) -> dict[str, Any]:
     """Read-only bounded operation telemetry for the Advanced Queue view."""
     return connector_operations.operation_queue_snapshot(
         connector_id=connector_id, status=status, kind=kind, limit=limit,
     )
+
+
+@router.post("/connector-operations/{operation_id}/cancel", status_code=202,
+             dependencies=[Depends(require_role("admin"))])
+def connector_operation_cancel(operation_id: str) -> dict[str, Any]:
+    if connector_operations.cancel_operation(operation_id):
+        return {"cancelled": True, "operation_id": operation_id}
+    operation = storage.get_connector_operation(operation_id)
+    if operation is None:
+        raise HTTPException(status_code=404, detail="operation not found")
+    return {"cancelled": False, "operation_id": operation_id, "status": operation["status"]}
 
 
 @router.post("/connectors/retry-all", status_code=202,

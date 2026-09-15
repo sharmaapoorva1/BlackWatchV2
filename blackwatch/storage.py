@@ -652,7 +652,7 @@ _OPERATION_COLS = (
     "operation_id, kind, connector_id, parent_operation_id, status, "
     "correlation_id, requested_at, started_at, finished_at, updated_at, "
     "next_attempt_at, retry_count, attempt, duration_ms, outcome, "
-    "error_category, error_message, created_by"
+    "error_category, error_message, created_by, priority"
 )
 
 
@@ -676,6 +676,7 @@ def _operation_row(row: tuple[Any, ...]) -> dict[str, Any]:
         "error_category": row[15],
         "error_message": row[16],
         "created_by": row[17],
+        "priority": row[18],
     }
 
 
@@ -693,6 +694,7 @@ def create_connector_operation(
     attempt: int = 0,
     outcome: dict[str, Any] | None = None,
     created_by: str | None = None,
+    priority: int = 100,
 ) -> None:
     with get_pool().connection() as conn:
         conn.execute(
@@ -700,13 +702,13 @@ def create_connector_operation(
             INSERT INTO connector_operations (
                 operation_id, kind, connector_id, parent_operation_id, status,
                 correlation_id, requested_at, next_attempt_at, retry_count,
-                attempt, outcome, created_by
-            ) VALUES (%s, %s, %s, %s, %s, %s, COALESCE(%s, now()), %s, %s, %s, %s, %s)
+                attempt, outcome, created_by, priority
+            ) VALUES (%s, %s, %s, %s, %s, %s, COALESCE(%s, now()), %s, %s, %s, %s, %s, %s)
             """,
             (
                 operation_id, kind, connector_id, parent_operation_id, status,
                 correlation_id, requested_at, next_attempt_at, max(0, retry_count),
-                max(0, attempt), Jsonb(outcome or {}), created_by,
+                max(0, attempt), Jsonb(outcome or {}), created_by, max(0, int(priority)),
             ),
         )
 
@@ -766,12 +768,18 @@ def list_stale_connector_operations(before: datetime) -> list[dict[str, Any]]:
             f"""
             SELECT {_OPERATION_COLS}
               FROM connector_operations
-             WHERE status = 'running'
-               AND started_at IS NOT NULL
-               AND started_at <= %s
+             WHERE (
+                     status = 'running'
+                 AND started_at IS NOT NULL
+                 AND started_at <= %s
+                   )
+                OR (
+                     status = 'queued'
+                 AND requested_at <= %s
+                   )
              ORDER BY requested_at
             """,
-            (before,),
+            (before, before),
         ).fetchall()
     return [_operation_row(row) for row in rows]
 
@@ -899,6 +907,22 @@ def mark_connector_operation_running(
              WHERE operation_id=%s AND status='queued'
             """,
             (started_at, operation_id),
+        )
+    return result.rowcount == 1
+
+
+def cancel_connector_operation(operation_id: str, *, reason: str = "cancelled_by_operator") -> bool:
+    """Cancel only queued work; running provider calls remain watchdog-bounded."""
+    with get_pool().connection() as conn:
+        result = conn.execute(
+            """
+            UPDATE connector_operations
+               SET status='cancelled', finished_at=now(), updated_at=now(),
+                   error_category='cancelled', error_message=%s,
+                   outcome=jsonb_build_object('status', 'cancelled', 'reason', %s)
+             WHERE operation_id=%s AND status='queued'
+            """,
+            (reason, reason, operation_id),
         )
     return result.rowcount == 1
 

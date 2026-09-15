@@ -91,6 +91,11 @@ export async function getConnectorOperationsAction(): Promise<Record<string, unk
   return (await res.json()) as Record<string, unknown>;
 }
 
+export async function cancelConnectorOperationAction(operationId: string): Promise<boolean> {
+  const res = await apiFetch(`/api/connector-operations/${encodeURIComponent(operationId)}/cancel`, { method: "POST", cache: "no-store" });
+  return res.ok;
+}
+
 export async function retryAllConnectorsAction(
   scope: "eligible" | "all" = "eligible",
 ): Promise<Record<string, unknown>> {

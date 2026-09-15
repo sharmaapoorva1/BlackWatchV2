@@ -302,6 +302,7 @@ def start_connector_operation(
     created_by: str | None = None,
     retry_count: int = 0,
     timeout_seconds: int = DEFAULT_OPERATION_TIMEOUT_SECONDS,
+    priority: int = 100,
 ) -> dict[str, Any]:
     connector = storage.get_connector(connector_id)
     if connector is None:
@@ -361,6 +362,7 @@ def start_connector_operation(
             requested_at=requested_at,
             retry_count=retry_count,
             created_by=created_by,
+            priority=priority,
         )
         future = _executor.submit(
             _execute,
@@ -679,12 +681,32 @@ def operation_queue_snapshot(
     rows = storage.list_connector_operations(
         connector_id=connector_id, status=status, kind=kind, limit=limit,
     )
+    connectors = {row["id"]: row.get("name") for row in storage.list_connectors()}
+    serialized = []
+    for row in rows:
+        item = serialize_operation(row) or {}
+        item["connector_name"] = connectors.get(row.get("connector_id"))
+        serialized.append(item)
     return {
-        "operations": [serialize_operation(row) for row in rows],
+        "operations": serialized,
         "active_operations": active_operation_count(),
         "max_concurrent_operations": MAX_CONCURRENT_OPERATIONS,
         "generated_at": _now().isoformat(),
     }
+
+
+def cancel_operation(operation_id: str) -> bool:
+    cancelled = storage.cancel_connector_operation(operation_id)
+    if cancelled:
+        with _state_lock:
+            current = _active.pop(operation_id, None)
+        if current:
+            current[3].cancel()
+            current[2].cancel()
+            _operation_slots.release()
+            if current[1].locked():
+                current[1].release()
+    return cancelled
 
 
 def wait_for_operation(
@@ -707,11 +729,19 @@ def wait_for_operation(
 
 
 def recover_stale_operations(max_age_seconds: int = DEFAULT_OPERATION_TIMEOUT_SECONDS) -> int:
-    """Close orphaned queued/running rows after a process restart."""
+    """Reconcile orphaned rows after a process restart.
+
+    Queued rows are cancelled because this process has no durable worker queue
+    to resume them. Running rows retain the existing bounded timeout behavior.
+    """
     now = _now()
     cutoff = now - timedelta(seconds=max_age_seconds)
     recovered = 0
     for operation in storage.list_stale_connector_operations(cutoff):
+        if operation.get("status") == "queued":
+            if storage.cancel_connector_operation(operation["operation_id"], reason="orphaned_after_process_restart"):
+                recovered += 1
+            continue
         safe = redact_error(TimeoutError("orphaned connector operation"), "timeout")
         retry_count = int(operation.get("retry_count") or 0) + 1
         next_attempt = now + timedelta(

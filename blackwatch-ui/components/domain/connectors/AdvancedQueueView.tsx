@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { getConnectorOperationsAction } from "@/app/connectors/actions";
+import { cancelConnectorOperationAction, getConnectorOperationsAction } from "@/app/connectors/actions";
 import type { ConnectorOperation, ConnectorProgress } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { DataPanel } from "@/components/layout/DataPanel";
@@ -11,7 +11,13 @@ import { Table } from "@/components/ui/Table";
 
 function progressOf(operation: ConnectorOperation): ConnectorProgress {
   const value = operation.outcome?.progress;
-  return value && typeof value === "object" ? value as ConnectorProgress : {};
+  if (value && typeof value === "object") return value as ConnectorProgress;
+  const outcome = operation.outcome ?? {};
+  return {
+    stage: operation.status === "succeeded" ? "completed" : operation.status,
+    fetched: typeof outcome.messages === "number" ? outcome.messages : 0,
+    ingested: typeof outcome.ingested === "number" ? outcome.ingested : 0,
+  };
 }
 
 function time(value: string | null) {
@@ -54,12 +60,12 @@ export function AdvancedQueueView({ initial }: { initial: ConnectorOperation[] }
       <DataPanel className="overflow-hidden">
         <Table tableId="advanced-queue-active" ariaLabel="Active connector operations">
           <thead><tr>
-            <th>Operation</th><th>Stage</th><th>Message</th><th>Fetched</th><th>Ingested</th><th>Failed</th><th>Deleted</th><th>Started</th><th>Status</th>
+            <th>Connector</th><th>Operation</th><th>Stage</th><th>Message</th><th>Fetched</th><th>Ingested</th><th>Failed</th><th>Deleted</th><th>Started</th><th>Status</th><th>Control</th>
           </tr></thead>
           <tbody>{active.length ? active.map((operation) => {
             const progress = progressOf(operation);
             return <tr key={operation.operation_id}>
-              <td className="font-mono text-xs">{operation.operation_id.slice(0, 8)}</td>
+              <td className="font-medium">{operation.connector_name ?? "—"}</td><td className="font-mono text-xs">{operation.operation_id.slice(0, 8)}</td>
               <td>{progress.stage ?? "starting"}</td>
               <td className="max-w-64 font-mono text-xs">
                 <div className="truncate" title={progress.message_id ?? undefined}>{progress.action ?? progress.message_id ?? "—"}</div>
@@ -73,8 +79,9 @@ export function AdvancedQueueView({ initial }: { initial: ConnectorOperation[] }
               <td>{progress.fetched ?? 0}</td><td>{progress.ingested ?? 0}</td><td>{progress.failed ?? 0}</td><td>{progress.deleted ?? 0}</td>
               <td className="whitespace-nowrap text-xs">{time(operation.started_at)}</td>
               <td><StatusPill severity="neutral" label={operation.status} /></td>
+              <td>{operation.status === "queued" && <Button size="sm" variant="danger" onClick={() => void cancelConnectorOperationAction(operation.operation_id)}>Stop</Button>}</td>
             </tr>;
-          }) : <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-fg-muted">No queued or running operations.</td></tr>}</tbody>
+          }) : <tr><td colSpan={11} className="px-4 py-8 text-center text-sm text-fg-muted">No queued or running operations.</td></tr>}</tbody>
         </Table>
       </DataPanel>
       <DataPanel className="overflow-hidden">
@@ -83,12 +90,12 @@ export function AdvancedQueueView({ initial }: { initial: ConnectorOperation[] }
           <Button size="sm" variant="ghost" onClick={() => window.location.reload()}><RefreshCw size={14} /> Refresh</Button>
         </div>
         <Table tableId="advanced-queue-history" ariaLabel="Recent connector operation log">
-          <thead><tr><th>Operation</th><th>Requested</th><th>Finished</th><th>Status</th><th>Progress / error</th></tr></thead>
+          <thead><tr><th>Connector</th><th>Operation</th><th>Requested</th><th>Finished</th><th>Status</th><th>Progress / error</th></tr></thead>
           <tbody>{recent.map((operation) => {
             const progress = progressOf(operation);
             const recentEvents = Array.isArray(operation.outcome?.recent_events) ? operation.outcome.recent_events : [];
             return <tr key={operation.operation_id}>
-              <td className="font-mono text-xs">{operation.operation_id.slice(0, 8)}</td>
+              <td className="font-medium">{operation.connector_name ?? "—"}</td><td className="font-mono text-xs">{operation.operation_id.slice(0, 8)}</td>
               <td className="whitespace-nowrap text-xs">{time(operation.requested_at)}</td>
               <td className="whitespace-nowrap text-xs">{time(operation.finished_at)}</td>
               <td><StatusPill severity={operation.status === "succeeded" ? "resolved" : operation.status === "failed" || operation.status === "timed_out" ? "critical" : "neutral"} label={operation.status} /></td>

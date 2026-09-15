@@ -1304,7 +1304,8 @@ export type ConnectorOperationStatus =
   | "succeeded"
   | "failed"
   | "skipped"
-  | "timed_out";
+  | "timed_out"
+  | "cancelled";
 
 export interface ConnectorProgress {
   stage?: string;
@@ -1340,6 +1341,8 @@ export interface ConnectorOperation {
   progress?: ConnectorProgress;
   error_category: string | null;
   error_message: string | null;
+  connector_name?: string | null;
+  priority?: number;
 }
 
 export interface ConnectorsListResponse {
