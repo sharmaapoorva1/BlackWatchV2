@@ -106,6 +106,10 @@ that persistent database volume and all BlackWatch data. Do not rename the
 volume or change its Compose project without first verifying the existing
 volume and taking a backup.
 
+The Compose logical volume `bw_pgdata` is pinned to the verified external
+Docker volume `blackwatch_bw_pgdata`. If that volume is missing, Compose will
+stop instead of creating an empty replacement database.
+
 BlackWatch migrations are required to be data-preserving. The application
 refuses to run a migration containing automatic table, column, row, schema,
 or database deletion. If a future change appears to require destructive

@@ -66,5 +66,8 @@ services:
 
 volumes:
   bw_pgdata:
-    labels:
-      com.blackwatch.data-critical: "true"
+    # This is the verified production/dev database volume. Pin the physical
+    # name so Compose project-directory changes cannot create a new database
+    # volume or prompt to adopt the existing one.
+    name: blackwatch_bw_pgdata
+    external: true
