@@ -368,6 +368,7 @@ export interface ApiGwFailure {
   event_time: string | null;
   action: "api.auth.failure" | "api.error";
   api_name: string | null;
+  route_key: string | null;
   source_ip: string | null;
   method: string | null;
   status: number | null;

@@ -376,6 +376,8 @@ function FailuresTable({ failures }: { failures: ApiGwFailure[] }) {
         <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
           <th className="w-40 px-4 py-2 text-left font-normal">When</th>
           <th className="w-32 px-4 py-2 text-left font-normal">Kind</th>
+          <th className="w-44 px-4 py-2 text-left font-normal">API</th>
+          <th className="w-48 px-4 py-2 text-left font-normal">Route</th>
           <th className="w-16 px-4 py-2 text-left font-normal">Method</th>
           <th className="w-20 px-4 py-2 text-left font-normal">Status</th>
           <th className="w-44 px-4 py-2 text-left font-normal">Source IP</th>
@@ -398,6 +400,12 @@ function FailuresTable({ failures }: { failures: ApiGwFailure[] }) {
             </td>
             <td className="px-4 py-2.5 text-xs text-fg-muted">
               {f.action === "api.auth.failure" ? "auth" : "5xx"}
+            </td>
+            <td className="max-w-[20rem] wrap-anywhere px-4 py-2.5 font-mono text-xs text-fg">
+              {f.api_name || <span className="text-fg-disabled">unknown API</span>}
+            </td>
+            <td className="max-w-[24rem] wrap-anywhere px-4 py-2.5 font-mono text-xs text-fg-muted">
+              {f.route_key || <span className="text-fg-disabled">—</span>}
             </td>
             <td className="px-4 py-2.5 font-mono text-xs text-fg-muted">
               {f.method || "—"}

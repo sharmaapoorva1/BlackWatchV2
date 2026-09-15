@@ -3217,6 +3217,7 @@ def api_gw_failures(
                 "event_time": r.get("event_time"),
                 "action": action,
                 "api_name": extra.get("api_name") or target.get("id"),
+                "route_key": extra.get("route_key"),
                 "source_ip": extra.get("source_ip") or actor.get("source_ip"),
                 "method": extra.get("method"),
                 "status": extra.get("status"),

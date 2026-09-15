@@ -161,7 +161,7 @@ export function IpCell({ value, className, fallback = "—" }: IpCellProps) {
             ref={menuRef}
             role="menu"
             aria-label={`Actions for ${value}`}
-            className="fixed z-50 min-w-[200px] border border-line bg-surface-2 shadow-xl"
+            className="fixed z-50 w-max min-w-[180px] max-w-[calc(100vw-1rem)] border border-line bg-surface-2 shadow-xl"
             style={{
               top: Math.min(menu.y, window.innerHeight - 140),
               left: Math.min(menu.x, window.innerWidth - 220),
