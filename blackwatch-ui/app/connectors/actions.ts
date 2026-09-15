@@ -85,6 +85,12 @@ export async function getConnectorOperationAction(
   return (await res.json()) as Record<string, unknown>;
 }
 
+export async function getConnectorOperationsAction(): Promise<Record<string, unknown> | null> {
+  const res = await apiFetch("/api/connector-operations?limit=100", { cache: "no-store" });
+  if (!res.ok) return null;
+  return (await res.json()) as Record<string, unknown>;
+}
+
 export async function retryAllConnectorsAction(
   scope: "eligible" | "all" = "eligible",
 ): Promise<Record<string, unknown>> {

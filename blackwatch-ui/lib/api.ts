@@ -18,6 +18,7 @@ import type {
   BucketsListResponse,
   StorageSummary,
   Connector,
+  ConnectorOperation,
   ConnectorsListResponse,
   CoverageResponse,
   OverviewResponse,
@@ -704,6 +705,23 @@ export async function fetchConnectors(): Promise<ConnectorsListResponse> {
   const res = await bwFetch(`/api/connectors`);
   if (!res.ok) throw new Error(`fetchConnectors failed: ${res.status} ${res.statusText}`);
   return (await res.json()) as ConnectorsListResponse;
+}
+
+export interface ConnectorOperationsResponse {
+  operations: ConnectorOperation[];
+  active_operations: number;
+  max_concurrent_operations: number;
+  generated_at: string;
+}
+
+export async function fetchConnectorOperations(
+  params: { limit?: number; status?: string } = {},
+): Promise<ConnectorOperationsResponse> {
+  const query = new URLSearchParams({ limit: String(params.limit ?? 100) });
+  if (params.status) query.set("status", params.status);
+  const res = await bwFetch(`/api/connector-operations?${query.toString()}`);
+  if (!res.ok) throw new Error(`fetchConnectorOperations failed: ${res.status} ${res.statusText}`);
+  return (await res.json()) as ConnectorOperationsResponse;
 }
 
 export async function fetchNotificationProfiles(): Promise<NotificationProfilesResponse> {

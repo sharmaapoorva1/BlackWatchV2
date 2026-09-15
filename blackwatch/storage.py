@@ -724,6 +724,8 @@ def list_connector_operations(
     *,
     connector_id: str | None = None,
     parent_operation_id: str | None = None,
+    status: str | None = None,
+    kind: str | None = None,
     limit: int = 20,
 ) -> list[dict[str, Any]]:
     limit = max(1, min(int(limit), 100))
@@ -735,6 +737,12 @@ def list_connector_operations(
     if parent_operation_id is not None:
         clauses.append("parent_operation_id=%s")
         params.append(parent_operation_id)
+    if status is not None:
+        clauses.append("status=%s")
+        params.append(status)
+    if kind is not None:
+        clauses.append("kind=%s")
+        params.append(kind)
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
     params.append(limit)
     with get_pool().connection() as conn:
@@ -758,8 +766,9 @@ def list_stale_connector_operations(before: datetime) -> list[dict[str, Any]]:
             f"""
             SELECT {_OPERATION_COLS}
               FROM connector_operations
-             WHERE status IN ('queued', 'running')
-               AND COALESCE(started_at, requested_at, updated_at) <= %s
+             WHERE status = 'running'
+               AND started_at IS NOT NULL
+               AND started_at <= %s
              ORDER BY requested_at
             """,
             (before,),

@@ -653,6 +653,19 @@ def connector_operation_get(operation_id: str) -> dict[str, Any]:
     return result
 
 
+@router.get("/connector-operations")
+def connector_operations_list(
+    limit: int = Query(default=100, ge=1, le=100),
+    connector_id: str | None = Query(default=None),
+    status: Literal["queued", "running", "succeeded", "failed", "skipped", "timed_out"] | None = Query(default=None),
+    kind: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """Read-only bounded operation telemetry for the Advanced Queue view."""
+    return connector_operations.operation_queue_snapshot(
+        connector_id=connector_id, status=status, kind=kind, limit=limit,
+    )
+
+
 @router.post("/connectors/retry-all", status_code=202,
              dependencies=[Depends(require_role("admin"))])
 def connectors_retry_all(

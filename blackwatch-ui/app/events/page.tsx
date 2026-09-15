@@ -79,7 +79,7 @@ function FilterBar({
     <form
       action="/events"
       method="GET"
-    className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(16rem,2fr)_repeat(4,minmax(10rem,1fr))_auto_auto]"
+    className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(18rem,2fr)_repeat(4,minmax(11rem,1fr))_minmax(8rem,auto)_minmax(6rem,auto)]"
   >
       <Input
         name="q"
@@ -109,10 +109,10 @@ function FilterBar({
         <option value="">All actions</option>
         {options.actions.map((value) => <option key={value} value={value}>{value}</option>)}
       </NativeSelect>
-      <Button type="submit" variant="primary" size="sm" className="w-1/2 justify-self-start">
+      <Button type="submit" variant="primary" size="sm" className="w-full min-w-32 justify-self-stretch">
         Apply filters
       </Button>
-      <Button asChild variant="secondary" size="sm" className="w-1/2 justify-self-start">
+      <Button asChild variant="secondary" size="sm" className="w-full min-w-24 justify-self-stretch">
         <Link href="/events">Clear</Link>
       </Button>
     </form>

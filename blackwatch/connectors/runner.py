@@ -5,7 +5,7 @@ shared ingest pipeline, and record status. A successful run marks the connector
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 from .. import storage
 from . import (
@@ -34,7 +34,11 @@ def _operation_is_live(operation_id: str | None) -> bool:
 
 
 def run_connector(
-    connector_id: str, *, operation_id: str | None = None, kind: str = "manual"
+    connector_id: str,
+    *,
+    operation_id: str | None = None,
+    kind: str = "manual",
+    progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     connector = storage.get_connector(connector_id)
     if connector is None:
@@ -49,7 +53,8 @@ def run_connector(
                 stats = aws_sqs.test_connection(cfg)
                 outcome = {"messages": stats["messages"]}
             else:
-                stats = aws_sqs.drain(cfg)
+                drain_kwargs = {"progress": progress} if progress is not None else {}
+                stats = aws_sqs.drain(cfg, **drain_kwargs)
                 outcome = {"ingested": stats["ingested"], "messages": stats["messages"]}
         elif ctype == "aws_ecs_health":
             cfg = AwsEcsHealthConfig(**connector["config"])

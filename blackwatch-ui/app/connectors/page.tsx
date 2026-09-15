@@ -48,6 +48,9 @@ export default async function ConnectorsPage({
             <RequireAdmin>
               <RetryAllButton />
             </RequireAdmin>
+            <Button asChild variant="secondary" size="sm">
+              <Link href="/connectors/advanced-queue">Advanced queue</Link>
+            </Button>
             <Button asChild variant="primary" size="sm">
               <Link href="/connectors/new">
                 <Plus size={14} /> Add connector
@@ -119,7 +122,7 @@ function ConnectorsTable({ connectors }: { connectors: Connector[] }) {
           <th className="w-32 px-4 py-2 text-left font-normal">Schedule</th>
           <th className="w-36 px-4 py-2 text-left font-normal">Last run</th>
           <th className="w-24 px-4 py-2 text-left font-normal">Status</th>
-          <th className="w-72 px-4 py-2 text-right font-normal" />
+          <th data-actions className="w-96 px-4 py-2 text-right font-normal">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -167,7 +170,7 @@ function ConnectorRow({ connector: c }: { connector: Connector }) {
         <td className="px-4 py-2.5">
           <StatusPill connector={c} />
         </td>
-        <td className="px-4 py-2.5 text-right">
+        <td data-actions className="px-4 py-2.5 text-right">
           <Actions connector={c} />
         </td>
       </tr>
@@ -191,7 +194,7 @@ function ConnectorRow({ connector: c }: { connector: Connector }) {
 function Actions({ connector: c }: { connector: Connector }) {
   return (
     <RequireAdmin>
-      <div className="flex flex-wrap items-center justify-end gap-1.5">
+      <div className="flex flex-wrap items-center justify-end gap-1.5 md:flex-nowrap">
         <ConnectorActionButton connectorId={c.id} kind="test" />
         <ConnectorActionButton connectorId={c.id} kind="manual" disabled={!c.verified} />
 

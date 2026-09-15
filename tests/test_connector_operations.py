@@ -426,3 +426,52 @@ class _TimerStub:
 
     def cancel(self):
         self.cancel_called = True
+
+
+def test_queued_operation_is_not_timed_out_by_active_watchdog(monkeypatch):
+    lock = threading.Lock()
+    lock.acquire()
+    future = _PendingFuture()
+    timer = _TimerStub()
+    with connector_operations._state_lock:
+        connector_operations._active["queued-op"] = ("c1", lock, future, timer)
+    monkeypatch.setattr(
+        connector_operations.storage,
+        "get_connector_operation",
+        lambda _operation_id: {"status": "queued", "started_at": None},
+    )
+
+    try:
+        assert connector_operations._timeout_operation("queued-op", "c1", lock, 0) is False
+        with connector_operations._state_lock:
+            assert "queued-op" in connector_operations._active
+        assert timer.cancel_called is False
+    finally:
+        with connector_operations._state_lock:
+            connector_operations._active.pop("queued-op", None)
+        if lock.locked():
+            lock.release()
+
+
+def test_report_operation_progress_persists_safe_live_state(monkeypatch):
+    updates = []
+    monkeypatch.setattr(
+        connector_operations.storage,
+        "get_connector_operation",
+        lambda _operation_id: {"status": "running", "outcome": {}},
+    )
+    monkeypatch.setattr(
+        connector_operations.storage,
+        "update_connector_operation",
+        lambda *args, **kwargs: updates.append((args, kwargs)) or True,
+    )
+
+    connector_operations.report_operation_progress(
+        "op-progress",
+        {"stage": "ingesting", "batch": 2, "message_index": 3, "fetched": 13},
+    )
+
+    assert updates[0][0] == ("op-progress",)
+    assert updates[0][1]["status"] == "running"
+    assert updates[0][1]["outcome"]["progress"]["stage"] == "ingesting"
+    assert updates[0][1]["outcome"]["recent_events"][0]["fetched"] == 13

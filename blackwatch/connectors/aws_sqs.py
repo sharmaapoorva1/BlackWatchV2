@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, Callable
 
 
 from .. import pipeline
@@ -69,18 +69,32 @@ def test_connection(cfg: AwsCloudtrailSqsConfig) -> dict[str, Any]:
     }
 
 
-def drain(cfg: AwsCloudtrailSqsConfig) -> dict[str, Any]:
+def drain(
+    cfg: AwsCloudtrailSqsConfig,
+    *,
+    progress: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
     sqs = _client(cfg)
     total_messages = 0
     total_ingested = 0
+    total_failed = 0
+    total_deleted = 0
 
-    for _ in range(max(1, cfg.max_batches)):
+    for batch in range(1, max(1, cfg.max_batches) + 1):
+        if progress:
+            progress({"stage": "receiving", "batch": batch, "fetched": total_messages,
+                      "ingested": total_ingested, "failed": total_failed,
+                      "deleted": total_deleted})
         resp = sqs.receive_message(
             QueueUrl=cfg.queue_url,
             MaxNumberOfMessages=10,
             WaitTimeSeconds=cfg.wait_seconds,
         )
         messages = resp.get("Messages", [])
+        if progress:
+            progress({"stage": "received", "batch": batch, "fetched": total_messages + len(messages),
+                      "batch_messages": len(messages), "ingested": total_ingested,
+                      "failed": total_failed, "deleted": total_deleted})
         if not messages:
             break
 
@@ -91,12 +105,24 @@ def drain(cfg: AwsCloudtrailSqsConfig) -> dict[str, Any]:
                 body = json.loads(message["Body"])
             except (ValueError, KeyError):
                 body = {"raw": message.get("Body")}
+            detail = body.get("detail") if isinstance(body, dict) and isinstance(body.get("detail"), dict) else body
+            action = (detail.get("eventName") or detail.get("action")) if isinstance(detail, dict) else None
+            if progress:
+                progress({"stage": "ingesting", "batch": batch, "message_index": total_messages,
+                          "message_id": message.get("MessageId"), "fetched": total_messages,
+                          "ingested": total_ingested, "failed": total_failed,
+                          "deleted": total_deleted, "action": action})
             try:
                 result = pipeline.ingest_payload(cfg.target_module, body, transport="queue")
                 total_ingested += result.get("ingested", 0)
                 to_delete.append(
                     {"Id": message["MessageId"], "ReceiptHandle": message["ReceiptHandle"]}
                 )
+                if progress:
+                    progress({"stage": "ingested", "batch": batch, "message_index": total_messages,
+                              "message_id": message.get("MessageId"), "fetched": total_messages,
+                              "ingested": total_ingested, "failed": total_failed,
+                              "deleted": total_deleted, "action": action})
             except Exception as exc:
                 # leave the message on the queue for redelivery / DLQ — but
                 # LOG the failure so silent-fail loops are visible. Includes
@@ -110,9 +136,24 @@ def drain(cfg: AwsCloudtrailSqsConfig) -> dict[str, Any]:
                     "sqs.ingest_failed module=%s message_id=%s%s: %s",
                     cfg.target_module, message.get("MessageId"), hint, exc,
                 )
+                total_failed += 1
+                if progress:
+                    progress({"stage": "failed", "batch": batch, "message_index": total_messages,
+                              "message_id": message.get("MessageId"), "fetched": total_messages,
+                              "ingested": total_ingested, "failed": total_failed,
+                              "deleted": total_deleted, "action": action})
                 continue
 
         if to_delete:
+            if progress:
+                progress({"stage": "deleting", "batch": batch, "fetched": total_messages,
+                          "ingested": total_ingested, "failed": total_failed,
+                          "deleted": total_deleted, "deleting": len(to_delete)})
             sqs.delete_message_batch(QueueUrl=cfg.queue_url, Entries=to_delete)
+            total_deleted += len(to_delete)
+            if progress:
+                progress({"stage": "batch_complete", "batch": batch, "fetched": total_messages,
+                          "ingested": total_ingested, "failed": total_failed,
+                          "deleted": total_deleted, "batch_deleted": len(to_delete)})
 
     return {"ingested": total_ingested, "messages": total_messages}

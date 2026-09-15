@@ -11,6 +11,7 @@ import {
   useState,
   type ReactElement,
   type ReactNode,
+  type CSSProperties,
   useId,
 } from "react";
 import { TablePagination } from "./Pagination";
@@ -46,6 +47,7 @@ export function Table({
   const [liveMessage, setLiveMessage] = useState("");
   const tableInstanceId = useId().replace(/:/g, "");
   const [hiddenColumns, setHiddenColumns] = useState<number[]>([]);
+  const [columnWidths, setColumnWidths] = useState<Record<number, number>>({});
   const [columnVisibilityHydrated, setColumnVisibilityHydrated] = useState(false);
   const parts = Children.toArray(children);
   const tbodyIndex = parts.findIndex(
@@ -104,6 +106,7 @@ export function Table({
   const columnLabels = thead ? readColumnLabels(thead) : [];
   const hiddenColumnSet = useMemo(() => new Set(hiddenColumns), [hiddenColumns]);
   const columnStorageKey = `bw-column-visibility-v1-${tableId ?? `auto-${tableInstanceId}`}`;
+  const widthStorageKey = `bw-column-widths-v1-${tableId ?? `auto-${tableInstanceId}`}`;
 
   useEffect(() => {
     try {
@@ -129,6 +132,28 @@ export function Table({
     }
   }, [columnStorageKey, columnVisibilityHydrated, hiddenColumns]);
 
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(widthStorageKey);
+      const parsed = raw ? JSON.parse(raw) : {};
+      if (parsed && typeof parsed === "object") {
+        setColumnWidths(Object.fromEntries(
+          Object.entries(parsed).filter(([, width]) => typeof width === "number" && width >= 88 && width <= 1200),
+        ) as Record<number, number>);
+      }
+    } catch {
+      // Storage can be unavailable in private browsing.
+    }
+  }, [widthStorageKey]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(widthStorageKey, JSON.stringify(columnWidths));
+    } catch {
+      // Storage can be unavailable in private browsing.
+    }
+  }, [widthStorageKey, columnWidths]);
+
   const toggleColumn = (index: number) => {
     setHiddenColumns((current) => {
       const next = current.includes(index)
@@ -139,16 +164,37 @@ export function Table({
     });
   };
 
+  const resizeColumn = (index: number, event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const source = columnLabels[index];
+    const startWidth = columnWidths[index] ?? (source?.isActions ? 220 : 140);
+    const onMove = (moveEvent: PointerEvent) => {
+      const nextWidth = Math.max(88, Math.min(1200, startWidth + moveEvent.clientX - startX));
+      setColumnWidths((current) => ({ ...current, [index]: nextWidth }));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  };
+
   const visibleThead = thead
     ? hideColumnsInSection(thead, hiddenColumnSet)
     : null;
-  if (sortable && thead) {
-    paginatedParts[theadIndex] = enhanceHead(visibleThead ?? thead, sortColumn, sortDirection, (index, label, direction) => {
+  if (thead) {
+    paginatedParts[theadIndex] = enhanceHead(visibleThead ?? thead, sortable, sortColumn, sortDirection, columnWidths, (index, label, direction) => {
       setPage(0);
       setSortColumn(index);
       setSortDirection(direction);
       setLiveMessage(`${label} sorted ${direction === "asc" ? "ascending" : "descending"}.`);
-    });
+    }, resizeColumn);
   }
   if (tbodyElement) {
     paginatedParts[tbodyIndex] = cloneElement(
@@ -187,6 +233,7 @@ export function Table({
                 type="button"
                 onClick={() => {
                   setHiddenColumns([]);
+                  setColumnWidths({});
                   setSortColumn(null);
                   setLiveMessage("All columns restored.");
                 }}
@@ -198,13 +245,13 @@ export function Table({
           </details>
         </div>
       )}
-      <div className="max-w-full overflow-x-auto border border-line bg-surface">
+      <div className="bw-table-shell max-w-full border border-line bg-surface">
         <table
-          className={clsx("w-full border-collapse text-sm", className)}
+          className={clsx("bw-table min-w-[72rem] w-full border-collapse text-sm", className)}
           data-responsive={responsive ? "cards" : "scroll"}
           aria-label={ariaLabel}
         >
-          {paginatedParts.map((part) => promoteTablePart(part))}
+          {paginatedParts.map((part) => promoteTablePart(part, columnLabels))}
         </table>
       </div>
       <TablePagination
@@ -231,45 +278,45 @@ export function Table({
  * ensuring every table receives the same sizing, header, row, and theme
  * contracts.
  */
-function promoteTablePart(node: ReactNode): ReactNode {
+function promoteTablePart(node: ReactNode, columnLabels: ReturnType<typeof readColumnLabels>): ReactNode {
   if (!isValidElement(node)) return node;
   const props = node.props as { children?: ReactNode; [key: string]: unknown };
   const muiProps = withoutLegacyClassName(props);
   if (node.type === "thead") {
     return (
       <thead {...muiProps} className="border-b border-line bg-surface-2 text-left text-[11px] uppercase tracking-wider text-muted">
-        {Children.map(props.children, (child) => promoteTableRow(child, true))}
+        {Children.map(props.children, (child) => promoteTableRow(child, true, columnLabels))}
       </thead>
     );
   }
   if (node.type === "tbody") {
     return (
       <tbody {...muiProps} className="divide-y divide-line">
-        {Children.map(props.children, (child) => promoteTableRow(child, false))}
+        {Children.map(props.children, (child) => promoteTableRow(child, false, columnLabels))}
       </tbody>
     );
   }
   return node;
 }
 
-function promoteTableRow(node: ReactNode, header: boolean): ReactNode {
+function promoteTableRow(node: ReactNode, header: boolean, columnLabels: ReturnType<typeof readColumnLabels>): ReactNode {
   if (!isValidElement(node) || node.type !== "tr") return node;
   const props = node.props as { children?: ReactNode; [key: string]: unknown };
   const tableProps = withoutLegacyClassName(props);
   return (
     <tr {...tableProps} className={header ? "h-10" : "transition-colors hover:bg-surface-2/60"}>
-      {Children.map(props.children, (cell) => promoteTableCell(cell, header))}
+      {Children.map(props.children, (cell, index) => promoteTableCell(cell, header, columnLabels[index]?.label))}
     </tr>
   );
 }
 
-function promoteTableCell(node: ReactNode, header: boolean): ReactNode {
+function promoteTableCell(node: ReactNode, header: boolean, label?: string): ReactNode {
   if (!isValidElement(node) || (node.type !== "th" && node.type !== "td")) return node;
   const props = node.props as { children?: ReactNode; [key: string]: unknown };
   const tableProps = withoutLegacyClassName(props);
   return header
-    ? <th {...tableProps} scope="col" className="whitespace-nowrap px-3 py-2 font-semibold">{props.children}</th>
-    : <td {...tableProps} className="px-3 py-2 align-top">{props.children}</td>;
+    ? <th {...tableProps} scope="col" className="relative whitespace-nowrap px-3 py-2 font-semibold">{props.children}</th>
+    : <td {...tableProps} data-label={props["data-label"] ?? label} className="px-3 py-2 align-top">{props.children}</td>;
 }
 
 function withoutLegacyClassName(
@@ -361,9 +408,12 @@ function nodeText(node: ReactNode): string {
 
 function enhanceHead(
   thead: ReactElement<{ children?: ReactNode }>,
+  sortableEnabled: boolean,
   sortColumn: number | null,
   sortDirection: "asc" | "desc",
+  columnWidths: Record<number, number>,
   onSort: (column: number, label: string, direction: "asc" | "desc") => void,
+  onResize: (column: number, event: React.PointerEvent<HTMLButtonElement>) => void,
 ) {
   const rows = Children.toArray(thead.props.children);
   const headRows = rows.map((row) => {
@@ -373,16 +423,26 @@ function enhanceHead(
       if (!isValidElement(cell) || cell.type !== "th") return cell;
       const label = nodeText((cell.props as { children?: ReactNode }).children).trim();
       const isActionsColumn = Boolean((cell.props as { "data-actions"?: boolean })["data-actions"]);
-      if (isActionsColumn || !label || hasInteractiveChild((cell.props as { children?: ReactNode }).children)) return cell;
-      const active = sortColumn === index;
-      const nextDirection = active && sortDirection === "asc" ? "desc" : "asc";
-      const SortIcon = active ? (sortDirection === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
-      return cloneElement(cell as ReactElement<{ children?: ReactNode; "aria-sort"?: "none" | "ascending" | "descending" }>, {
-        "aria-sort": active ? (sortDirection === "asc" ? "ascending" : "descending") : "none",
-      }, <button type="button" onClick={() => onSort(index, label, nextDirection)} aria-label={`Sort ${label} ${active ? ` ${nextDirection}` : ""}`} title={`Sort by ${label}`} className="inline-flex min-h-11 w-full cursor-pointer items-center justify-between gap-2 text-left text-inherit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal/70 sm:min-h-8"><span>{(cell.props as { children?: ReactNode }).children}</span><SortIcon size={13} aria-hidden="true" className={active ? "text-signal" : "text-fg-subtle"} /></button>);
+      const cellProps = cell.props as { children?: ReactNode; style?: CSSProperties };
+      const width = columnWidths[index] ?? (isActionsColumn ? 220 : readWidth(cellProps.style) ?? 140);
+      const canSort = sortableEnabled && !isActionsColumn && Boolean(label) && !hasInteractiveChild(cellProps.children);
+      const content = canSort ? (() => {
+        const active = sortColumn === index;
+        const nextDirection = active && sortDirection === "asc" ? "desc" : "asc";
+        const SortIcon = active ? (sortDirection === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+        return <button type="button" onClick={() => onSort(index, label, nextDirection)} aria-label={`Sort ${label} ${active ? ` ${nextDirection}` : ""}`} title={`Sort by ${label}`} className="inline-flex min-h-11 w-full items-center justify-between gap-2 pr-2 text-left text-inherit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal/70 sm:min-h-8"><span>{cellProps.children}</span><SortIcon size={13} aria-hidden="true" className={active ? "text-signal" : "text-fg-subtle"} /></button>;
+      })() : cellProps.children;
+      return cloneElement(cell as ReactElement<{ children?: ReactNode; style?: CSSProperties }>, {
+        style: { ...cellProps.style, width, minWidth: width },
+      }, <>{content}<button type="button" aria-label={`Resize ${label || `column ${index + 1}`}`} title="Resize column" onPointerDown={(event) => onResize(index, event)} className="bw-col-resize-handle cursor-col-resize touch-none border-0 bg-transparent p-0 after:absolute after:inset-y-2 after:right-0 after:w-px after:bg-line-soft hover:after:bg-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal/70" /></>);
     }));
   });
   return cloneElement(thead, undefined, headRows);
+}
+
+function readWidth(style?: CSSProperties): number | undefined {
+  if (!style || typeof style.width !== "number") return undefined;
+  return style.width;
 }
 
 function compareCellValues(left: string, right: string): number {

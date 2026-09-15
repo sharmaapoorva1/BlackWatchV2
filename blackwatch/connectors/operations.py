@@ -89,6 +89,32 @@ def _public_operation(operation: dict[str, Any] | None) -> dict[str, Any] | None
     return serialize_operation(operation)
 
 
+def report_operation_progress(operation_id: str, progress: dict[str, Any]) -> bool:
+    """Persist safe live progress and a bounded, non-sensitive event trail."""
+    current = storage.get_connector_operation(operation_id)
+    if not current or current.get("status") != "running":
+        return False
+    previous = current.get("outcome") or {}
+    safe_progress = {
+        key: value for key, value in progress.items()
+        if isinstance(value, (str, int, float, bool, type(None)))
+    }
+    event = dict(safe_progress)
+    event["at"] = _now().isoformat()
+    recent = previous.get("recent_events") if isinstance(previous, dict) else []
+    if not isinstance(recent, list):
+        recent = []
+    return storage.update_connector_operation(
+        operation_id,
+        status="running",
+        outcome={
+            "progress": safe_progress,
+            "recent_events": [*recent[-49:], event],
+        },
+        require_active=True,
+    )
+
+
 def get_latest_connector_operations(
     connector_ids: list[str],
 ) -> dict[str, dict[str, Any]]:
@@ -324,6 +350,7 @@ def start_connector_operation(
     operation_id = str(uuid.uuid4())
     correlation_id = str(uuid.uuid4())
     requested_at = _now()
+    ready = threading.Event()
     try:
         storage.create_connector_operation(
             operation_id,
@@ -342,6 +369,7 @@ def start_connector_operation(
             kind,
             lock,
             max(1, min(int(timeout_seconds), 900)),
+            ready,
         )
         timer = threading.Timer(
             max(1, min(int(timeout_seconds), 900)),
@@ -351,12 +379,16 @@ def start_connector_operation(
         timer.daemon = True
         with _state_lock:
             _active[operation_id] = (connector_id, lock, future, timer)
-        timer.start()
+        # The worker waits until this registration is visible. This prevents
+        # a fast connector from claiming the operation before its watchdog can
+        # be attached, while still ensuring queued time is never timed.
+        ready.set()
         # A fast worker can finish between submit() and registration in
         # _active. Clean that entry immediately so it cannot block retries.
         if future.done():
             _finish(operation_id, connector_id, lock)
     except Exception:
+        ready.set()
         _operation_slots.release()
         lock.release()
         raise
@@ -380,22 +412,38 @@ def _finish(operation_id: str, connector_id: str, lock: threading.Lock) -> None:
         lock.release()
 
 
+def _start_timeout_timer(operation_id: str, lock: threading.Lock) -> None:
+    with _state_lock:
+        current = _active.get(operation_id)
+        if current is None or current[1] is not lock:
+            return
+        timer = current[3]
+        if not timer.is_alive():
+            timer.start()
+
+
 def _execute(
     operation_id: str,
     connector_id: str,
     kind: str,
     lock: threading.Lock,
     timeout_seconds: int,
+    ready: threading.Event,
 ) -> None:
+    ready.wait()
     started = _now()
     if not storage.mark_connector_operation_running(
         operation_id, started_at=started
     ):
         _finish(operation_id, connector_id, lock)
         return
+    _start_timeout_timer(operation_id, lock)
     try:
         result = runner.run_connector(
-            connector_id, operation_id=operation_id, kind=kind
+            connector_id,
+            operation_id=operation_id,
+            kind=kind,
+            progress=lambda update: report_operation_progress(operation_id, update),
         )
         current = storage.get_connector_operation(operation_id)
         if current and current.get("status") == "timed_out":
@@ -478,11 +526,19 @@ def _timeout_operation(
     if not current or current[2].done():
         return False
     operation = storage.get_connector_operation(operation_id)
-    if not operation or operation.get("status") not in {"queued", "running"}:
+    # A queued operation has not started consuming provider time. It must not
+    # be charged against the execution watchdog.
+    if not operation or operation.get("status") != "running" or not operation.get("started_at"):
         return False
     safe = redact_error(TimeoutError("connector operation timed out"), "timeout")
     now = _now()
     next_attempt = now + timedelta(seconds=_scheduled_retry_delay(retry_count))
+    previous_outcome = operation.get("outcome") or {}
+    timeout_outcome = {"status": "timed_out"}
+    if isinstance(previous_outcome, dict):
+        for key in ("progress", "recent_events"):
+            if key in previous_outcome:
+                timeout_outcome[key] = previous_outcome[key]
     transitioned = storage.mark_connector_operation_timed_out(
         operation_id,
         finished_at=now,
@@ -490,7 +546,7 @@ def _timeout_operation(
         retry_count=retry_count + 1,
         error_category="timeout",
         error_message=safe["message"],
-        outcome={"status": "timed_out"},
+        outcome=timeout_outcome,
     )
     if not transitioned:
         return False
@@ -616,6 +672,21 @@ def operation_details(operation_id: str) -> dict[str, Any] | None:
     return result
 
 
+def operation_queue_snapshot(
+    *, connector_id: str | None = None, status: str | None = None,
+    kind: str | None = None, limit: int = 100,
+) -> dict[str, Any]:
+    rows = storage.list_connector_operations(
+        connector_id=connector_id, status=status, kind=kind, limit=limit,
+    )
+    return {
+        "operations": [serialize_operation(row) for row in rows],
+        "active_operations": active_operation_count(),
+        "max_concurrent_operations": MAX_CONCURRENT_OPERATIONS,
+        "generated_at": _now().isoformat(),
+    }
+
+
 def wait_for_operation(
     operation_id: str,
     *,
@@ -678,9 +749,9 @@ def reap_stale_operations(
             _finish(operation_id, current[0], current[1])
             continue
         operation = storage.get_connector_operation(operation_id)
-        if not operation or operation.get("status") not in {"queued", "running"}:
+        if not operation or operation.get("status") != "running":
             continue
-        timestamp = operation.get("started_at") or operation.get("requested_at")
+        timestamp = operation.get("started_at")
         if isinstance(timestamp, str):
             try:
                 timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))

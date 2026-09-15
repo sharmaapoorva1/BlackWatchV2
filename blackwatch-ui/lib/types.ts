@@ -1306,6 +1306,21 @@ export type ConnectorOperationStatus =
   | "skipped"
   | "timed_out";
 
+export interface ConnectorProgress {
+  stage?: string;
+  batch?: number;
+  message_index?: number;
+  message_id?: string | null;
+  action?: string | null;
+  fetched?: number;
+  ingested?: number;
+  failed?: number;
+  deleted?: number;
+  deleting?: number;
+  batch_messages?: number;
+  batch_deleted?: number;
+}
+
 export interface ConnectorOperation {
   operation_id: string;
   kind: string;
@@ -1322,6 +1337,7 @@ export interface ConnectorOperation {
   attempt: number;
   duration_ms: number | null;
   outcome: Record<string, unknown>;
+  progress?: ConnectorProgress;
   error_category: string | null;
   error_message: string | null;
 }
