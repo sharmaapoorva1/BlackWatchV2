@@ -735,13 +735,16 @@ def recover_stale_operations(max_age_seconds: int = DEFAULT_OPERATION_TIMEOUT_SE
     to resume them. Running rows retain the existing bounded timeout behavior.
     """
     now = _now()
+    queued_cutoff = now - timedelta(seconds=30)
     cutoff = now - timedelta(seconds=max_age_seconds)
     recovered = 0
+    # There is no durable executor queue in this process. A queued row older
+    # than the short admission grace period cannot be resumed by a worker and
+    # otherwise blocks that connector forever through find_active().
+    for operation in storage.list_stale_queued_connector_operations(queued_cutoff):
+        if storage.cancel_connector_operation(operation["operation_id"], reason="orphaned_queued_operation"):
+            recovered += 1
     for operation in storage.list_stale_connector_operations(cutoff):
-        if operation.get("status") == "queued":
-            if storage.cancel_connector_operation(operation["operation_id"], reason="orphaned_after_process_restart"):
-                recovered += 1
-            continue
         safe = redact_error(TimeoutError("orphaned connector operation"), "timeout")
         retry_count = int(operation.get("retry_count") or 0) + 1
         next_attempt = now + timedelta(

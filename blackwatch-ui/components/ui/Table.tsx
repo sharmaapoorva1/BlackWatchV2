@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import {
   Children,
+  Fragment,
   cloneElement,
   isValidElement,
   useEffect,
@@ -168,9 +169,11 @@ export function Table({
     event.preventDefault();
     const startX = event.clientX;
     const source = columnLabels[index];
-    const startWidth = columnWidths[index] ?? (source?.isActions ? 220 : 140);
+    const measuredWidth = event.currentTarget.parentElement?.getBoundingClientRect().width;
+    const startWidth = columnWidths[index] ?? measuredWidth ?? (source?.isActions ? 320 : 96);
+    const minimumWidth = source?.isActions ? 280 : 72;
     const onMove = (moveEvent: PointerEvent) => {
-      const nextWidth = Math.max(88, Math.min(1200, startWidth + moveEvent.clientX - startX));
+      const nextWidth = Math.max(minimumWidth, Math.min(1200, startWidth + moveEvent.clientX - startX));
       setColumnWidths((current) => ({ ...current, [index]: nextWidth }));
     };
     const onUp = () => {
@@ -245,9 +248,9 @@ export function Table({
           </details>
         </div>
       )}
-      <div className="bw-table-shell max-w-full border border-line bg-surface">
+      <div className={clsx("bw-table-shell max-w-full border border-line bg-surface", responsive && "bw-table-shell-cards")}>
         <table
-          className={clsx("bw-table min-w-[72rem] w-full border-collapse text-sm", className)}
+          className={clsx("bw-table w-full border-collapse text-sm", className)}
           data-responsive={responsive ? "cards" : "scroll"}
           aria-label={ariaLabel}
         >
@@ -300,7 +303,14 @@ function promoteTablePart(node: ReactNode, columnLabels: ReturnType<typeof readC
 }
 
 function promoteTableRow(node: ReactNode, header: boolean, columnLabels: ReturnType<typeof readColumnLabels>): ReactNode {
-  if (!isValidElement(node) || node.type !== "tr") return node;
+  if (!isValidElement(node)) return node;
+  if (node.type === Fragment) {
+    const props = node.props as { children?: ReactNode };
+    return cloneElement(node, undefined,
+      Children.map(props.children, (child) => promoteTableRow(child, header, columnLabels)),
+    );
+  }
+  if (node.type !== "tr") return node;
   const props = node.props as { children?: ReactNode; [key: string]: unknown };
   const tableProps = withoutLegacyClassName(props);
   return (
@@ -327,10 +337,9 @@ function withoutLegacyClassName(
 }
 
 function isDataRow(row: ReactNode): row is ReactElement {
-  if (!isValidElement(row) || row.type !== "tr") return false;
-  const children = Children.toArray(
-    (row as ReactElement<{ children?: ReactNode }>).props.children,
-  );
+  const tableRow = firstTableRow(row);
+  if (!tableRow) return false;
+  const children = Children.toArray(tableRow.props.children);
   return !children.some(
     (cell) =>
       isValidElement(cell) &&
@@ -339,8 +348,22 @@ function isDataRow(row: ReactNode): row is ReactElement {
 }
 
 function cellText(row: ReactElement, column: number): string {
-  const cells = Children.toArray((row.props as { children?: ReactNode }).children);
+  const tableRow = firstTableRow(row);
+  if (!tableRow) return "";
+  const cells = Children.toArray(tableRow.props.children);
   return nodeText(cells[column]);
+}
+
+function firstTableRow(node: ReactNode): ReactElement<{ children?: ReactNode }> | null {
+  if (!isValidElement(node)) return null;
+  if (node.type === "tr") return node as ReactElement<{ children?: ReactNode }>;
+  if (node.type !== Fragment) return null;
+  const firstRow = Children.toArray(
+    (node as ReactElement<{ children?: ReactNode }>).props.children,
+  ).find((child) => isValidElement(child) && child.type === "tr");
+  return isValidElement(firstRow)
+    ? firstRow as ReactElement<{ children?: ReactNode }>
+    : null;
 }
 
 function readColumnLabels(thead: ReactElement<{ children?: ReactNode }>) {
@@ -375,7 +398,14 @@ function hideColumnsInSection(
 }
 
 function hideColumnsInRow(row: ReactNode, hidden: Set<number>): ReactNode {
-  if (!isValidElement(row) || row.type !== "tr" || hidden.size === 0) return row;
+  if (!isValidElement(row) || hidden.size === 0) return row;
+  if (row.type === Fragment) {
+    const props = row.props as { children?: ReactNode };
+    return cloneElement(row, undefined,
+      Children.map(props.children, (child) => hideColumnsInRow(child, hidden)),
+    );
+  }
+  if (row.type !== "tr") return row;
   const cells = Children.toArray((row.props as { children?: ReactNode }).children);
   if (cells.some((cell) => isValidElement(cell) && (cell.props as { colSpan?: number }).colSpan)) return row;
   return cloneElement(row as ReactElement<{ children?: ReactNode }>, undefined,
@@ -424,7 +454,7 @@ function enhanceHead(
       const label = nodeText((cell.props as { children?: ReactNode }).children).trim();
       const isActionsColumn = Boolean((cell.props as { "data-actions"?: boolean })["data-actions"]);
       const cellProps = cell.props as { children?: ReactNode; style?: CSSProperties };
-      const width = columnWidths[index] ?? (isActionsColumn ? 220 : readWidth(cellProps.style) ?? 140);
+      const savedWidth = columnWidths[index];
       const canSort = sortableEnabled && !isActionsColumn && Boolean(label) && !hasInteractiveChild(cellProps.children);
       const content = canSort ? (() => {
         const active = sortColumn === index;
@@ -432,8 +462,13 @@ function enhanceHead(
         const SortIcon = active ? (sortDirection === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
         return <button type="button" onClick={() => onSort(index, label, nextDirection)} aria-label={`Sort ${label} ${active ? ` ${nextDirection}` : ""}`} title={`Sort by ${label}`} className="inline-flex min-h-11 w-full items-center justify-between gap-2 pr-2 text-left text-inherit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal/70 sm:min-h-8"><span>{cellProps.children}</span><SortIcon size={13} aria-hidden="true" className={active ? "text-signal" : "text-fg-subtle"} /></button>;
       })() : cellProps.children;
+      const sizingStyle = savedWidth !== undefined
+        ? { width: savedWidth, minWidth: savedWidth }
+        : isActionsColumn
+          ? { minWidth: 280 }
+          : {};
       return cloneElement(cell as ReactElement<{ children?: ReactNode; style?: CSSProperties }>, {
-        style: { ...cellProps.style, width, minWidth: width },
+        style: { ...cellProps.style, ...sizingStyle },
       }, <>{content}<button type="button" aria-label={`Resize ${label || `column ${index + 1}`}`} title="Resize column" onPointerDown={(event) => onResize(index, event)} className="bw-col-resize-handle cursor-col-resize touch-none border-0 bg-transparent p-0 after:absolute after:inset-y-2 after:right-0 after:w-px after:bg-line-soft hover:after:bg-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal/70" /></>);
     }));
   });

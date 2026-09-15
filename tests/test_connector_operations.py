@@ -278,6 +278,11 @@ def test_restart_recovery_schedules_a_bounded_retry(monkeypatch):
     )
     monkeypatch.setattr(
         connector_operations.storage,
+        "list_stale_queued_connector_operations",
+        lambda _before: [],
+    )
+    monkeypatch.setattr(
+        connector_operations.storage,
         "mark_connector_operation_timed_out",
         lambda *args, **kwargs: (updates.append((args, kwargs)) or True),
     )

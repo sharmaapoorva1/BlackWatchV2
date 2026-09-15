@@ -784,18 +784,29 @@ def list_stale_connector_operations(before: datetime) -> list[dict[str, Any]]:
                 f"""
                 SELECT {_OPERATION_COLS}
                   FROM connector_operations
-                 WHERE (
-                         status = 'running'
-                     AND started_at IS NOT NULL
-                     AND started_at <= %s
-                       )
-                    OR (
-                         status = 'queued'
-                     AND requested_at <= %s
-                       )
+                 WHERE status = 'running'
+                   AND started_at IS NOT NULL
+                   AND started_at <= %s
                  ORDER BY requested_at
                 """,
-                (before, before),
+                (before,),
+            ).fetchall()
+    return [_operation_row(row) for row in rows]
+
+
+def list_stale_queued_connector_operations(before: datetime) -> list[dict[str, Any]]:
+    """Return queued rows old enough to be orphaned by a process restart."""
+    with get_pool().connection() as conn:
+        with conn.transaction():
+            conn.execute("SET LOCAL statement_timeout = '5000ms'")
+            rows = conn.execute(
+                f"""
+                SELECT {_OPERATION_COLS}
+                  FROM connector_operations
+                 WHERE status = 'queued' AND requested_at <= %s
+                 ORDER BY requested_at
+                """,
+                (before,),
             ).fetchall()
     return [_operation_row(row) for row in rows]
 

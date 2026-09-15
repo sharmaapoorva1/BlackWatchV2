@@ -37,11 +37,21 @@ test("shared controls provide mobile touch targets and consistent focus feedback
 
 test("mobile card tables do not keep a desktop width or horizontal scrollbar", () => {
   const tableSource = read("components/ui/Table.tsx");
+  const connectors = read("app/connectors/page.tsx");
   const css = read("app/globals.css");
-  assert.match(tableSource, /overflow-x-auto/);
+  assert.match(css, /\.bw-table-shell[\s\S]*overflow-x: auto/);
   assert.match(tableSource, /data-responsive={responsive \? "cards" : "scroll"}/);
+  assert.doesNotMatch(tableSource, /min-w-\[72rem\]/);
+  assert.match(tableSource, /bw-table-shell-cards/);
+  assert.doesNotMatch(connectors, /DataPanel className="overflow-hidden"/);
   assert.match(css, /data-responsive="cards"/);
   assert.match(css, /overflow-x: hidden/);
+});
+
+test("connector actions do not pass server actions through a client auth boundary", () => {
+  const source = read("app/connectors/page.tsx");
+  assert.doesNotMatch(source, /<RequireAdmin>/);
+  assert.doesNotMatch(source, /import \{ RequireAdmin \}/);
 });
 
 test("shared tables promote semantic rows and cells to native styled primitives", () => {
@@ -53,6 +63,14 @@ test("shared tables promote semantic rows and cells to native styled primitives"
   assert.match(source, /<td/);
   assert.doesNotMatch(source, /@mui/);
   assert.match(source, /withoutLegacyClassName/);
+  assert.match(source, /Fragment/);
+  assert.match(source, /firstTableRow/);
+});
+
+test("tables switch to cards before the sidebar leaves too little content width", () => {
+  const css = read("app/globals.css");
+  assert.match(css, /@media \(max-width: 1100px\)/);
+  assert.match(css, /bw-table-shell-cards[\s\S]*overflow-x: hidden/);
 });
 
 test("narrow table pagination can wrap its controls", () => {

@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmSubmitButton } from "@/components/ui/ConfirmSubmitButton";
 import { TimestampCell } from "@/components/domain/TimestampCell";
 import { StatusPill as SharedStatusPill } from "@/components/ui/StatusPill";
-import { RequireAdmin } from "@/components/auth/RequireAdmin";
 import { ConnectorActionButton } from "@/components/domain/connectors/ConnectorActionButton";
 import { RetryAllButton } from "@/components/domain/connectors/RetryAllButton";
 import {
@@ -45,9 +44,7 @@ export default async function ConnectorsPage({
         subtitle={`${count} configured · poll AWS, SQS, and probe targets on a schedule`}
         actions={
           <div className="flex items-center gap-2">
-            <RequireAdmin>
-              <RetryAllButton />
-            </RequireAdmin>
+            <RetryAllButton />
             <Button asChild variant="secondary" size="sm">
               <Link href="/connectors/advanced-queue">Advanced queue</Link>
             </Button>
@@ -86,7 +83,7 @@ export default async function ConnectorsPage({
         </div>
       )}
 
-      <DataPanel className="overflow-hidden">
+      <DataPanel>
         {loadError ? (
           <div className="px-6 py-12 text-center text-sm text-fg-muted">
             Connector records will appear here when the API is healthy.
@@ -115,14 +112,14 @@ function ConnectorsTable({ connectors }: { connectors: Connector[] }) {
     <Table>
       <thead>
         <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-          <th className="w-44 px-4 py-2 text-left font-normal">Name</th>
-          <th className="w-44 px-4 py-2 text-left font-normal">Type</th>
+          <th className="px-4 py-2 text-left font-normal">Name</th>
+          <th className="px-4 py-2 text-left font-normal">Type</th>
           <th className="px-4 py-2 text-left font-normal">Details</th>
-          <th className="w-24 px-4 py-2 text-left font-normal">Verified</th>
-          <th className="w-32 px-4 py-2 text-left font-normal">Schedule</th>
-          <th className="w-36 px-4 py-2 text-left font-normal">Last run</th>
-          <th className="w-24 px-4 py-2 text-left font-normal">Status</th>
-          <th data-actions className="w-96 px-4 py-2 text-right font-normal">Actions</th>
+          <th className="px-4 py-2 text-left font-normal">Verified</th>
+          <th className="px-4 py-2 text-left font-normal">Schedule</th>
+          <th className="px-4 py-2 text-left font-normal">Last run</th>
+          <th className="px-4 py-2 text-left font-normal">Status</th>
+          <th data-actions className="px-4 py-2 text-right font-normal">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -193,8 +190,7 @@ function ConnectorRow({ connector: c }: { connector: Connector }) {
 
 function Actions({ connector: c }: { connector: Connector }) {
   return (
-    <RequireAdmin>
-      <div className="flex flex-wrap items-center justify-end gap-1.5 md:flex-nowrap">
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
         <ConnectorActionButton connectorId={c.id} kind="test" />
         <ConnectorActionButton connectorId={c.id} kind="manual" disabled={!c.verified} />
 
@@ -217,7 +213,6 @@ function Actions({ connector: c }: { connector: Connector }) {
           </ConfirmSubmitButton>
         </form>
       </div>
-    </RequireAdmin>
   );
 }
 
