@@ -32,6 +32,43 @@ def _client(cfg: AwsCloudtrailSqsConfig):
     )
 
 
+def test_connection(cfg: AwsCloudtrailSqsConfig) -> dict[str, Any]:
+    """Bounded SQS connectivity/permission probe used by the Test action.
+
+    A test must not consume the connector's workload.  In particular, it must
+    not run the ingest pipeline or delete messages: those are collection
+    responsibilities for a manual or scheduled operation.
+    """
+    import boto3  # lazy import
+    from botocore.config import Config
+
+    session = boto3.session.Session(region_name=cfg.aws_region)
+    sqs = session.client(
+        "sqs",
+        config=Config(
+            connect_timeout=5,
+            read_timeout=5,
+            retries={"max_attempts": 0, "mode": "standard"},
+        ),
+    )
+    attributes = sqs.get_queue_attributes(
+        QueueUrl=cfg.queue_url,
+        AttributeNames=["QueueArn"],
+    )
+    # Validate receive permission without waiting for long polling and without
+    # changing message visibility. The message is intentionally not deleted.
+    response = sqs.receive_message(
+        QueueUrl=cfg.queue_url,
+        MaxNumberOfMessages=1,
+        WaitTimeSeconds=0,
+        VisibilityTimeout=0,
+    )
+    return {
+        "messages": len(response.get("Messages", [])),
+        "queue_attributes": len(attributes.get("Attributes", {})),
+    }
+
+
 def drain(cfg: AwsCloudtrailSqsConfig) -> dict[str, Any]:
     sqs = _client(cfg)
     total_messages = 0

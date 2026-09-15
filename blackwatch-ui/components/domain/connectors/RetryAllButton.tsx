@@ -29,6 +29,9 @@ export function RetryAllButton() {
           setMessage(next.status === "succeeded" ? "completed" : "completed with failures");
           router.refresh();
         }
+      }).catch(() => {
+        window.clearInterval(timer);
+        setMessage("status unavailable");
       });
     }, 1200);
     return () => window.clearInterval(timer);
@@ -37,15 +40,19 @@ export function RetryAllButton() {
   const start = () => {
     setMessage(null);
     startTransition(async () => {
-      const result = await retryAllConnectorsAction("eligible");
-      const next = result.operation as ConnectorOperation | undefined;
-      if (next) setOperation(next);
-      setMessage(
-        result.accepted
-          ? "queued"
-          : String(result.reason ?? result.error ?? "could not queue"),
-      );
-      router.refresh();
+      try {
+        const result = await retryAllConnectorsAction("eligible");
+        const next = result.operation as ConnectorOperation | undefined;
+        if (next) setOperation(next);
+        setMessage(
+          result.accepted
+            ? "queued"
+            : String(result.reason ?? result.error ?? "could not queue"),
+        );
+        if (next && !["queued", "running"].includes(next.status)) router.refresh();
+      } catch {
+        setMessage("could not queue");
+      }
     });
   };
 
@@ -53,7 +60,7 @@ export function RetryAllButton() {
   const progress = operation?.outcome as { completed?: number; total?: number } | undefined;
   return (
     <span className="inline-flex items-center gap-2">
-      <Button type="button" size="sm" variant="primary" onClick={start} disabled={active} aria-busy={active}>
+      <Button type="button" size="sm" variant="primary" onClick={start} disabled={active} aria-busy={active} className="min-w-[8rem]">
         {active ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
         {active ? "Retrying…" : "Retry eligible"}
       </Button>

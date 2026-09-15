@@ -34,7 +34,7 @@ def _operation_is_live(operation_id: str | None) -> bool:
 
 
 def run_connector(
-    connector_id: str, *, operation_id: str | None = None
+    connector_id: str, *, operation_id: str | None = None, kind: str = "manual"
 ) -> dict[str, Any]:
     connector = storage.get_connector(connector_id)
     if connector is None:
@@ -45,8 +45,12 @@ def run_connector(
     try:
         if ctype == "aws_cloudtrail_sqs":
             cfg = AwsCloudtrailSqsConfig(**connector["config"])
-            stats = aws_sqs.drain(cfg)
-            outcome = {"ingested": stats["ingested"], "messages": stats["messages"]}
+            if kind == "test":
+                stats = aws_sqs.test_connection(cfg)
+                outcome = {"messages": stats["messages"]}
+            else:
+                stats = aws_sqs.drain(cfg)
+                outcome = {"ingested": stats["ingested"], "messages": stats["messages"]}
         elif ctype == "aws_ecs_health":
             cfg = AwsEcsHealthConfig(**connector["config"])
             stats = aws_ecs.poll(cfg)

@@ -374,6 +374,42 @@ def test_late_provider_response_does_not_overwrite_timed_out_connector(monkeypat
     assert status_updates == []
 
 
+def test_sqs_test_operation_probes_without_draining(monkeypatch):
+    monkeypatch.setattr(
+        connector_runner.storage,
+        "get_connector",
+        lambda _connector_id: {
+            "id": "c1",
+            "type": "aws_cloudtrail_sqs",
+            "config": {
+                "queue_url": "https://sqs.us-west-1.amazonaws.com/123/queue",
+                "target_module": "ec2.host",
+            },
+        },
+    )
+    calls = []
+    monkeypatch.setattr(
+        connector_runner.aws_sqs,
+        "test_connection",
+        lambda _cfg: calls.append("test") or {"messages": 1},
+    )
+    monkeypatch.setattr(
+        connector_runner.aws_sqs,
+        "drain",
+        lambda _cfg: calls.append("drain") or {"ingested": 10, "messages": 10},
+    )
+    monkeypatch.setattr(
+        connector_runner.storage,
+        "set_connector_status",
+        lambda *args, **kwargs: None,
+    )
+
+    result = connector_runner.run_connector("c1", kind="test")
+
+    assert result == {"status": "ok", "messages": 1}
+    assert calls == ["test"]
+
+
 class _PendingFuture:
     cancel_called = False
 

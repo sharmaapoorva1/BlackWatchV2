@@ -167,7 +167,7 @@ function ConnectorRow({ connector: c }: { connector: Connector }) {
         <td className="px-4 py-2.5">
           <StatusPill connector={c} />
         </td>
-        <td className="whitespace-nowrap px-4 py-2.5 text-right">
+        <td className="px-4 py-2.5 text-right">
           <Actions connector={c} />
         </td>
       </tr>
@@ -191,7 +191,7 @@ function ConnectorRow({ connector: c }: { connector: Connector }) {
 function Actions({ connector: c }: { connector: Connector }) {
   return (
     <RequireAdmin>
-      <div className="inline-flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
         <ConnectorActionButton connectorId={c.id} kind="test" />
         <ConnectorActionButton connectorId={c.id} kind="manual" disabled={!c.verified} />
 

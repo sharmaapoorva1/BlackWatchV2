@@ -14,7 +14,15 @@ export function RequireAdmin({
   fallback?: React.ReactNode;
 }) {
   const { role, loading } = useAuth();
-  if (loading) return null;
+  // Keep the control surface stable while /api/whoami hydrates. The backend
+  // remains the authority, and pointer-events prevents a premature click.
+  if (loading) {
+    return (
+      <span className="contents pointer-events-none opacity-60" aria-busy="true">
+        {children}
+      </span>
+    );
+  }
   if (role !== "admin") return <>{fallback}</>;
   return <>{children}</>;
 }

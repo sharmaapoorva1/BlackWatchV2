@@ -394,7 +394,9 @@ def _execute(
         _finish(operation_id, connector_id, lock)
         return
     try:
-        result = runner.run_connector(connector_id, operation_id=operation_id)
+        result = runner.run_connector(
+            connector_id, operation_id=operation_id, kind=kind
+        )
         current = storage.get_connector_operation(operation_id)
         if current and current.get("status") == "timed_out":
             return

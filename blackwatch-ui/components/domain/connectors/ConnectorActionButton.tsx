@@ -48,6 +48,9 @@ export function ConnectorActionButton({
           );
           router.refresh();
         }
+      }).catch(() => {
+        window.clearInterval(timer);
+        setMessage("status unavailable");
       });
     }, 1200);
     return () => window.clearInterval(timer);
@@ -56,24 +59,30 @@ export function ConnectorActionButton({
   const start = () => {
     setMessage(null);
     startTransition(async () => {
-      const result = await startConnectorOperationAction(connectorId, kind);
-      const next = result.operation as ConnectorOperation | undefined;
-      if (next) setOperation(next);
-      if (result.duplicate) {
-        setMessage("already running");
-      } else if (result.accepted) {
-        setMessage("queued");
-      } else {
-        setMessage(String(result.reason ?? result.error ?? "could not start"));
+      try {
+        const result = await startConnectorOperationAction(connectorId, kind);
+        const next = result.operation as ConnectorOperation | undefined;
+        if (next) setOperation(next);
+        if (result.duplicate) {
+          setMessage("already running");
+        } else if (result.accepted) {
+          setMessage("queued");
+        } else {
+          setMessage(String(result.reason ?? result.error ?? "could not start"));
+        }
+        // Do not refresh while the operation is queued/running: that remounts
+        // every row and makes the details/action layout jump on click.
+        if (next && !["queued", "running"].includes(next.status)) router.refresh();
+      } catch {
+        setMessage("could not start");
       }
-      router.refresh();
     });
   };
 
   const active = pending || ["queued", "running"].includes(operation?.status ?? "");
   const label = kind === "test" ? "Test" : "Run now";
   return (
-    <span className="inline-flex items-center gap-1">
+    <span className="inline-flex min-w-0 flex-wrap items-center justify-end gap-1">
       <Button
         type="button"
         size="sm"
@@ -81,6 +90,7 @@ export function ConnectorActionButton({
         onClick={start}
         disabled={disabled || active}
         aria-busy={active}
+        className="min-w-[5.5rem]"
         title={disabled ? "Test successfully first" : `Start ${kind} operation`}
       >
         {active ? <Loader2 size={12} className="animate-spin" /> : kind === "test" ? <ShieldCheck size={12} /> : <Play size={12} />}
