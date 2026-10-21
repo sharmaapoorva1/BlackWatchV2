@@ -212,8 +212,12 @@ def _project_heartbeat(event: Event, instance_id: str) -> list[Event]:
     prev = storage.get_host_status(instance_id)
     prev_active = prev["active"] if prev else None
     prev_extra = (prev or {}).get("extra") or {}
-    when = event.event_time or datetime.now(timezone.utc)
     e = event.extra
+    when = _received_time(e, event.event_time or datetime.now(timezone.utc))
+    # A delayed or redelivered message must never move the host's liveness
+    # clock backwards.
+    if prev and prev.get("updated_at") and when < prev["updated_at"]:
+        when = prev["updated_at"]
 
     # Update Welford baseline with this tick's CPU sample. The baseline persists
     # across upserts via merge into host_status.extra._baseline_cpu.
@@ -278,6 +282,17 @@ def _project_heartbeat(event: Event, instance_id: str) -> list[Event]:
         )
 
     return derived
+
+
+def _received_time(extra: dict[str, Any], fallback: datetime) -> datetime:
+    value = extra.get("received_at")
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+    return fallback
 
 
 def _host_transition(prev_active) -> str | None:

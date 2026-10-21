@@ -64,6 +64,16 @@ _SNAPSHOT_BYTE_CAP = 512 * 1024
 _INSTANCE_ID_RE = re.compile(r"^(i-[0-9a-f]{8,17}|[A-Za-z0-9._-]{1,64})$")
 
 
+def _report_time(value: Any) -> datetime:
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+    return datetime.now(timezone.utc)
+
+
 def _journal_message(entry: dict[str, Any]) -> str:
     msg = entry.get("MESSAGE", "")
     if isinstance(msg, list):
@@ -128,6 +138,17 @@ class Ec2HostAdapter(Adapter):
             "agent_version": raw.get("agent_version"),
             **tags_extra,
         }
+        # Keep transport timing in the heartbeat. event_time remains the
+        # agent's collection time; the projection uses received_at for
+        # liveness so a delayed queue message is not mistaken for a dead host.
+        for key in (
+            "agent_id", "boot_id", "sequence", "report_id", "collected_at", "sent_at",
+            "priority_counts",
+        ):
+            if raw.get(key) is not None:
+                hb_extra[key] = raw[key]
+        if ctx.received_at is not None:
+            hb_extra["received_at"] = ctx.received_at.isoformat()
         if raw.get("tick_duration_ms") is not None:
             hb_extra["tick_duration_ms"] = raw["tick_duration_ms"]
         if raw.get("collector_errors"):
@@ -142,7 +163,7 @@ class Ec2HostAdapter(Adapter):
         events.append(
             Event(
                 source=src(),
-                event_time=datetime.now(timezone.utc),
+                event_time=_report_time(raw.get("collected_at")),
                 category=Category.host,
                 action="host.service.health",
                 outcome=Outcome.success,
@@ -360,7 +381,6 @@ class Ec2HostAdapter(Adapter):
             )
 
         return events
-
     @staticmethod
     def _classify(msg: str):
         """-> (action, outcome, user, ip, extra) or None."""

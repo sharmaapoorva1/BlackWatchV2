@@ -1,0 +1,38 @@
+id: BW-050
+status: approved
+title: "Make agent freshness and transfer health truthful"
+area: full-stack
+source: user-directed-scope
+severity: critical
+confidence: high
+implementation_allowed: true
+evidence:
+  - file: "blackwatch/hosts/staleness.py"
+    location: "1-48"
+    observation: "Host staleness is derived from the processed host_status timestamp, so delayed connector or database processing can be reported as an agent outage."
+  - file: "blackwatch/modules/ec2_host.py"
+    location: "104-132"
+    observation: "Heartbeat events use server-side datetime.now() and do not preserve agent collection, send, or acceptance timestamps."
+  - file: "scripts/ec2_agent.py"
+    location: "951-1000"
+    observation: "The agent emits periodic reports but does not expose a delivery sequence, boot ID, or phase-specific transfer timestamps."
+  - file: "docs/superpowers/plans/2026-10-21-agent-transfer-reliability.md"
+    location: "Phase 1"
+    observation: "Phase 1 defines the required metadata, health states, delivery read model, regression coverage, and operator UI."
+impact: "Operators can distinguish a stopped agent from delayed transport, delayed ingestion, collector degradation, and database processing lag."
+acceptance_criteria:
+  - "Add agent_id, boot_id, sequence, report_id, collected_at, and sent_at metadata without breaking existing report consumers."
+  - "Preserve agent-observed timestamps through adapter parsing and use them for event freshness where present."
+  - "Add additive delivery status persistence for last observed, sent, accepted, and processed timestamps, sequence, boot ID, queue delay, processing delay, and last error."
+  - "Classify health as healthy, delivery_delayed, processing_delayed, collector_degraded, silent, or data_loss_risk without treating processing delay as proof that the agent stopped."
+  - "Record acceptance and processing boundaries for the existing SQS path."
+  - "Expose phase-aware delivery diagnostics through a read-only API and the relevant operator UI."
+  - "Add regression tests for false-stale behavior, duplicate reports, reboot sequence reset, delayed processing, and explicit error states."
+  - "Preserve all existing PostgreSQL data, connector configuration, event history, and notification behavior."
+dependencies: []
+risks:
+  - "Changing staleness semantics can hide a real outage if grace periods are increased without phase telemetry; tests must assert each boundary independently."
+  - "Existing SQS payloads may not contain new metadata; all new fields require backward-compatible fallbacks."
+proposed_role: "coder-backend + coder-ui + coder-tests"
+approved_by: user
+notes: "User explicitly approved implementation of Phase 1 with 'lets go, implement 1'. No direct transport or SQS removal is included in this task."

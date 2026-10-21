@@ -12,6 +12,7 @@ Rules enforced by convention (keep them true):
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel
@@ -26,6 +27,10 @@ class IngestContext(BaseModel):
     transport: str = "webhook"
     account: str | None = None
     region: str | None = None
+    # Server-side receipt time. This is intentionally separate from the
+    # agent's collected_at/event_time so delayed queue delivery cannot make a
+    # live agent appear stale.
+    received_at: datetime | None = None
 
 
 class Adapter(ABC):

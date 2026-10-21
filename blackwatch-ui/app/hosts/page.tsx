@@ -130,7 +130,10 @@ function InstancesTable({ servers }: { servers: HostSummary[] }) {
               {s.hostname ?? "—"}
             </td>
             <td className="px-4 py-2.5">
-              <AgentPill active={s.active} stale={s.stale} />
+              <AgentPill
+                state={s.health_state ?? (s.stale ? "silent" : "healthy")}
+                reason={s.health_reason ?? ""}
+              />
             </td>
             <td className="px-4 py-2.5 font-mono text-xs text-fg-muted">
               {s.region ?? "—"}
@@ -145,7 +148,12 @@ function InstancesTable({ servers }: { servers: HostSummary[] }) {
               {s.key_count}
             </td>
             <td className="px-4 py-2.5">
-              <LastSeenCell ageSeconds={s.age_seconds} stale={s.stale} />
+              <LastSeenCell
+                ageSeconds={s.age_seconds}
+                stale={s.stale}
+                state={s.health_state ?? (s.stale ? "silent" : "healthy")}
+                delivery={s.delivery}
+              />
             </td>
           </tr>
         ))}
@@ -268,18 +276,22 @@ function AccessTable({ rows }: { rows: EventEnvelope[] }) {
 
 // --- pills ----------------------------------------------------------------
 
-function AgentPill({ active, stale }: { active: boolean; stale: boolean }) {
-  const ok = active && !stale;
+function AgentPill({ state, reason }: { state: string; reason: string }) {
+  const ok = state === "healthy";
+  const warning = state === "delivery_delayed" || state === "processing_delayed" || state === "collector_degraded";
+  const label = state.replaceAll("_", " ");
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs">
+    <span className="inline-flex items-center gap-1.5 text-xs" title={reason}>
       <span
         className={clsx(
           "h-1.5 w-1.5 rounded-full",
-          ok ? "bg-sev-resolved" : "bg-sev-critical",
+          ok ? "bg-sev-resolved" : warning ? "bg-sev-medium" : "bg-sev-critical",
         )}
         aria-hidden
       />
-      <span className="text-fg-muted">{ok ? "reporting" : "stale / down"}</span>
+      <span className={clsx(ok ? "text-fg-muted" : warning ? "text-sev-medium" : "text-sev-critical")}>
+        {label}
+      </span>
     </span>
   );
 }
@@ -305,9 +317,13 @@ function OutcomePill({ outcome }: { outcome: string | undefined }) {
 function LastSeenCell({
   ageSeconds,
   stale,
+  state,
+  delivery,
 }: {
   ageSeconds: number | null;
   stale: boolean;
+  state: string;
+  delivery?: HostSummary["delivery"];
 }) {
   if (ageSeconds === null) {
     return <span className="font-mono text-xs text-fg-disabled">—</span>;
@@ -315,9 +331,14 @@ function LastSeenCell({
   return (
     <span className="font-mono text-xs">
       <span className="text-fg-muted">{ageSeconds}s ago</span>
-      {stale && (
+      {state !== "healthy" && (
         <span className="ml-1.5 text-[10px] uppercase tracking-wider text-sev-medium">
-          stale
+          {state.replaceAll("_", " ")}
+        </span>
+      )}
+      {delivery?.queue_delay_seconds !== null && delivery?.queue_delay_seconds !== undefined && delivery.queue_delay_seconds > 0 && (
+        <span className="ml-1.5 text-[10px] text-fg-subtle" title="Time from agent send to server acceptance">
+          q {Math.round(delivery.queue_delay_seconds)}s
         </span>
       )}
     </span>

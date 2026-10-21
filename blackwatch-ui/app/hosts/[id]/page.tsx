@@ -12,6 +12,7 @@ import type {
   FimCoverage,
   FimChange,
   FimConfiguredPaths,
+  AgentDeliveryStatus,
 } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
@@ -34,6 +35,7 @@ export default async function HostDetailPage({
   const data = await fetchHostDetail(id);
   const {
     host, snapshots, age_seconds, stale,
+    health_state, health_reason, delivery,
     auth_events, state_changes, alerts,
     fim_coverage, fim_recent_changes,
   } = data;
@@ -60,7 +62,14 @@ export default async function HostDetailPage({
 
       {host && (
         <>
-          <StatusSection host={host} ageSeconds={age_seconds} stale={stale} />
+          <StatusSection
+            host={host}
+            ageSeconds={age_seconds}
+            stale={stale}
+            healthState={health_state}
+            healthReason={health_reason}
+            delivery={delivery}
+          />
 
           <HostMetricsChart instanceId={host.instance_id} />
 
@@ -163,13 +172,21 @@ function StatusSection({
   host,
   ageSeconds,
   stale,
+  healthState,
+  healthReason,
+  delivery,
 }: {
   host: HostRecord;
   ageSeconds: number | null;
   stale: boolean;
+  healthState?: string;
+  healthReason?: string;
+  delivery?: AgentDeliveryStatus;
 }) {
   const extra = host.extra ?? {};
-  const reporting = host.active && !stale;
+  const state = healthState ?? (host.active && !stale ? "healthy" : "silent");
+  const reporting = state === "healthy";
+  const warning = ["delivery_delayed", "processing_delayed", "collector_degraded"].includes(state);
   const memory = extra.memory;
   const cpu = extra.cpu;
   const cpuAnomaly = extra._state?.cpu_anomaly_active === true;
@@ -181,19 +198,36 @@ function StatusSection({
       <DataPanel>
         <dl>
           <KeyValueRow label="Agent">
-            <span className="inline-flex items-center gap-2">
+            <span className="inline-flex items-center gap-2" title={healthReason}>
               <span
                 aria-hidden
                 className={clsx(
                   "h-1.5 w-1.5 rounded-full",
-                  reporting ? "bg-sev-resolved" : "bg-sev-critical",
+                  reporting ? "bg-sev-resolved" : warning ? "bg-sev-medium" : "bg-sev-critical",
                 )}
               />
-              <span className={clsx(reporting ? "text-fg" : "text-sev-critical")}>
-                {reporting ? "reporting" : "stale / down"}
+              <span className={clsx(reporting ? "text-fg" : warning ? "text-sev-medium" : "text-sev-critical")}>
+                {state.replaceAll("_", " ")}
               </span>
             </span>
           </KeyValueRow>
+          {delivery && (
+            <>
+              <KeyValueRow label="Delivery">
+                <span className="font-mono text-xs text-fg-muted">
+                  queue {delivery.queue_delay_seconds === null ? "—" : `${Math.round(delivery.queue_delay_seconds)}s`}
+                  {" · "}
+                  processing {delivery.processing_delay_seconds === null ? "—" : `${Math.round(delivery.processing_delay_seconds)}s`}
+                </span>
+              </KeyValueRow>
+              <KeyValueRow label="Sequence">
+                <span className="font-mono text-xs text-fg-muted">
+                  {delivery.last_sequence ?? "—"}
+                  {delivery.sequence_gaps > 0 ? ` · ${delivery.sequence_gaps} gap(s)` : ""}
+                </span>
+              </KeyValueRow>
+            </>
+          )}
           <KeyValueRow label="Last seen">
             {ageSeconds === null ? (
               <span className="text-fg-disabled">—</span>

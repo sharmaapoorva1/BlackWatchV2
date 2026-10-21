@@ -42,15 +42,17 @@ import subprocess
 import sys
 import time
 import urllib.request
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-AGENT_VERSION = "1.5"  # FIM Part 3: auditd whodata — actor attribution on real-time events
+AGENT_VERSION = "1.6"  # Phase 1 delivery metadata + FIM Part 3 auditd whodata
 IMDS = "http://169.254.169.254"
 
 SQS_URL = os.environ.get("BLACKWATCH_SQS_URL", "")
 INTERVAL = int(os.environ.get("INTERVAL", "60"))
 SPOOL_DIR = Path(os.environ.get("SPOOL_DIR", "/var/lib/blackwatch-agent")) / "spool"
+SEQUENCE_FILE = SPOOL_DIR.parent / "sequence"
 SPOOL_MAX_FILES = int(os.environ.get("SPOOL_MAX_FILES", "5000"))
 SPOOL_MAX_BYTES = int(os.environ.get("SPOOL_MAX_BYTES", str(100 * 1024 * 1024)))
 
@@ -212,6 +214,41 @@ def uptime_seconds() -> int:
         return int(float(Path("/proc/uptime").read_text().split()[0]))
     except Exception:
         return 0
+
+
+def boot_id() -> str:
+    """Return the kernel boot identity, stable across agent restarts."""
+    try:
+        value = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        if value:
+            return value
+    except Exception:
+        pass
+    return os.environ.get("BLACKWATCH_BOOT_ID") or os.uname().nodename
+
+
+def next_sequence() -> int:
+    """Persist a monotonic per-agent report sequence across process restarts."""
+    try:
+        SEQUENCE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            current = int(SEQUENCE_FILE.read_text().strip())
+        except (FileNotFoundError, ValueError):
+            current = 0
+        value = current + 1
+        tmp = SEQUENCE_FILE.with_suffix(".tmp")
+        tmp.write_text(str(value))
+        os.replace(tmp, SEQUENCE_FILE)
+        try:
+            os.chmod(SEQUENCE_FILE, 0o600)
+        except Exception:
+            pass
+        return value
+    except Exception:
+        # Reporting must continue even if the optional local state file is
+        # unavailable. A UUID-based fallback still lets the server correlate
+        # the report, while the next healthy tick retries persistence.
+        return int(time.time() * 1000)
 
 
 # ---------- Distro detection (RPM vs DPKG) --------------------------------
@@ -952,6 +989,8 @@ def build_report() -> dict:
     global _last_snapshot_hash, _last_full_send_at
 
     tick_start = time.perf_counter()
+    collected_at = datetime.now(timezone.utc).isoformat()
+    identity = host_identity()
     now = time.time()
     run_due_collectors(now)
     snapshots, snap_hash = build_snapshots_and_hash()
@@ -963,7 +1002,12 @@ def build_report() -> dict:
 
     report: dict = {
         "kind": "ec2_report",
-        "host": host_identity(),
+        "host": identity,
+        "agent_id": identity.get("instance_id"),
+        "boot_id": boot_id(),
+        "sequence": next_sequence(),
+        "report_id": str(uuid.uuid4()),
+        "collected_at": collected_at,
         "agent_version": AGENT_VERSION,
         "uptime_seconds": uptime_seconds(),
         "auth_events": read_auth_events(INTERVAL + 120),
@@ -995,6 +1039,11 @@ def build_report() -> dict:
     if errs:
         report["collector_errors"] = errs
 
+    report["priority_counts"] = {
+        "critical": len(report.get("oom_events") or []) + len(report.get("fim_changes") or []),
+        "normal": len(report.get("auth_events") or []),
+        "bulk": int("snapshots" in report),
+    }
     report["tick_duration_ms"] = int((time.perf_counter() - tick_start) * 1000)
     return report
 
@@ -1073,7 +1122,9 @@ def _flush_spool(client) -> None:
         return
     for f in sorted(SPOOL_DIR.glob("*.json")):
         try:
-            client.send_message(QueueUrl=SQS_URL, MessageBody=f.read_text())
+            payload = json.loads(f.read_text())
+            payload["sent_at"] = datetime.now(timezone.utc).isoformat()
+            client.send_message(QueueUrl=SQS_URL, MessageBody=json.dumps(payload))
             f.unlink()
         except Exception:
             return  # still unreachable; keep the rest for later
@@ -1166,6 +1217,7 @@ def send(payload: dict) -> None:
     global _send_failures
 
     payload = _shrink_for_sqs(payload)
+    payload["sent_at"] = datetime.now(timezone.utc).isoformat()
 
     try:
         client = _sqs()

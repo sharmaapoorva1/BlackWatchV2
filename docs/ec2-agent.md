@@ -7,13 +7,14 @@ against, and how to verify it's working.
 The quick-start install is at [`deploy/ec2/README.md`](../deploy/ec2/README.md);
 read this when you want the *full* picture or are debugging at 3am.
 
-Current agent version: **v1.5** (hardened, full File Integrity Monitoring).
+Current agent version: **v1.6** (delivery metadata, hardened, full File Integrity Monitoring).
 
 Recent version history:
 - **v1.2** — scrubbing, systemd sandbox, watchdog, size caps, send backoff
 - **v1.3** — FIM Part 1: periodic baseline scan + per-instance coverage
 - **v1.4** — FIM Part 2: real-time inotify watcher on critical paths
 - **v1.5** — FIM Part 3: auditd whodata, actor attribution per change event
+- **v1.6** — stable report identity, sequence tracking, and server-side delivery timing
 
 For a deep dive on FIM specifically (architecture, every detection path,
 auditd rules, the UI surfaces, troubleshooting), see [`docs/fim.md`](fim.md).
@@ -37,6 +38,11 @@ seconds (default 60s) it:
    instance role (no static creds on the box).
 6. Spools to disk and replays if SQS is unreachable. Bounded — see
    [Failure modes](#13-failure-modes--recovery).
+
+Each report also carries `agent_id`, `boot_id`, a monotonic `sequence`, a
+`report_id`, `collected_at`, and `sent_at`. BlackWatch records when the report
+was accepted and processed separately, so queue delay and ingest delay are
+visible without treating either as agent downtime.
 
 In parallel, three background threads owned by `fim_engine.py` run
 independently of the heartbeat tick:

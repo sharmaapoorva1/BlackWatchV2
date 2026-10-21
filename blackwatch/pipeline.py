@@ -6,6 +6,7 @@ how it arrived. The event core stays a pure sink — this function is the seam."
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 from . import correlation, noise, storage
@@ -132,9 +133,16 @@ def ingest_payload(
     transport: str = "webhook",
     account: str | None = None,
     region: str | None = None,
+    received_at: datetime | None = None,
     progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
-    ctx = IngestContext(module=module, transport=transport, account=account, region=region)
+    ctx = IngestContext(
+        module=module,
+        transport=transport,
+        account=account,
+        region=region,
+        received_at=received_at or datetime.now(timezone.utc),
+    )
     adapter = registry.resolve(module)
     if progress:
         progress({"stage": "parsing", "module": module})

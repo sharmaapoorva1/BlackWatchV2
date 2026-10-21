@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 
-from .. import pipeline
+from .. import pipeline, storage
+from ..agents.delivery import extract_report_metadata
 from .models import AwsCloudtrailSqsConfig
 
 _log = logging.getLogger(__name__)
@@ -101,10 +103,17 @@ def drain(
         to_delete = []
         for message in messages:
             total_messages += 1
+            accepted_at = datetime.now(timezone.utc)
             try:
                 body = json.loads(message["Body"])
             except (ValueError, KeyError):
                 body = {"raw": message.get("Body")}
+            delivery = extract_report_metadata(body)
+            if delivery:
+                try:
+                    storage.record_agent_delivery(delivery, accepted_at=accepted_at)
+                except Exception:
+                    _log.exception("sqs.delivery_status_accept_failed agent_id=%s", delivery.get("agent_id"))
             detail = body.get("detail") if isinstance(body, dict) and isinstance(body.get("detail"), dict) else body
             action = (detail.get("eventName") or detail.get("action")) if isinstance(detail, dict) else None
             if progress:
@@ -114,9 +123,22 @@ def drain(
                           "deleted": total_deleted, "action": action})
             try:
                 result = pipeline.ingest_payload(
-                    cfg.target_module, body, transport="queue", progress=progress,
+                    cfg.target_module,
+                    body,
+                    transport="queue",
+                    received_at=accepted_at,
+                    progress=progress,
                 )
                 total_ingested += result.get("ingested", 0)
+                if delivery:
+                    try:
+                        storage.record_agent_delivery(
+                            delivery,
+                            accepted_at=accepted_at,
+                            processed_at=datetime.now(timezone.utc),
+                        )
+                    except Exception:
+                        _log.exception("sqs.delivery_status_process_failed agent_id=%s", delivery.get("agent_id"))
                 to_delete.append(
                     {"Id": message["MessageId"], "ReceiptHandle": message["ReceiptHandle"]}
                 )
@@ -139,6 +161,15 @@ def drain(
                     cfg.target_module, message.get("MessageId"), hint, exc,
                 )
                 total_failed += 1
+                if delivery:
+                    try:
+                        storage.record_agent_delivery(
+                            delivery,
+                            accepted_at=accepted_at,
+                            error=str(exc)[:500],
+                        )
+                    except Exception:
+                        _log.exception("sqs.delivery_status_error_failed agent_id=%s", delivery.get("agent_id"))
                 if progress:
                     progress({"stage": "failed", "batch": batch, "message_index": total_messages,
                               "message_id": message.get("MessageId"), "fetched": total_messages,

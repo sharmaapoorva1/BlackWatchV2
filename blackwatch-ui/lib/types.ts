@@ -734,6 +734,34 @@ export interface PostureFindingsResponse {
 
 // --- Hosts -----------------------------------------------------------------
 
+export type AgentHealthState =
+  | "healthy"
+  | "delivery_delayed"
+  | "processing_delayed"
+  | "collector_degraded"
+  | "silent"
+  | "data_loss_risk"
+  | string;
+
+export interface AgentDeliveryStatus {
+  state: AgentHealthState;
+  reason: string;
+  age_seconds: number | null;
+  queue_delay_seconds: number | null;
+  processing_delay_seconds: number | null;
+  sequence_gaps: number;
+  agent_id: string | null;
+  boot_id: string | null;
+  last_sequence: number | null;
+  last_report_id: string | null;
+  last_observed_at: string | null;
+  last_collected_at: string | null;
+  last_sent_at: string | null;
+  last_accepted_at: string | null;
+  last_processed_at: string | null;
+  last_error: string | null;
+}
+
 export interface HostSummary {
   instance_id: string;
   hostname: string | null;
@@ -743,6 +771,9 @@ export interface HostSummary {
   active: boolean;
   age_seconds: number | null;
   stale: boolean;
+  health_state?: AgentHealthState;
+  health_reason?: string;
+  delivery?: AgentDeliveryStatus;
   updated_at: string | null;
   tags: Record<string, string> | null;
   port_count: number;
@@ -781,6 +812,9 @@ export interface HostDetailResponse {
   snapshots: HostSnapshots;
   age_seconds: number | null;
   stale: boolean;
+  health_state?: AgentHealthState;
+  health_reason?: string;
+  delivery?: AgentDeliveryStatus;
   auth_events: EventEnvelope[];
   state_changes: EventEnvelope[];
   alerts: EventEnvelope[];

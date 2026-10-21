@@ -14,6 +14,7 @@ from .auth import require_role
 from pydantic import BaseModel
 
 from . import auth, coverage, investigation_flow, noise, storage
+from .agents.delivery import delivery_health
 from .intel import db as intel_db
 from .intel import enrich as intel_enrich
 from .connectors import operations as connector_operations
@@ -819,17 +820,70 @@ _HOST_CHANGE_PREFIXES = (
 )
 
 
+def _delivery_view(
+    row: dict[str, Any] | None,
+    *,
+    host_updated_at: datetime | None,
+    host_extra: dict[str, Any],
+    now: datetime,
+) -> dict[str, Any]:
+    """Combine transport timing with host collector health for the UI."""
+    accepted_at = (row or {}).get("last_accepted_at") or host_updated_at
+    health = delivery_health(
+        now=now,
+        last_accepted_at=accepted_at,
+        queue_delay_seconds=(row or {}).get("queue_delay_seconds"),
+        processing_delay_seconds=(row or {}).get("processing_delay_seconds"),
+        collector_degraded=bool(
+            host_extra.get("collector_errors") or host_extra.get("stalled_collectors")
+        ),
+        sequence_gaps=int((row or {}).get("sequence_gaps") or 0),
+        silent_after_seconds=_HOST_STALE_AFTER,
+    )
+    return {
+        **health,
+        "agent_id": (row or {}).get("agent_id"),
+        "boot_id": (row or {}).get("boot_id"),
+        "last_sequence": (row or {}).get("last_sequence"),
+        "last_report_id": (row or {}).get("last_report_id"),
+        "last_observed_at": _iso((row or {}).get("last_observed_at")),
+        "last_collected_at": _iso((row or {}).get("last_collected_at")),
+        "last_sent_at": _iso((row or {}).get("last_sent_at")),
+        "last_accepted_at": _iso(accepted_at),
+        "last_processed_at": _iso((row or {}).get("last_processed_at")),
+        "last_error": (row or {}).get("last_error"),
+    }
+
+
+def _iso(value: Any) -> str | None:
+    return value.isoformat() if hasattr(value, "isoformat") else value
+
+
 @router.get("/hosts")
 def hosts_list() -> dict[str, Any]:
     """List of all reporting hosts plus the recent host-category events used
     to render the /ui/hosts page (auth + state-change tables)."""
     now = datetime.now(timezone.utc)
+    try:
+        delivery_rows = {
+            row["agent_id"]: row for row in storage.list_agent_delivery_status()
+        }
+    except Exception:
+        # Keep the hosts page available while an older deployment is starting
+        # up before the additive Phase 1 migration has completed.
+        delivery_rows = {}
     servers: list[dict[str, Any]] = []
     for row in storage.list_host_status():
-        age = (now - row["updated_at"]).total_seconds() if row.get("updated_at") else None
         snaps = row.get("snapshots") or {}
         extra = row.get("extra") or {}
         tags = extra.get("tags") if isinstance(extra.get("tags"), dict) else None
+        delivery = _delivery_view(
+            delivery_rows.get(row["instance_id"]),
+            host_updated_at=row.get("updated_at"),
+            host_extra=extra,
+            now=now,
+        )
+        age = delivery["age_seconds"]
         servers.append({
             "instance_id": row["instance_id"],
             "hostname": row.get("hostname"),
@@ -838,8 +892,11 @@ def hosts_list() -> dict[str, Any]:
             "region": row.get("region"),
             "active": row.get("active"),
             "age_seconds": int(age) if age is not None else None,
-            "stale": age is not None and age > _HOST_STALE_AFTER,
-            "updated_at": row["updated_at"].isoformat() if row.get("updated_at") else None,
+            "stale": delivery["state"] == "silent",
+            "health_state": delivery["state"],
+            "health_reason": delivery["reason"],
+            "delivery": delivery,
+            "updated_at": _iso(row.get("updated_at")),
             "tags": tags,
             "port_count": len(snaps.get("ports") or []),
             "user_count": len(snaps.get("users") or []),
@@ -862,6 +919,27 @@ def hosts_list() -> dict[str, Any]:
     }
 
 
+@router.get("/agents/delivery")
+def agents_delivery() -> dict[str, Any]:
+    """Read-only delivery diagnostics for the current SQS-backed agents."""
+    now = datetime.now(timezone.utc)
+    hosts = {row["instance_id"]: row for row in storage.list_host_status()}
+    try:
+        rows = storage.list_agent_delivery_status()
+    except Exception:
+        rows = []
+    agents = []
+    for row in rows:
+        host = hosts.get(row["agent_id"], {})
+        agents.append(_delivery_view(
+            row,
+            host_updated_at=host.get("updated_at"),
+            host_extra=host.get("extra") or {},
+            now=now,
+        ))
+    return {"count": len(agents), "agents": agents, "updated_at": now.isoformat()}
+
+
 @router.get("/hosts/{instance_id}")
 def host_detail(instance_id: str) -> dict[str, Any]:
     """All data needed to render the host detail page. Returns host=null when
@@ -879,11 +957,20 @@ def host_detail(instance_id: str) -> dict[str, Any]:
             "alerts": [],
         }
     now = datetime.now(timezone.utc)
+    try:
+        delivery_row = storage.get_agent_delivery_status(instance_id)
+    except Exception:
+        delivery_row = None
     age: int | None = None
     stale = False
-    if host.get("updated_at"):
-        age = int((now - host["updated_at"]).total_seconds())
-        stale = age > _HOST_STALE_AFTER
+    delivery = _delivery_view(
+        delivery_row,
+        host_updated_at=host.get("updated_at"),
+        host_extra=host.get("extra") or {},
+        now=now,
+    )
+    age = delivery["age_seconds"]
+    stale = delivery["state"] == "silent"
     snapshots = host.get("snapshots") or {}
     recent = storage.query_events(target_id=instance_id, limit=150)
     return {
@@ -892,6 +979,9 @@ def host_detail(instance_id: str) -> dict[str, Any]:
         "snapshots": snapshots,
         "age_seconds": age,
         "stale": stale,
+        "health_state": delivery["state"],
+        "health_reason": delivery["reason"],
+        "delivery": delivery,
         "auth_events": [
             e for e in recent
             if e.get("action", "").startswith(("host.auth", "host.sudo"))

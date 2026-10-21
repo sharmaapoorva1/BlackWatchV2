@@ -1326,6 +1326,178 @@ def set_host_active(instance_id: str, active: bool) -> None:
         )
 
 
+# --- Agent delivery status -------------------------------------------------
+
+_DELIVERY_COLS = (
+    "agent_id, boot_id, last_sequence, last_report_id, last_observed_at, "
+    "last_collected_at, last_sent_at, last_accepted_at, last_processed_at, queue_delay_seconds, "
+    "processing_delay_seconds, sequence_gaps, last_error, updated_at"
+)
+
+
+def _delivery_row(row: tuple[Any, ...]) -> dict[str, Any]:
+    return {
+        "agent_id": row[0],
+        "boot_id": row[1],
+        "last_sequence": row[2],
+        "last_report_id": row[3],
+        "last_observed_at": row[4],
+        "last_collected_at": row[5],
+        "last_sent_at": row[6],
+        "last_accepted_at": row[7],
+        "last_processed_at": row[8],
+        "queue_delay_seconds": float(row[9]) if row[9] is not None else None,
+        "processing_delay_seconds": float(row[10]) if row[10] is not None else None,
+        "sequence_gaps": int(row[11] or 0),
+        "last_error": row[12],
+        "updated_at": row[13],
+    }
+
+
+def record_agent_delivery(
+    metadata: dict[str, Any],
+    *,
+    accepted_at: datetime,
+    processed_at: datetime | None = None,
+    error: str | None = None,
+) -> None:
+    """Record server-side acceptance and processing for one agent report.
+
+    The upsert is monotonic within a boot: redelivered or out-of-order SQS
+    messages cannot move the latest sequence backwards. A new boot starts a
+    fresh sequence while preserving the accumulated gap counter.
+    """
+    agent_id = metadata.get("agent_id")
+    if not agent_id:
+        return
+    collected_at = metadata.get("collected_at")
+    sent_at = metadata.get("sent_at")
+    queue_delay = (
+        max(0.0, (accepted_at - sent_at).total_seconds())
+        if isinstance(sent_at, datetime)
+        else None
+    )
+    processing_delay = (
+        max(0.0, (processed_at - accepted_at).total_seconds())
+        if processed_at is not None
+        else None
+    )
+    sequence = metadata.get("sequence")
+    boot_id = metadata.get("boot_id")
+    with get_pool().connection() as conn:
+        conn.execute(
+            f"""
+            INSERT INTO agent_delivery_status (
+                agent_id, boot_id, last_sequence, last_report_id,
+                last_observed_at, last_collected_at, last_sent_at, last_accepted_at,
+                last_processed_at, queue_delay_seconds,
+                processing_delay_seconds, sequence_gaps, last_error
+            ) VALUES (
+                %(agent_id)s, %(boot_id)s, %(sequence)s, %(report_id)s,
+                %(collected_at)s, %(collected_at)s, %(sent_at)s, %(accepted_at)s,
+                %(processed_at)s, %(queue_delay)s, %(processing_delay)s,
+                0, %(error)s
+            )
+            ON CONFLICT (agent_id) DO UPDATE SET
+                boot_id = CASE
+                    WHEN agent_delivery_status.boot_id IS DISTINCT FROM EXCLUDED.boot_id
+                    THEN EXCLUDED.boot_id ELSE agent_delivery_status.boot_id END,
+                last_sequence = CASE
+                    WHEN agent_delivery_status.boot_id IS DISTINCT FROM EXCLUDED.boot_id
+                    THEN EXCLUDED.last_sequence
+                    WHEN EXCLUDED.last_sequence IS NULL THEN agent_delivery_status.last_sequence
+                    WHEN agent_delivery_status.last_sequence IS NULL
+                         OR EXCLUDED.last_sequence >= agent_delivery_status.last_sequence
+                    THEN EXCLUDED.last_sequence
+                    ELSE agent_delivery_status.last_sequence END,
+                last_report_id = CASE
+                    WHEN agent_delivery_status.boot_id IS DISTINCT FROM EXCLUDED.boot_id
+                         OR EXCLUDED.last_sequence IS NULL
+                         OR agent_delivery_status.last_sequence IS NULL
+                         OR EXCLUDED.last_sequence >= agent_delivery_status.last_sequence
+                    THEN EXCLUDED.last_report_id
+                    ELSE agent_delivery_status.last_report_id END,
+                last_collected_at = CASE
+                    WHEN agent_delivery_status.boot_id IS DISTINCT FROM EXCLUDED.boot_id
+                         OR EXCLUDED.last_sequence IS NULL
+                         OR agent_delivery_status.last_sequence IS NULL
+                         OR EXCLUDED.last_sequence >= agent_delivery_status.last_sequence
+                    THEN COALESCE(EXCLUDED.last_collected_at, agent_delivery_status.last_collected_at)
+                    ELSE agent_delivery_status.last_collected_at END,
+                last_observed_at = CASE
+                    WHEN agent_delivery_status.boot_id IS DISTINCT FROM EXCLUDED.boot_id
+                         OR EXCLUDED.last_sequence IS NULL
+                         OR agent_delivery_status.last_sequence IS NULL
+                         OR EXCLUDED.last_sequence >= agent_delivery_status.last_sequence
+                    THEN COALESCE(EXCLUDED.last_observed_at, agent_delivery_status.last_observed_at)
+                    ELSE agent_delivery_status.last_observed_at END,
+                last_sent_at = CASE
+                    WHEN agent_delivery_status.boot_id IS DISTINCT FROM EXCLUDED.boot_id
+                         OR EXCLUDED.last_sequence IS NULL
+                         OR agent_delivery_status.last_sequence IS NULL
+                         OR EXCLUDED.last_sequence >= agent_delivery_status.last_sequence
+                    THEN COALESCE(EXCLUDED.last_sent_at, agent_delivery_status.last_sent_at)
+                    ELSE agent_delivery_status.last_sent_at END,
+                last_accepted_at = GREATEST(
+                    agent_delivery_status.last_accepted_at, EXCLUDED.last_accepted_at
+                ),
+                last_processed_at = COALESCE(
+                    EXCLUDED.last_processed_at, agent_delivery_status.last_processed_at
+                ),
+                queue_delay_seconds = CASE
+                    WHEN EXCLUDED.queue_delay_seconds IS NOT NULL
+                    THEN EXCLUDED.queue_delay_seconds
+                    ELSE agent_delivery_status.queue_delay_seconds END,
+                processing_delay_seconds = CASE
+                    WHEN EXCLUDED.processing_delay_seconds IS NOT NULL
+                    THEN EXCLUDED.processing_delay_seconds
+                    ELSE agent_delivery_status.processing_delay_seconds END,
+                sequence_gaps = agent_delivery_status.sequence_gaps + CASE
+                    WHEN agent_delivery_status.boot_id IS DISTINCT FROM EXCLUDED.boot_id
+                         OR EXCLUDED.last_sequence IS NULL
+                         OR agent_delivery_status.last_sequence IS NULL
+                         OR EXCLUDED.last_sequence <= agent_delivery_status.last_sequence + 1
+                    THEN 0
+                    ELSE EXCLUDED.last_sequence - agent_delivery_status.last_sequence - 1
+                END,
+                last_error = CASE
+                    WHEN EXCLUDED.last_processed_at IS NOT NULL THEN NULL
+                    ELSE EXCLUDED.last_error END,
+                updated_at = NOW()
+            """,
+            {
+                "agent_id": agent_id,
+                "boot_id": boot_id,
+                "sequence": sequence,
+                "report_id": metadata.get("report_id"),
+                "collected_at": collected_at,
+                "sent_at": sent_at,
+                "accepted_at": accepted_at,
+                "processed_at": processed_at,
+                "queue_delay": queue_delay,
+                "processing_delay": processing_delay,
+                "error": error,
+            },
+        )
+
+
+def list_agent_delivery_status() -> list[dict[str, Any]]:
+    with get_pool().connection() as conn:
+        rows = conn.execute(
+            f"SELECT {_DELIVERY_COLS} FROM agent_delivery_status ORDER BY agent_id"
+        ).fetchall()
+    return [_delivery_row(row) for row in rows]
+
+
+def get_agent_delivery_status(agent_id: str) -> dict[str, Any] | None:
+    with get_pool().connection() as conn:
+        row = conn.execute(
+            f"SELECT {_DELIVERY_COLS} FROM agent_delivery_status WHERE agent_id = %s",
+            (agent_id,),
+        ).fetchone()
+    return _delivery_row(row) if row else None
+
+
 # --- Notification rules --------------------------------------------------------
 
 _NRULE_COLS = (
