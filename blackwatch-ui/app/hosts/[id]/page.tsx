@@ -215,6 +215,9 @@ function StatusSection({
             <>
               <KeyValueRow label="Delivery">
                 <span className="font-mono text-xs text-fg-muted">
+                  {delivery.transport ?? "unknown"}
+                  {delivery.rollout ? ` · ${delivery.rollout}` : ""}
+                  {" · "}
                   queue {delivery.queue_delay_seconds === null ? "—" : `${Math.round(delivery.queue_delay_seconds)}s`}
                   {" · "}
                   processing {delivery.processing_delay_seconds === null ? "—" : `${Math.round(delivery.processing_delay_seconds)}s`}
@@ -226,6 +229,25 @@ function StatusSection({
                   {delivery.sequence_gaps > 0 ? ` · ${delivery.sequence_gaps} gap(s)` : ""}
                 </span>
               </KeyValueRow>
+              <KeyValueRow label="Last accepted">
+                <span className="font-mono text-xs text-fg-muted">
+                  {delivery.last_accepted_at
+                    ? new Date(delivery.last_accepted_at).toLocaleString()
+                    : "—"}
+                </span>
+              </KeyValueRow>
+              <KeyValueRow label="Last processed">
+                <span className="font-mono text-xs text-fg-muted">
+                  {delivery.last_processed_at
+                    ? new Date(delivery.last_processed_at).toLocaleString()
+                    : "—"}
+                </span>
+              </KeyValueRow>
+              {delivery.last_error && (
+                <KeyValueRow label="Delivery error">
+                  <span className="text-xs text-sev-critical">{delivery.last_error}</span>
+                </KeyValueRow>
+              )}
             </>
           )}
           <KeyValueRow label="Last seen">

@@ -1331,7 +1331,7 @@ def set_host_active(instance_id: str, active: bool) -> None:
 _DELIVERY_COLS = (
     "agent_id, boot_id, last_sequence, last_report_id, last_observed_at, "
     "last_collected_at, last_sent_at, last_accepted_at, last_processed_at, queue_delay_seconds, "
-    "processing_delay_seconds, sequence_gaps, last_error, updated_at"
+    "processing_delay_seconds, sequence_gaps, last_error, updated_at, transport, rollout"
 )
 
 
@@ -1351,6 +1351,8 @@ def _delivery_row(row: tuple[Any, ...]) -> dict[str, Any]:
         "sequence_gaps": int(row[11] or 0),
         "last_error": row[12],
         "updated_at": row[13],
+        "transport": row[14],
+        "rollout": row[15],
     }
 
 
@@ -1391,12 +1393,12 @@ def record_agent_delivery(
                 agent_id, boot_id, last_sequence, last_report_id,
                 last_observed_at, last_collected_at, last_sent_at, last_accepted_at,
                 last_processed_at, queue_delay_seconds,
-                processing_delay_seconds, sequence_gaps, last_error
+                processing_delay_seconds, sequence_gaps, last_error, transport, rollout
             ) VALUES (
                 %(agent_id)s, %(boot_id)s, %(sequence)s, %(report_id)s,
                 %(collected_at)s, %(collected_at)s, %(sent_at)s, %(accepted_at)s,
                 %(processed_at)s, %(queue_delay)s, %(processing_delay)s,
-                0, %(error)s
+                0, %(error)s, %(transport)s, %(rollout)s
             )
             ON CONFLICT (agent_id) DO UPDATE SET
                 boot_id = CASE
@@ -1463,6 +1465,8 @@ def record_agent_delivery(
                 last_error = CASE
                     WHEN EXCLUDED.last_processed_at IS NOT NULL THEN NULL
                     ELSE EXCLUDED.last_error END,
+                transport = COALESCE(EXCLUDED.transport, agent_delivery_status.transport),
+                rollout = COALESCE(EXCLUDED.rollout, agent_delivery_status.rollout),
                 updated_at = NOW()
             """,
             {
@@ -1477,6 +1481,8 @@ def record_agent_delivery(
                 "queue_delay": queue_delay,
                 "processing_delay": processing_delay,
                 "error": error,
+                "transport": metadata.get("transport"),
+                "rollout": metadata.get("rollout"),
             },
         )
 
@@ -1496,6 +1502,195 @@ def get_agent_delivery_status(agent_id: str) -> dict[str, Any] | None:
             (agent_id,),
         ).fetchone()
     return _delivery_row(row) if row else None
+
+
+# ---------- Direct agent ingress receipts ---------------------------------
+
+def annotate_agent_ingress_report(
+    agent_id: str,
+    report_id: str,
+    metadata: dict[str, Any],
+    *,
+    priority: str,
+) -> None:
+    """Attach immutable agent/transport timestamps to an admitted report."""
+    with get_pool().connection() as conn:
+        conn.execute(
+            """
+            UPDATE agent_ingress_receipts
+            SET collected_at = COALESCE(%s, collected_at),
+                sent_at = COALESCE(%s, sent_at),
+                priority = COALESCE(%s, priority),
+                transport = COALESCE(%s, transport),
+                rollout = COALESCE(%s, rollout),
+                updated_at = NOW()
+            WHERE agent_id = %s AND report_id = %s
+            """,
+            (
+                metadata.get("collected_at"),
+                metadata.get("sent_at"),
+                priority,
+                metadata.get("transport"),
+                metadata.get("rollout"),
+                agent_id,
+                report_id,
+            ),
+        )
+
+def claim_agent_report(agent_id: str, report_id: str, lease_seconds: int) -> bool:
+    """Claim a report once, or reclaim a stale processing lease."""
+    with get_pool().connection() as conn:
+        row = conn.execute(
+            """
+            INSERT INTO agent_ingress_receipts (
+                agent_id, report_id, state, attempts, processing_started_at, updated_at
+            ) VALUES (%s, %s, 'processing', 1, NOW(), NOW())
+            ON CONFLICT (agent_id, report_id) DO UPDATE SET
+                state = 'processing',
+                attempts = agent_ingress_receipts.attempts + 1,
+                processing_started_at = NOW(),
+                retry_at = NULL,
+                updated_at = NOW()
+            WHERE agent_ingress_receipts.state IN ('incoming', 'retry')
+               OR (
+                    agent_ingress_receipts.state = 'processing'
+                    AND agent_ingress_receipts.updated_at < NOW() - (%s * INTERVAL '1 second')
+               )
+            RETURNING report_id
+            """,
+            (agent_id, report_id, max(1, int(lease_seconds))),
+        ).fetchone()
+    return row is not None
+
+
+def complete_agent_report(
+    agent_id: str,
+    report_id: str,
+    processed_at: datetime,
+    stats: dict[str, Any],
+) -> None:
+    with get_pool().connection() as conn:
+        conn.execute(
+            """
+            UPDATE agent_ingress_receipts
+            SET state = 'completed', processed_at = %s, retry_at = NULL,
+                last_error = NULL, stats = %s, updated_at = NOW()
+            WHERE agent_id = %s AND report_id = %s AND state = 'processing'
+            """,
+            (processed_at, Jsonb(stats), agent_id, report_id),
+        )
+
+
+def retry_agent_report(
+    agent_id: str,
+    report_id: str,
+    error: str,
+    retry_at: datetime,
+) -> None:
+    with get_pool().connection() as conn:
+        conn.execute(
+            """
+            UPDATE agent_ingress_receipts
+            SET state = 'retry', retry_at = %s,
+                last_error = %s, updated_at = NOW()
+            WHERE agent_id = %s AND report_id = %s AND state = 'processing'
+            """,
+            (retry_at, str(error)[:500], agent_id, report_id),
+        )
+
+
+def quarantine_agent_report(agent_id: str, report_id: str, reason: str) -> None:
+    with get_pool().connection() as conn:
+        conn.execute(
+            """
+            UPDATE agent_ingress_receipts
+            SET state = 'quarantine', quarantine_reason = %s,
+                retry_at = NULL, updated_at = NOW()
+            WHERE agent_id = %s AND report_id = %s
+            """,
+            (str(reason)[:500], agent_id, report_id),
+        )
+
+
+def list_agent_ingress_receipts(limit: int = 200) -> list[dict[str, Any]]:
+    limit = max(1, min(int(limit), 1000))
+    with get_pool().connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT agent_id, report_id, state, attempts, accepted_at,
+                   processing_started_at, processed_at, retry_at,
+                   last_error, quarantine_reason, stats, updated_at,
+                   collected_at, sent_at, priority, transport, rollout
+            FROM agent_ingress_receipts
+            ORDER BY updated_at DESC
+            LIMIT %s
+            """,
+            (limit,),
+        ).fetchall()
+    columns = (
+        "agent_id", "report_id", "state", "attempts", "accepted_at",
+        "processing_started_at", "processed_at", "retry_at", "last_error",
+        "quarantine_reason", "stats", "updated_at", "collected_at", "sent_at",
+        "priority", "transport", "rollout",
+    )
+    return [dict(zip(columns, row)) for row in rows]
+
+
+def agent_ingress_metrics() -> dict[str, Any]:
+    """Return safe rollout/latency aggregates without exposing payloads."""
+    with get_pool().connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                COUNT(*)::BIGINT AS accepted,
+                COUNT(*) FILTER (WHERE state = 'completed')::BIGINT AS completed,
+                COUNT(*) FILTER (WHERE state = 'retry')::BIGINT AS retrying,
+                COUNT(*) FILTER (WHERE state = 'quarantine')::BIGINT AS quarantined,
+                percentile_cont(0.95) WITHIN GROUP (
+                    ORDER BY EXTRACT(EPOCH FROM (accepted_at - sent_at))
+                ) FILTER (WHERE sent_at IS NOT NULL) AS acceptance_p95_seconds,
+                percentile_cont(0.95) WITHIN GROUP (
+                    ORDER BY EXTRACT(EPOCH FROM (processed_at - accepted_at))
+                ) FILTER (WHERE processed_at IS NOT NULL) AS processing_p95_seconds,
+                MAX(EXTRACT(EPOCH FROM (NOW() - accepted_at)))
+                    FILTER (WHERE state IN ('incoming', 'processing', 'retry'))
+                    AS oldest_active_age_seconds
+            FROM agent_ingress_receipts
+            """
+        ).fetchone()
+        transport_rows = conn.execute(
+            """
+            SELECT
+                COALESCE(transport, 'unknown') AS transport,
+                COUNT(*)::BIGINT AS accepted,
+                percentile_cont(0.95) WITHIN GROUP (
+                    ORDER BY EXTRACT(EPOCH FROM (accepted_at - sent_at))
+                ) FILTER (WHERE sent_at IS NOT NULL) AS acceptance_p95_seconds,
+                percentile_cont(0.95) WITHIN GROUP (
+                    ORDER BY EXTRACT(EPOCH FROM (processed_at - accepted_at))
+                ) FILTER (WHERE processed_at IS NOT NULL) AS processing_p95_seconds
+            FROM agent_ingress_receipts
+            GROUP BY COALESCE(transport, 'unknown')
+            ORDER BY transport
+            """
+        ).fetchall()
+    by_transport = {}
+    for transport, accepted, acceptance_p95, processing_p95 in transport_rows:
+        by_transport[str(transport)] = {
+            "accepted": int(accepted or 0),
+            "acceptance_p95_seconds": float(acceptance_p95) if acceptance_p95 is not None else None,
+            "processing_p95_seconds": float(processing_p95) if processing_p95 is not None else None,
+        }
+    return {
+        "accepted": int(row[0] or 0),
+        "completed": int(row[1] or 0),
+        "retrying": int(row[2] or 0),
+        "quarantined": int(row[3] or 0),
+        "acceptance_p95_seconds": float(row[4]) if row[4] is not None else None,
+        "processing_p95_seconds": float(row[5]) if row[5] is not None else None,
+        "oldest_active_age_seconds": float(row[6]) if row[6] is not None else None,
+        "by_transport": by_transport,
+    }
 
 
 # --- Notification rules --------------------------------------------------------

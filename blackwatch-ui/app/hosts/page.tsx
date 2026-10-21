@@ -1,7 +1,7 @@
 import Link from "next/link";
 import clsx from "clsx";
 
-import { fetchHosts } from "@/lib/api";
+import { fetchAgentIngressDiagnostics, fetchHosts } from "@/lib/api";
 import type {
   EventEnvelope,
   HostSummary,
@@ -20,7 +20,10 @@ import {
 } from "@/components/domain/SeverityBadge";
 
 export default async function HostsPage() {
-  const { count, servers, auth, changes } = await fetchHosts();
+  const [{ count, servers, auth, changes }, ingress] = await Promise.all([
+    fetchHosts(),
+    fetchAgentIngressDiagnostics(1).catch(() => null),
+  ]);
 
   return (
     <>
@@ -29,6 +32,45 @@ export default async function HostsPage() {
         title="Hosts"
         subtitle={`${count} EC2 host${count === 1 ? "" : "s"} reporting`}
       />
+
+      {ingress && (
+        <section className="mb-6 space-y-2">
+          <div className="flex items-baseline justify-between">
+            <SectionLabel>direct transfer</SectionLabel>
+            <span className="font-mono text-[11px] text-fg-subtle">
+              {ingress.transport} · {ingress.spool.oldest_active_age_seconds == null
+                ? "queue clear"
+                : `oldest ${Math.round(ingress.spool.oldest_active_age_seconds)}s`}
+            </span>
+          </div>
+          <DataPanel className="grid grid-cols-2 gap-px overflow-hidden sm:grid-cols-4">
+            <div className="bg-surface-1 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-fg-subtle">acceptance p95</div>
+              <div className="mt-1 font-mono text-sm text-fg">
+                {ingress.metrics?.acceptance_p95_seconds == null
+                  ? "—"
+                  : `${ingress.metrics.acceptance_p95_seconds.toFixed(2)}s`}
+              </div>
+            </div>
+            <div className="bg-surface-1 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-fg-subtle">processing p95</div>
+              <div className="mt-1 font-mono text-sm text-fg">
+                {ingress.metrics?.processing_p95_seconds == null
+                  ? "—"
+                  : `${ingress.metrics.processing_p95_seconds.toFixed(2)}s`}
+              </div>
+            </div>
+            <div className="bg-surface-1 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-fg-subtle">retrying</div>
+              <div className="mt-1 font-mono text-sm text-fg">{ingress.metrics?.retrying ?? "—"}</div>
+            </div>
+            <div className="bg-surface-1 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-fg-subtle">quarantined</div>
+              <div className="mt-1 font-mono text-sm text-fg">{ingress.metrics?.quarantined ?? "—"}</div>
+            </div>
+          </DataPanel>
+        </section>
+      )}
 
       <section className="space-y-2">
         <SectionLabel>instances</SectionLabel>

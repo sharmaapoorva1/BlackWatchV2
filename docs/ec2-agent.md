@@ -7,7 +7,7 @@ against, and how to verify it's working.
 The quick-start install is at [`deploy/ec2/README.md`](../deploy/ec2/README.md);
 read this when you want the *full* picture or are debugging at 3am.
 
-Current agent version: **v1.6** (delivery metadata, hardened, full File Integrity Monitoring).
+Current agent version: **v1.8** (direct HTTPS transport, priority-aware recovery, critical cadence, transfer metrics, delivery metadata, hardened, full File Integrity Monitoring).
 
 Recent version history:
 - **v1.2** — scrubbing, systemd sandbox, watchdog, size caps, send backoff
@@ -15,6 +15,8 @@ Recent version history:
 - **v1.4** — FIM Part 2: real-time inotify watcher on critical paths
 - **v1.5** — FIM Part 3: auditd whodata, actor attribution per change event
 - **v1.6** — stable report identity, sequence tracking, and server-side delivery timing
+- **v1.8** — critical-event cadence, immutable send timestamps, rollout labels, and transfer latency metrics
+- **v1.7** — selectable BlackWatch HTTPS ingress with SQS rollback and priority-aware local recovery
 
 For a deep dive on FIM specifically (architecture, every detection path,
 auditd rules, the UI surfaces, troubleshooting), see [`docs/fim.md`](fim.md).
@@ -34,9 +36,10 @@ seconds (default 60s) it:
    rpm-DB health).
 4. Drains any pending **FIM** change events queued by the FIM engine's
    three detection threads (periodic baseline / inotify / auditd whodata).
-5. Builds **one JSON payload** and pushes it to an SQS queue using the
-   instance role (no static creds on the box).
-6. Spools to disk and replays if SQS is unreachable. Bounded — see
+5. Builds **one JSON payload** and sends it through the configured transport:
+   direct HTTPS to BlackWatch or SQS using the instance role.
+6. Spools to disk and replays if the selected transport is unreachable.
+   Critical reports replay before bulk telemetry. Bounded — see
    [Failure modes](#13-failure-modes--recovery).
 
 Each report also carries `agent_id`, `boot_id`, a monotonic `sequence`, a
@@ -54,7 +57,8 @@ independently of the heartbeat tick:
   maintains a path → `{uid,pid,comm,exe,proctitle}` lookup map. The other
   two threads consult it when emitting changes, attaching actor data.
 
-BlackWatch (running on Lightsail) drains the SQS queue and turns each
+BlackWatch admits HTTPS reports to a persistent server-side spool and drains
+them asynchronously; SQS remains a compatibility path. Both paths turn each
 payload into normalized events. FIM changes get persisted to
 `fim_history` + `fim_baselines`; coverage stats land in `fim_coverage`
 and feed the `/fim` UI.
@@ -96,8 +100,10 @@ but no inbound from the public internet ever.
 | Path | Mode | Purpose |
 |---|---|---|
 | `/opt/blackwatch/ec2_agent.py` | `0755 root:root` | The agent script itself. Not a secret. |
+| `/opt/blackwatch/agent_transport.py` | `0644 root:root` | SQS/HTTPS transport implementation. Not a secret. |
 | `/opt/blackwatch/fim_engine.py` | `0644 root:root` | FIM engine module (v1.3+). Imported by `ec2_agent.py` at startup. |
 | `/etc/systemd/system/blackwatch-agent.service` | `0644 root:root` | systemd unit. Owns all env vars + sandboxing. |
+| `/etc/blackwatch-agent.env` | `0600 root:root` | Transport settings and the per-agent HTTPS token. |
 | `/etc/sysctl.d/99-blackwatch-agent.conf` | `0644 root:root` | Bumps `fs.inotify.max_user_watches` for FIM Part 2. |
 | `/etc/audit/rules.d/bw_fim.rules` | `0640 root:root` | Audit rules for FIM Part 3 whodata. Loaded by auditd. |
 | `/var/lib/blackwatch-agent/` | `0700 root:root` | Spool parent. Locked at install time. |
@@ -132,7 +138,15 @@ but no inbound from the public internet ever.
 All set in the systemd unit's `Environment=` lines (read at startup; restart
 the unit to apply changes).
 
-### Required
+### Transport selection
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `BLACKWATCH_TRANSPORT` | `sqs` | Selects `sqs` for compatibility or `https` for direct BlackWatch admission. |
+| `BLACKWATCH_INGEST_URL` | unset | HTTPS endpoint, normally `https://<host>/api/agent/v1/reports`. Required for `https`. |
+| `BLACKWATCH_AGENT_TOKEN` | unset | Token scoped to this agent. Required for `https`; stored in `/etc/blackwatch-agent.env` mode `0600`. |
+
+### Required for SQS mode
 
 | Variable | Example | Purpose |
 |---|---|---|
@@ -144,10 +158,19 @@ the unit to apply changes).
 |---|---|---|
 | `AWS_REGION` | from IMDS | SQS queue region. Almost always same as the instance. |
 | `INTERVAL` | `60` | Tick interval in seconds. Also drives the `auth_events` lookback (`INTERVAL + 120`). |
+| `CRITICAL_INTERVAL_SEC` | `2` | Maximum polling interval for critical FIM/OOM reports. Tune from measured CPU and acceptance latency. |
+| `BLACKWATCH_ROLLOUT` | `unclassified` | Non-secret rollout label recorded with delivery metrics, e.g. `phase3-canary`. |
 | `BLACKWATCH_TAGS` | `""` | `k=v,k=v` pairs stamped onto every event's extras. E.g. `env=prod,role=api`. Used for routing rules. |
 | `SPOOL_DIR` | `/var/lib/blackwatch-agent` | Parent of `spool/`. |
 | `SPOOL_MAX_FILES` | `5000` | Hard cap. Oldest files deleted when exceeded. |
 | `SPOOL_MAX_BYTES` | `100*1024*1024` (100 MB) | Hard byte cap. Oldest files deleted when exceeded. |
+
+To use direct HTTPS on a canary, install with `BLACKWATCH_TRANSPORT=https`,
+`BLACKWATCH_INGEST_URL`, and that agent's token. The server maps tokens with
+`BLACKWATCH_AGENT_TOKENS=instance-id:token` and binds the credential to the
+report's `agent_id`. The endpoint acknowledges only after durable server-side
+spool persistence. Set `BLACKWATCH_TRANSPORT=sqs` and restart the service to
+roll back without deleting local or server data.
 
 ### FIM (Part 1 / 2 / 3)
 
@@ -470,7 +493,7 @@ On your dev machine:
 $KEY = "<path to .pem>"
 $BOX = "ec2-user@<instance-ip>"
 
-scp -i $KEY scripts/ec2_agent.py            ${BOX}:/tmp/
+scp -i $KEY scripts/ec2_agent.py scripts/agent_transport.py ${BOX}:/tmp/
 scp -i $KEY deploy/ec2/install-agent.sh     ${BOX}:/tmp/
 ```
 
@@ -480,6 +503,8 @@ On the EC2 box:
 sudo BLACKWATCH_SQS_URL="https://sqs.us-west-1.amazonaws.com/<ACCT>/blackwatch-ec2-agents" \
      AWS_REGION="us-west-1" \
      INTERVAL="60" \
+     CRITICAL_INTERVAL_SEC="2" \
+     BLACKWATCH_ROLLOUT="phase3-canary" \
      BLACKWATCH_TAGS="env=prod,role=api" \
      AGENT_SRC=/tmp/ec2_agent.py \
      bash /tmp/install-agent.sh

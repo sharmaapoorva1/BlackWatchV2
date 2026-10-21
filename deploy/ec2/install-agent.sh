@@ -3,8 +3,14 @@
 #
 #   sudo BLACKWATCH_SQS_URL="https://sqs.us-west-1.amazonaws.com/ACCT/blackwatch-ec2-agents" \
 #        AWS_REGION="us-west-1" \
+#        CRITICAL_INTERVAL_SEC="2" \
 #        BLACKWATCH_TAGS="env=prod,role=api-server" \
 #        bash install-agent.sh
+#
+# Direct transport example:
+#   sudo BLACKWATCH_TRANSPORT=https \
+#        BLACKWATCH_INGEST_URL="https://blackwatch.example/api/agent/v1/reports" \
+#        BLACKWATCH_AGENT_TOKEN="per-agent-token" bash install-agent.sh
 #
 # Prereqs: the instance's IAM role must have the blackwatch-ec2-agent-send policy
 # (sqs:SendMessage to the queue). python3 + journald are present on Amazon Linux
@@ -12,9 +18,23 @@
 
 set -euo pipefail
 
-: "${BLACKWATCH_SQS_URL:?set BLACKWATCH_SQS_URL}"
+BLACKWATCH_TRANSPORT="${BLACKWATCH_TRANSPORT:-sqs}"
+BLACKWATCH_SQS_URL="${BLACKWATCH_SQS_URL:-}"
+BLACKWATCH_INGEST_URL="${BLACKWATCH_INGEST_URL:-}"
+BLACKWATCH_AGENT_TOKEN="${BLACKWATCH_AGENT_TOKEN:-}"
+if [ "$BLACKWATCH_TRANSPORT" = "sqs" ]; then
+  : "${BLACKWATCH_SQS_URL:?set BLACKWATCH_SQS_URL when BLACKWATCH_TRANSPORT=sqs}"
+elif [ "$BLACKWATCH_TRANSPORT" = "https" ]; then
+  : "${BLACKWATCH_INGEST_URL:?set BLACKWATCH_INGEST_URL when BLACKWATCH_TRANSPORT=https}"
+  : "${BLACKWATCH_AGENT_TOKEN:?set BLACKWATCH_AGENT_TOKEN when BLACKWATCH_TRANSPORT=https}"
+else
+  echo "ERROR: BLACKWATCH_TRANSPORT must be sqs or https" >&2
+  exit 2
+fi
 AWS_REGION="${AWS_REGION:-us-west-1}"
 INTERVAL="${INTERVAL:-60}"
+CRITICAL_INTERVAL_SEC="${CRITICAL_INTERVAL_SEC:-2}"
+BLACKWATCH_ROLLOUT="${BLACKWATCH_ROLLOUT:-phase3-canary}"
 BLACKWATCH_TAGS="${BLACKWATCH_TAGS:-}"
 
 # Find ec2_agent.py: explicit AGENT_SRC, next to this script, or repo layout.
@@ -169,12 +189,29 @@ else
   echo "WARNING: fim_engine.py not found — FIM will be disabled at runtime" >&2
 fi
 
+# Phase 2 direct transport helper. It must live beside ec2_agent.py because
+# the agent is intentionally stdlib-only on Amazon Linux 2.
+TRANSPORT_SRC=""
+for p in "$(dirname "$AGENT_SRC")/agent_transport.py" "$HERE/agent_transport.py" "$HERE/../../scripts/agent_transport.py"; do
+  if [ -f "$p" ]; then TRANSPORT_SRC="$p"; break; fi
+done
+if [ -n "$TRANSPORT_SRC" ]; then
+  TRANSPORT_DEST=/opt/blackwatch/agent_transport.py
+  if [ "$(readlink -f "$TRANSPORT_SRC")" != "$(readlink -f "$TRANSPORT_DEST")" ]; then
+    install -m 0644 "$TRANSPORT_SRC" "$TRANSPORT_DEST"
+    echo "agent_transport.py installed from $TRANSPORT_SRC"
+  fi
+else
+  echo "ERROR: agent_transport.py not found — direct transport cannot start" >&2
+  exit 2
+fi
+
 # 2b. Pre-flight — fail at install time if the instance role can't actually
 # reach SQS. Otherwise the operator wires the policy wrong and only finds out
 # when the dashboard stays empty. We send a zero-length probe and read the
 # response code; SendMessage with a 1-byte payload tagged "preflight" is the
 # minimum that actually exercises the IAM grant.
-if command -v aws >/dev/null 2>&1; then
+if [ "$BLACKWATCH_TRANSPORT" = "sqs" ] && command -v aws >/dev/null 2>&1; then
   if aws sts get-caller-identity --region "$AWS_REGION" >/dev/null 2>&1; then
     if aws sqs get-queue-attributes \
         --queue-url "$BLACKWATCH_SQS_URL" \
@@ -191,7 +228,26 @@ if command -v aws >/dev/null 2>&1; then
   fi
 fi
 
-# 3. systemd unit — resource limits + sandboxing + watchdog. The agent runs
+# 3. systemd environment + unit — resource limits + sandboxing + watchdog.
+# Keep the per-agent HTTPS token in a root-readable file rather than in the
+# unit itself, which is commonly readable by non-root operators.
+ENV_FILE=/etc/blackwatch-agent.env
+umask 077
+cat > "$ENV_FILE" <<EOF
+BLACKWATCH_TRANSPORT=$BLACKWATCH_TRANSPORT
+BLACKWATCH_SQS_URL=$BLACKWATCH_SQS_URL
+BLACKWATCH_INGEST_URL=$BLACKWATCH_INGEST_URL
+BLACKWATCH_AGENT_TOKEN=$BLACKWATCH_AGENT_TOKEN
+AWS_REGION=$AWS_REGION
+INTERVAL=$INTERVAL
+CRITICAL_INTERVAL_SEC=$CRITICAL_INTERVAL_SEC
+BLACKWATCH_ROLLOUT=$BLACKWATCH_ROLLOUT
+BLACKWATCH_TAGS=$BLACKWATCH_TAGS
+PYTHONUNBUFFERED=1
+EOF
+chmod 0600 "$ENV_FILE"
+
+# systemd unit — resource limits + sandboxing + watchdog. The agent runs
 # as root because it needs to read shadow/journal/SUID/sudoers, but every
 # other privilege is locked down so a compromise can't spread.
 #
@@ -211,11 +267,7 @@ NotifyAccess=main
 WatchdogSec=180
 TimeoutStartSec=30
 
-Environment=BLACKWATCH_SQS_URL=${BLACKWATCH_SQS_URL}
-Environment=AWS_REGION=${AWS_REGION}
-Environment=INTERVAL=${INTERVAL}
-Environment=BLACKWATCH_TAGS=${BLACKWATCH_TAGS}
-Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-${ENV_FILE}
 ExecStart=/usr/bin/python3 /opt/blackwatch/ec2_agent.py
 Restart=always
 RestartSec=10

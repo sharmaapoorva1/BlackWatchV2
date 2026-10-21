@@ -760,6 +760,8 @@ export interface AgentDeliveryStatus {
   last_accepted_at: string | null;
   last_processed_at: string | null;
   last_error: string | null;
+  transport: string | null;
+  rollout: string | null;
 }
 
 export interface HostSummary {
@@ -820,6 +822,56 @@ export interface HostDetailResponse {
   alerts: EventEnvelope[];
   fim_coverage: FimCoverage | null;
   fim_recent_changes: FimChange[];
+}
+
+export type AgentIngressState =
+  | "incoming"
+  | "processing"
+  | "retry"
+  | "completed"
+  | "quarantine"
+  | string;
+
+export interface AgentIngressReceipt {
+  agent_id: string;
+  report_id: string;
+  state: AgentIngressState;
+  attempts: number;
+  accepted_at: string | null;
+  processing_started_at: string | null;
+  processed_at: string | null;
+  retry_at: string | null;
+  last_error: string | null;
+  quarantine_reason: string | null;
+  stats: Record<string, unknown> | null;
+  updated_at: string | null;
+}
+
+export interface AgentIngressDiagnostics {
+  transport: "https" | "sqs" | string;
+  spool: {
+    files: Record<string, number>;
+    bytes: number;
+    oldest_active_age_seconds?: number | null;
+  };
+  metrics?: {
+    accepted?: number;
+    completed?: number;
+    retrying?: number;
+    quarantined?: number;
+    acceptance_p95_seconds?: number | null;
+    processing_p95_seconds?: number | null;
+    oldest_active_age_seconds?: number | null;
+    by_transport?: Record<string, {
+      accepted: number;
+      acceptance_p95_seconds: number | null;
+      processing_p95_seconds: number | null;
+    }>;
+    available?: boolean;
+    error?: string;
+  };
+  rows: AgentIngressReceipt[];
+  count: number;
 }
 
 // FIM coverage + per-file change history.

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+from .agents.ingress import parse_agent_tokens
 
 
 def _parse_token_map(raw: str) -> dict[str, str]:
@@ -36,6 +39,24 @@ class Settings:
         self.rules_dir: str = os.environ.get("RULES_DIR", "rules")
         self.notifications_file: str = os.environ.get(
             "NOTIFICATIONS_FILE", "notifications.yaml"
+        )
+        self.agent_tokens: dict[str, str] = parse_agent_tokens(
+            os.environ.get("BLACKWATCH_AGENT_TOKENS", "")
+        )
+        self.agent_ingress_dir: Path = Path(
+            os.environ.get("BLACKWATCH_AGENT_INGRESS_DIR", "/app/data/agent-ingress")
+        )
+        self.agent_ingress_max_files: int = int(
+            os.environ.get("BLACKWATCH_AGENT_INGRESS_MAX_FILES", "10000")
+        )
+        self.agent_ingress_max_bytes: int = int(
+            os.environ.get("BLACKWATCH_AGENT_INGRESS_MAX_BYTES", str(1024 * 1024 * 1024))
+        )
+        self.agent_ingress_max_request_bytes: int = int(
+            os.environ.get("BLACKWATCH_AGENT_INGRESS_MAX_REQUEST_BYTES", str(1024 * 1024))
+        )
+        self.agent_ingress_lease_seconds: int = int(
+            os.environ.get("BLACKWATCH_AGENT_INGRESS_LEASE_SECONDS", "300")
         )
 
 

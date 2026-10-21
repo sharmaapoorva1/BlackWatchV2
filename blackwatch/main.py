@@ -76,6 +76,8 @@ _PUBLIC_PATH_SET = {
     "/healthz",
     "/ingest",
     "/api/ingest",
+    "/agent/v1/reports",
+    "/api/agent/v1/reports",
     "/auth/login",
     "/api/auth/login",
     "/auth/logout",

@@ -13,6 +13,7 @@ import type {
   HostsListResponse,
   HostDetailResponse,
   HostMetricsResponse,
+  AgentIngressDiagnostics,
   ServicesListResponse,
   RulesResponse,
   BucketsListResponse,
@@ -218,6 +219,16 @@ export async function fetchHostDetail(
     throw new Error(`fetchHostDetail failed: ${res.status} ${res.statusText}`);
   }
   return (await res.json()) as HostDetailResponse;
+}
+
+export async function fetchAgentIngressDiagnostics(
+  limit: number = 200,
+): Promise<AgentIngressDiagnostics> {
+  const res = await bwFetch(`/api/agents/ingress?limit=${limit}`);
+  if (!res.ok) {
+    throw new Error(`fetchAgentIngressDiagnostics failed: ${res.status} ${res.statusText}`);
+  }
+  return (await res.json()) as AgentIngressDiagnostics;
 }
 
 // Hourly memory/CPU rollup for the chart on the host detail page.

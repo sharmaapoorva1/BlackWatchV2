@@ -6,14 +6,17 @@ Runs as a systemd service on each EC2. Every INTERVAL seconds it:
     every minute, heavy ones every 10 min),
   * reads new sshd + sudo lines from the journal,
   * builds a heartbeat + (when something changed) a state snapshot,
-  * pushes ONE JSON message to SQS using the instance role,
-  * spools to disk and replays if SQS is unreachable (bounded — see SPOOL_*).
+  * pushes ONE JSON message through the configured SQS or HTTPS transport,
+  * spools to disk and replays if delivery is unreachable (bounded — see SPOOL_*).
 
 Distro-portable: RPM (Amazon Linux / RHEL / Fedora / CentOS) and DPKG
 (Debian / Ubuntu) are both supported for the packages collector.
 
 Config via environment (set in the systemd unit):
-    BLACKWATCH_SQS_URL    SQS queue URL                           (REQUIRED)
+    BLACKWATCH_TRANSPORT  sqs (default) or https
+    BLACKWATCH_SQS_URL    SQS queue URL                           (required for sqs)
+    BLACKWATCH_INGEST_URL BlackWatch HTTPS ingest URL              (required for https)
+    BLACKWATCH_AGENT_TOKEN per-agent HTTPS credential               (required for https)
     AWS_REGION            queue region                            (default from IMDS)
     INTERVAL              tick seconds                            (default 60)
     SPOOL_DIR             local buffer dir                        (default /var/lib/blackwatch-agent)
@@ -46,11 +49,21 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-AGENT_VERSION = "1.6"  # Phase 1 delivery metadata + FIM Part 3 auditd whodata
+try:
+    from agent_transport import LocalSpool, Transport, build_transport, priority_for_report, stamp_report
+except ImportError:  # imported as scripts.ec2_agent during local tests
+    from scripts.agent_transport import LocalSpool, Transport, build_transport, priority_for_report, stamp_report
+
+AGENT_VERSION = "1.8"  # Phase 3 critical cadence + transfer metrics
 IMDS = "http://169.254.169.254"
 
+TRANSPORT_NAME = os.environ.get("BLACKWATCH_TRANSPORT", "sqs").lower()
 SQS_URL = os.environ.get("BLACKWATCH_SQS_URL", "")
+INGEST_URL = os.environ.get("BLACKWATCH_INGEST_URL", "")
+AGENT_TOKEN = os.environ.get("BLACKWATCH_AGENT_TOKEN", "")
 INTERVAL = int(os.environ.get("INTERVAL", "60"))
+CRITICAL_INTERVAL_SEC = max(1, int(os.environ.get("CRITICAL_INTERVAL_SEC", "2")))
+ROLLOUT = os.environ.get("BLACKWATCH_ROLLOUT", "unclassified")
 SPOOL_DIR = Path(os.environ.get("SPOOL_DIR", "/var/lib/blackwatch-agent")) / "spool"
 SEQUENCE_FILE = SPOOL_DIR.parent / "sequence"
 SPOOL_MAX_FILES = int(os.environ.get("SPOOL_MAX_FILES", "5000"))
@@ -984,21 +997,39 @@ _last_full_send_at: float = 0.0
 _FULL_RESYNC_SECONDS = 3600
 
 
-def build_report() -> dict:
-    """One tick. Returns a JSON-serializable dict to ship to SQS."""
+def build_report(*, critical_only: bool = False) -> dict | None:
+    """Build one report, or only emit a report when critical data is ready."""
     global _last_snapshot_hash, _last_full_send_at
 
     tick_start = time.perf_counter()
     collected_at = datetime.now(timezone.utc).isoformat()
     identity = host_identity()
     now = time.time()
-    run_due_collectors(now)
-    snapshots, snap_hash = build_snapshots_and_hash()
+    if critical_only:
+        snapshots, snap_hash = {}, ""
+    else:
+        run_due_collectors(now)
+        snapshots, snap_hash = build_snapshots_and_hash()
 
     include_snaps = (
+        not critical_only
+        and (
         snap_hash != _last_snapshot_hash
         or (now - _last_full_send_at) > _FULL_RESYNC_SECONDS
+        )
     )
+
+    auth_events = [] if critical_only else read_auth_events(INTERVAL + 120)
+    oom_events = detect_oom_events(
+        CRITICAL_INTERVAL_SEC + 2 if critical_only else INTERVAL + 120
+    )
+    fim_changes = []
+    fim_coverage = None
+    if _FIM_ENGINE is not None:
+        fim_changes = _FIM_ENGINE.drain_changes()
+        fim_coverage = _FIM_ENGINE.coverage()
+    if critical_only and not (oom_events or fim_changes):
+        return None
 
     report: dict = {
         "kind": "ec2_report",
@@ -1010,7 +1041,7 @@ def build_report() -> dict:
         "collected_at": collected_at,
         "agent_version": AGENT_VERSION,
         "uptime_seconds": uptime_seconds(),
-        "auth_events": read_auth_events(INTERVAL + 120),
+        "auth_events": auth_events,
         # v1.1: always-on light metrics + health checks. Projection compares
         # against rolling baseline / previous state to decide transitions.
         "memory": snapshot_memory(),
@@ -1018,7 +1049,7 @@ def build_report() -> dict:
         "active_sessions": snapshot_active_sessions(),
         "rpm_db_corrupted": detect_rpm_db_corruption(),
         "stalled_collectors": stalled_collectors(now),
-        "oom_events": detect_oom_events(INTERVAL + 120),
+        "oom_events": oom_events,
     }
     if include_snaps and snapshots:
         report["snapshots"] = snapshots
@@ -1029,11 +1060,10 @@ def build_report() -> dict:
     # FIM Part 1: drain any baseline-scan-detected changes since last tick.
     # The scanner thread queues changes asynchronously; we ship whatever is
     # pending. Coverage rides on every tick so the UI never goes "no data".
-    if _FIM_ENGINE is not None:
-        fim_changes = _FIM_ENGINE.drain_changes()
-        if fim_changes:
-            report["fim_changes"] = fim_changes
-        report["fim_coverage"] = _FIM_ENGINE.coverage()
+    if fim_changes:
+        report["fim_changes"] = fim_changes
+    if fim_coverage is not None:
+        report["fim_coverage"] = fim_coverage
 
     errs = collector_errors()
     if errs:
@@ -1056,6 +1086,22 @@ def _sqs():
     return boto3.client("sqs", region_name=region)
 
 
+_TRANSPORT: Transport | None = None
+
+
+def _transport() -> Transport:
+    global _TRANSPORT
+    if _TRANSPORT is None:
+        _TRANSPORT = build_transport(
+            transport_name=TRANSPORT_NAME,
+            sqs_url=SQS_URL,
+            ingest_url=INGEST_URL,
+            agent_token=AGENT_TOKEN,
+            sqs_client=_sqs() if TRANSPORT_NAME == "sqs" else None,
+        )
+    return _TRANSPORT
+
+
 def _spool(payload: dict) -> None:
     # Make sure the spool directory exists AND is private. The parent
     # /var/lib/blackwatch-agent and its `spool/` sub both get 0700 so
@@ -1067,7 +1113,8 @@ def _spool(payload: dict) -> None:
         os.chmod(SPOOL_DIR, 0o700)
     except Exception:
         pass
-    path = SPOOL_DIR / f"{int(time.time() * 1000)}.json"
+    priority = priority_for_report(payload)
+    path = SPOOL_DIR / f"{priority}-{int(time.time() * 1000)}-{uuid.uuid4().hex}.json"
     # umask-independent write: open file with explicit 0600.
     fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
@@ -1117,17 +1164,33 @@ def _enforce_spool_caps() -> None:
         print(f"spool cap enforcement failed: {exc}", file=sys.stderr)
 
 
-def _flush_spool(client) -> None:
+def _flush_spool(transport: Transport):
     if not SPOOL_DIR.exists():
-        return
-    for f in sorted(SPOOL_DIR.glob("*.json")):
+        return None
+    files = sorted(
+        SPOOL_DIR.glob("*.json"),
+        key=lambda path: (0 if path.name.startswith("critical-") else 1, path.name),
+    )
+    for f in files:
         try:
             payload = json.loads(f.read_text())
-            payload["sent_at"] = datetime.now(timezone.utc).isoformat()
-            client.send_message(QueueUrl=SQS_URL, MessageBody=json.dumps(payload))
+            stamp_report(
+                payload,
+                transport_name=TRANSPORT_NAME,
+                rollout=ROLLOUT,
+            )
+            priority = priority_for_report(payload)
+            result = transport.send(
+                json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+                priority=priority,
+            )
+            if not result.accepted:
+                return result
             f.unlink()
-        except Exception:
-            return  # still unreachable; keep the rest for later
+        except Exception as exc:
+            print(f"spool replay failed: {exc}", file=sys.stderr)
+            return None
+    return None
 
 
 def _shrink_for_sqs(payload: dict, max_bytes: int = SQS_BODY_MAX_BYTES) -> dict:
@@ -1216,13 +1279,25 @@ def send(payload: dict) -> None:
     """
     global _send_failures
 
-    payload = _shrink_for_sqs(payload)
-    payload["sent_at"] = datetime.now(timezone.utc).isoformat()
+    if TRANSPORT_NAME == "sqs":
+        payload = _shrink_for_sqs(payload)
+    stamp_report(
+        payload,
+        transport_name=TRANSPORT_NAME,
+        rollout=ROLLOUT,
+    )
 
     try:
-        client = _sqs()
-        _flush_spool(client)
-        client.send_message(QueueUrl=SQS_URL, MessageBody=json.dumps(payload))
+        transport = _transport()
+        replay_result = _flush_spool(transport)
+        if replay_result is not None and not replay_result.accepted:
+            raise RuntimeError(replay_result.error_category or "spool replay rejected")
+        result = transport.send(
+            json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+            priority=priority_for_report(payload),
+        )
+        if not result.accepted:
+            raise RuntimeError(result.error_category or "transport rejected")
         _send_failures = 0
         mem = payload.get("memory") or {}
         cpu = payload.get("cpu") or {}
@@ -1232,7 +1307,16 @@ def send(payload: dict) -> None:
         if payload.get("stalled_collectors"): flags.append("stalled=" + ",".join(payload["stalled_collectors"]))
         if payload.get("collector_errors"): flags.append("errs=" + ",".join(payload["collector_errors"]))
         if payload.get("truncated"): flags.append("trunc=" + ",".join(payload["truncated"]))
+        accepted_ms = None
+        if result.accepted_at:
+            try:
+                sent_at = datetime.fromisoformat(payload["sent_at"].replace("Z", "+00:00"))
+                accepted_ms = max(0, int((result.accepted_at - sent_at).total_seconds() * 1000))
+            except (KeyError, TypeError, ValueError):
+                pass
         print(f"reported instance={payload['host'].get('instance_id')} "
+              f"transport={TRANSPORT_NAME} "
+              f"accept_ms={accepted_ms if accepted_ms is not None else '-'} "
               f"auth_lines={len(payload.get('auth_events') or [])} "
               f"snaps={'yes' if 'snapshots' in payload else 'no'} "
               f"tick_ms={payload.get('tick_duration_ms')} "
@@ -1253,22 +1337,35 @@ def send(payload: dict) -> None:
 
 
 def main() -> None:
-    if not SQS_URL:
-        print("ERROR: set BLACKWATCH_SQS_URL", file=sys.stderr)
-        sys.exit(2)
-    # Fail fast on tampered / typo'd URL. The IAM policy is the real control
-    # (sqs:SendMessage scoped to one queue ARN), but rejecting an obviously
-    # bogus URL here is cheap and surfaces operator error immediately.
-    if not _SQS_URL_RE.match(SQS_URL):
-        print(
-            f"ERROR: BLACKWATCH_SQS_URL doesn't look like a valid SQS URL: {SQS_URL}\n"
-            "       expected https://sqs.<region>.amazonaws.com/<account>/<queue-name>",
-            file=sys.stderr,
-        )
+    if TRANSPORT_NAME == "sqs":
+        if not SQS_URL:
+            print("ERROR: set BLACKWATCH_SQS_URL", file=sys.stderr)
+            sys.exit(2)
+        # Fail fast on tampered / typo'd URL. The IAM policy is the real control
+        # (sqs:SendMessage scoped to one queue ARN), but rejecting an obviously
+        # bogus URL here is cheap and surfaces operator error immediately.
+        if not _SQS_URL_RE.match(SQS_URL):
+            print(
+                f"ERROR: BLACKWATCH_SQS_URL doesn't look like a valid SQS URL: {SQS_URL}\n"
+                "       expected https://sqs.<region>.amazonaws.com/<account>/<queue-name>",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+    elif TRANSPORT_NAME == "https":
+        if not INGEST_URL or not AGENT_TOKEN:
+            print(
+                "ERROR: BLACKWATCH_INGEST_URL and BLACKWATCH_AGENT_TOKEN are required "
+                "for BLACKWATCH_TRANSPORT=https",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+    else:
+        print("ERROR: BLACKWATCH_TRANSPORT must be sqs or https", file=sys.stderr)
         sys.exit(2)
 
     once = "--once" in sys.argv
-    print(f"BlackWatch EC2 agent v{AGENT_VERSION} -> {SQS_URL} (every {INTERVAL}s)")
+    target = SQS_URL if TRANSPORT_NAME == "sqs" else INGEST_URL
+    print(f"BlackWatch EC2 agent v{AGENT_VERSION} [{TRANSPORT_NAME}] -> {target} (every {INTERVAL}s)")
     print(f"  distro={distro_family()} tags={TAGS or '-'}")
 
     # FIM Part 1: kick off the periodic-baseline scanner. The thread starts
@@ -1327,15 +1424,26 @@ def main() -> None:
 
     # Tell systemd we're alive (no-op outside systemd / outside Type=notify).
     _sd_notify("READY=1")
-    while True:
+    if once:
         send(build_report())
-        # Ping the watchdog. If WatchdogSec is set, systemd kills+restarts us
-        # when we miss this. Successful send → fresh ping; failed send still
-        # pings because we're functioning, just temporarily blocked.
+        return
+    next_heartbeat = 0.0
+    next_critical = 0.0
+    while True:
+        now = time.monotonic()
+        if now >= next_critical:
+            critical_report = build_report(critical_only=True)
+            if critical_report is not None:
+                send(critical_report)
+            next_critical = now + CRITICAL_INTERVAL_SEC
+        if now >= next_heartbeat:
+            send(build_report())
+            next_heartbeat = now + max(1, INTERVAL)
+        # Ping the watchdog even when the network is down: the collector is
+        # alive and local spooling/backoff is functioning.
         _sd_notify("WATCHDOG=1")
-        if once:
-            break
-        time.sleep(INTERVAL)
+        sleep_for = min(next_critical, next_heartbeat) - time.monotonic()
+        time.sleep(max(0.1, min(0.5, sleep_for)))
 
 
 if __name__ == "__main__":

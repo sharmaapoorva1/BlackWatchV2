@@ -15,6 +15,14 @@ from pydantic import BaseModel
 
 from . import auth, coverage, investigation_flow, noise, storage
 from .agents.delivery import delivery_health
+from .agents.ingress import (
+    IngressAuthError,
+    IngressValidationError,
+    authenticate_agent,
+    decode_report_body,
+    validate_report,
+)
+from .agents.spool import IngressSpool, SpoolCapacityError
 from .intel import db as intel_db
 from .intel import enrich as intel_enrich
 from .connectors import operations as connector_operations
@@ -204,6 +212,101 @@ def ingest(
         )
     except NormalizationError as exc:
         raise HTTPException(status_code=422, detail=f"normalization failed: {exc}")
+
+
+@router.post("/agent/v1/reports", status_code=202)
+async def direct_agent_report(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    content_encoding: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Durably admit one agent report without touching the database pipeline."""
+    max_bytes = settings.agent_ingress_max_request_bytes
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > max_bytes:
+                raise HTTPException(status_code=413, detail="report body exceeds configured size")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="invalid content length")
+    try:
+        agent_id = authenticate_agent(authorization, settings.agent_tokens)
+        body = await request.body()
+        payload = decode_report_body(body, content_encoding, max_bytes)
+        payload = validate_report(payload, agent_id, max_bytes)
+    except IngressAuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+    except IngressValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    priority_counts = payload.get("priority_counts")
+    priority = "bulk"
+    if isinstance(priority_counts, dict):
+        try:
+            if int(priority_counts.get("critical") or 0) > 0:
+                priority = "critical"
+        except (TypeError, ValueError):
+            pass
+    try:
+        spool = IngressSpool(
+            settings.agent_ingress_dir,
+            max_files=settings.agent_ingress_max_files,
+            max_bytes=settings.agent_ingress_max_bytes,
+        )
+        result = spool.persist(
+            agent_id,
+            payload["report_id"],
+            payload,
+            priority,
+        )
+    except SpoolCapacityError as exc:
+        raise HTTPException(status_code=429, detail=str(exc), headers={"Retry-After": "5"})
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail="agent ingress spool unavailable") from exc
+    return {
+        "accepted": True,
+        "duplicate": result.duplicate,
+        "ack_id": payload["report_id"],
+        "accepted_at": result.accepted_at.isoformat() if result.accepted_at else datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.get("/agents/ingress")
+def agent_ingress_diagnostics(limit: int = Query(default=200, ge=1, le=1000)) -> dict[str, Any]:
+    """Read-only direct-ingress state for the operator UI."""
+    try:
+        spool = IngressSpool(
+            settings.agent_ingress_dir,
+            max_files=settings.agent_ingress_max_files,
+            max_bytes=settings.agent_ingress_max_bytes,
+        )
+        spool_stats = spool.stats()
+    except OSError:
+        spool_stats = {
+            "available": False,
+            "error": "agent ingress spool unavailable",
+        }
+    try:
+        rows = storage.list_agent_ingress_receipts(limit)
+    except Exception:
+        # The diagnostics page must remain available while an additive
+        # migration is being applied or the database is recovering.
+        rows = []
+    try:
+        metrics = storage.agent_ingress_metrics()
+    except Exception:
+        metrics = {"available": False, "error": "agent ingress metrics unavailable"}
+    for row in rows:
+        for key, value in list(row.items()):
+            if hasattr(value, "isoformat"):
+                row[key] = value.isoformat()
+    return {
+        "transport": "https",
+        "spool": spool_stats,
+        "metrics": metrics,
+        "rows": rows,
+        "count": len(rows),
+    }
 
 
 @router.get("/events")
@@ -852,6 +955,8 @@ def _delivery_view(
         "last_accepted_at": _iso(accepted_at),
         "last_processed_at": _iso((row or {}).get("last_processed_at")),
         "last_error": (row or {}).get("last_error"),
+        "transport": (row or {}).get("transport"),
+        "rollout": (row or {}).get("rollout"),
     }
 
 

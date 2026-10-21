@@ -49,6 +49,8 @@ def extract_report_metadata(raw: Any) -> dict[str, Any] | None:
         "collected_at": parse_report_time(raw.get("collected_at")),
         "sent_at": parse_report_time(raw.get("sent_at")),
         "priority_counts": raw.get("priority_counts") if isinstance(raw.get("priority_counts"), dict) else {},
+        "transport": raw.get("transport") if isinstance(raw.get("transport"), str) else None,
+        "rollout": raw.get("rollout") if isinstance(raw.get("rollout"), str) else None,
     }
 
 
