@@ -71,7 +71,7 @@ def test_https_transport_accepts_and_reuses_connection():
     transport = HttpsTransport(
         "https://blackwatch.example/api/agent/v1/reports",
         "agent-token",
-        connection_factory=lambda host, timeout: connection,
+        connection_factory=lambda host, port, timeout: connection,
     )
 
     result = transport.send(b'{"report_id":"r1"}', priority="critical")
@@ -85,12 +85,32 @@ def test_https_transport_accepts_and_reuses_connection():
     assert connection.requests[0][3]["Authorization"] == "Bearer agent-token"
 
 
+def test_https_transport_passes_explicit_port_and_timeout_to_connection_factory():
+    connection = FakeConnection(FakeResponse(202, b'{"ack_id":"ack-9443"}'))
+    calls = []
+
+    def factory(host, port, timeout):
+        calls.append((host, port, timeout))
+        return connection
+
+    transport = HttpsTransport(
+        "https://blackwatch.example:9443/api/agent/v1/reports",
+        "agent-token",
+        connection_factory=factory,
+    )
+
+    result = transport.send(b'{"report_id":"r-9443"}', priority="critical")
+
+    assert result.accepted is True
+    assert calls == [("blackwatch.example", 9443, 5.0)]
+
+
 def test_https_transport_preserves_retry_after_for_backpressure():
     connection = FakeConnection(FakeResponse(503, b"busy", {"Retry-After": "7"}))
     transport = HttpsTransport(
         "https://blackwatch.example/api/agent/v1/reports",
         "agent-token",
-        connection_factory=lambda host, timeout: connection,
+        connection_factory=lambda host, port, timeout: connection,
     )
 
     result = transport.send(b"{}", priority="bulk")

@@ -156,7 +156,8 @@ class HttpsTransport(Transport):
         self.token = token
         self.timeout = timeout
         self.max_request_bytes = max_request_bytes
-        self._host = parsed.netloc
+        self._host = parsed.hostname or ""
+        self._port = parsed.port or 443
         self._path = parsed.path or "/"
         if parsed.query:
             self._path += "?" + parsed.query
@@ -165,7 +166,11 @@ class HttpsTransport(Transport):
 
     def _get_connection(self) -> Any:
         if self._connection is None:
-            self._connection = self._connection_factory(self._host, self.timeout)
+            self._connection = self._connection_factory(
+                self._host,
+                self._port,
+                timeout=self.timeout,
+            )
         return self._connection
 
     def _close_connection(self) -> None:
