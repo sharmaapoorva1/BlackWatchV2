@@ -47,23 +47,26 @@ if [ -z "$AGENT_SRC" ]; then
 fi
 : "${AGENT_SRC:?could not find ec2_agent.py — set AGENT_SRC=/path/to/ec2_agent.py or place it next to install-agent.sh}"
 
-# 1. deps — pip3 first (try yum/dnf, then apt for Debian/Ubuntu)
+# 1. deps — install into an agent-owned directory. This works with PEP 668
+# (externally managed Python) without changing or overriding system Python.
 if ! command -v pip3 >/dev/null 2>&1; then
   if   command -v dnf       >/dev/null 2>&1; then dnf install -y python3-pip
   elif command -v yum       >/dev/null 2>&1; then yum install -y python3-pip
   elif command -v apt-get   >/dev/null 2>&1; then apt-get update && apt-get install -y python3-pip
   else echo "ERROR: no supported package manager found"; exit 2; fi
 fi
+PYTHON_PACKAGE_DIR=/opt/blackwatch/python-packages
+install -d -m 0755 "$PYTHON_PACKAGE_DIR"
 # Pin boto3 — the AL2-default python3.7 will eventually pull a boto3 that drops
 # 3.7 support and break agents silently. Pin to a known-good range that supports
 # 3.7 through 3.12+.
-pip3 install --quiet 'boto3>=1.28,<1.35'
+pip3 install --quiet --upgrade --target "$PYTHON_PACKAGE_DIR" 'boto3>=1.28,<1.35'
 
 # v1.4 (FIM Part 2): inotify_simple is a tiny pure-python wrapper around the
 # inotify syscalls. Without it, FIM falls back to periodic-only — the agent
 # still works, just no sub-second detection. Pin loosely; this package is
 # stable and rarely changes.
-pip3 install --quiet 'inotify_simple>=1.3,<2.0' || \
+pip3 install --quiet --upgrade --target "$PYTHON_PACKAGE_DIR" 'inotify_simple>=1.3,<2.0' || \
   echo "WARNING: inotify_simple install failed — real-time FIM will be disabled" >&2
 
 # Bump kernel inotify watch limit. AL2 default is 8192 which is fine for our
@@ -243,6 +246,7 @@ INTERVAL=$INTERVAL
 CRITICAL_INTERVAL_SEC=$CRITICAL_INTERVAL_SEC
 BLACKWATCH_ROLLOUT=$BLACKWATCH_ROLLOUT
 BLACKWATCH_TAGS=$BLACKWATCH_TAGS
+PYTHONPATH=$PYTHON_PACKAGE_DIR
 PYTHONUNBUFFERED=1
 EOF
 chmod 0600 "$ENV_FILE"
