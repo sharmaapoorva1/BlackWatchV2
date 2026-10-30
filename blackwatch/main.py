@@ -130,13 +130,21 @@ _AWS_KEY_RE = re.compile(r"AKIA[0-9A-Z]{16}")
 _JWT_RE = re.compile(r"eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+")
 
 
-def _scrub_body(raw: bytes | None) -> str | None:
+def _scrub_body(raw: bytes | None, content_encoding: str | None = None) -> str | None:
     if not raw:
         return None
+    if content_encoding:
+        # Compressed request bytes are not text. In particular gzip data can
+        # decode to NUL characters, which PostgreSQL TEXT rejects. Keep only
+        # safe metadata in the append-only audit row instead of storing an
+        # unreadable binary fragment.
+        encoding = re.sub(r"[^a-zA-Z0-9._-]", "", content_encoding)[:32] or "encoded"
+        return f"<{encoding} body; {len(raw)} bytes>"
     try:
         text = raw.decode("utf-8", errors="replace")
     except Exception:
         return "<binary>"
+    text = text.replace("\x00", "�")
     text = text[:2000]
     text = _SECRET_KEYS_RE.sub(r'\1"***REDACTED***"', text)
     text = _AWS_KEY_RE.sub("***REDACTED***", text)
@@ -173,7 +181,9 @@ async def _audit_middleware(request: Request, call_next):
                 method=method,
                 path=path,
                 status=response.status_code,
-                body_summary=_scrub_body(body_bytes),
+                body_summary=_scrub_body(
+                    body_bytes, request.headers.get("content-encoding"),
+                ),
             )
         except Exception:
             _AUDIT_LOGGER.exception("audit insert failed")

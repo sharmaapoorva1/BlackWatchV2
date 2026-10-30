@@ -17,6 +17,7 @@ from blackwatch.agents.ingress import (
     validate_report,
 )
 from blackwatch.agents.spool import IngressSpool, SpoolCapacityError
+from blackwatch.main import _scrub_body
 
 
 def report(agent_id: str = "i-123", report_id: str = "r-1") -> dict:
@@ -40,6 +41,15 @@ def test_agent_token_map_and_identity_binding():
     assert authenticate_agent("Bearer secret-1", tokens) == "i-123"
     with pytest.raises(IngressAuthError):
         authenticate_agent("Bearer secret-unknown", tokens)
+
+
+def test_audit_summary_does_not_store_compressed_request_bytes_as_text():
+    compressed = gzip.compress(b'{"agent_id":"i-example","snapshots":{}}')
+    summary = _scrub_body(compressed, content_encoding="gzip")
+
+    assert "\x00" not in summary
+    assert "gzip" in summary.lower()
+    assert "\x00" not in _scrub_body(b'{"bad":"\x00"}')
 
 
 def test_validate_report_rejects_forged_identity_and_missing_metadata():

@@ -69,3 +69,11 @@ Verification on this development PC:
 - Next.js production build compiled and generated pages, but final standalone output tracing failed with Windows `EPERM` while creating a generated `.next/standalone/node_modules` directory. This is an environment limitation; a complete production build is not confirmed here.
 
 The additive sequence-tracking migration is `blackwatch/sql/045_agent_sequence_tracking.sql`. It has not been applied to the production server. No deployment or live-agent update was performed in this implementation.
+
+## Follow-up record — 2026-10-30: compressed-request audit failure
+
+During deployment, the app accepted direct HTTPS agent reports with HTTP 202, while best-effort audit writes failed with PostgreSQL's `text fields cannot contain NUL` error. Root cause: bulk agent reports use gzip, and the generic audit middleware decoded the compressed bytes as UTF-8 and attempted to store the resulting binary fragment in a TEXT column. The report had already been durably admitted to the ingress spool; this failure affected the audit summary, not admission.
+
+The audit summary now records only the content-encoding label and compressed byte count for encoded bodies. Unencoded bodies replace literal NUL characters before persistence. Regression coverage reproduces gzip input and literal-NUL text. Verification: 76 relevant regression tests passed, Python compileall passed, and `git diff --check` passed.
+
+This follow-up is local and must be committed and deployed to the app before treating audit logging as clean. The agent rollout should wait until this app hotfix is running.
