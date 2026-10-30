@@ -39,6 +39,9 @@ export default async function HostDetailPage({
     auth_events, state_changes, alerts,
     fim_coverage, fim_recent_changes,
   } = data;
+  const systemd = snapshots?.systemd_units;
+  const enabledSystemdUnits = Array.isArray(systemd) ? systemd : systemd?.enabled ?? [];
+  const activeSystemdUnits = Array.isArray(systemd) ? [] : systemd?.active ?? [];
 
   return (
     <>
@@ -124,11 +127,11 @@ export default async function HostDetailPage({
             <FileHashSection title="cron files" data={snapshots.cron} />
           )}
 
-          {(snapshots.systemd_units?.length ?? 0) > 0 && (
-            <ScrollableList
-              title="enabled systemd units"
-              items={snapshots.systemd_units!}
-            />
+          {enabledSystemdUnits.length > 0 && (
+            <ScrollableList title="enabled systemd units" items={enabledSystemdUnits} />
+          )}
+          {activeSystemdUnits.length > 0 && (
+            <ScrollableList title="active systemd units" items={activeSystemdUnits} />
           )}
 
           {(snapshots.kernel_modules?.length ?? 0) > 0 && (
@@ -227,6 +230,7 @@ function StatusSection({
                 <span className="font-mono text-xs text-fg-muted">
                   {delivery.last_sequence ?? "—"}
                   {delivery.sequence_gaps > 0 ? ` · ${delivery.sequence_gaps} gap(s)` : ""}
+                  {delivery.sequence_tracking_overflow ? " · tracking limit exceeded" : ""}
                 </span>
               </KeyValueRow>
               <KeyValueRow label="Last accepted">
@@ -382,6 +386,31 @@ function StatusSection({
                 {Object.entries(extra.collector_errors).map(([name, err]) => (
                   <div key={name} className="text-xs text-sev-critical">
                     <span className="font-mono">{name}</span>: {err}
+                  </div>
+                ))}
+              </div>
+            </KeyValueRow>
+          )}
+          {extra.collector_status && Object.keys(extra.collector_status).length > 0 && (
+            <KeyValueRow label="Collector freshness">
+              <div className="grid gap-y-1 text-xs sm:grid-cols-[minmax(8rem,1fr)_5rem_8rem_6rem] sm:gap-x-3">
+                <span className="text-fg-subtle">Collector</span>
+                <span className="text-fg-subtle">State</span>
+                <span className="text-fg-subtle">Last success</span>
+                <span className="text-fg-subtle">Cadence</span>
+                {Object.entries(extra.collector_status).map(([name, status]) => (
+                  <div key={name} className="contents">
+                    <span className="font-mono text-fg">{name}</span>
+                    <span className={status.state === "ok" ? "text-sev-resolved" : "text-sev-medium"}>
+                      {status.state}
+                    </span>
+                    <span className="font-mono text-fg-muted">
+                      {status.age_seconds == null ? "never" : `${status.age_seconds}s ago`}
+                    </span>
+                    <span className="font-mono text-fg-muted">{status.interval_seconds}s</span>
+                    {status.error && (
+                      <span className="col-span-full text-sev-critical">{status.error}</span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -906,6 +935,7 @@ function DiskSection({
               <th className="w-64 px-4 py-2 text-left font-normal">Mount</th>
               <th className="w-32 px-4 py-2 text-left font-normal">FS</th>
               <th className="w-24 px-4 py-2 text-left font-normal">Used %</th>
+              <th className="w-28 px-4 py-2 text-left font-normal">Inodes %</th>
               <th className="px-4 py-2 text-left font-normal">Used / Total</th>
             </tr>
           </thead>
@@ -919,6 +949,9 @@ function DiskSection({
                 <td className="px-4 py-2 font-mono text-xs text-fg-muted">{d.fs_type}</td>
                 <td className={clsx("px-4 py-2 font-mono text-xs", memoryColor(d.used_pct))}>
                   {d.used_pct}%
+                </td>
+                <td className={clsx("px-4 py-2 font-mono text-xs", d.inodes_used_pct == null ? "text-fg-subtle" : memoryColor(d.inodes_used_pct))}>
+                  {d.inodes_used_pct == null ? "—" : `${d.inodes_used_pct}%`}
                 </td>
                 <td className="px-4 py-2 font-mono text-xs text-fg-muted">
                   {d.used} / {d.total} KB
@@ -998,7 +1031,6 @@ function ProcessesSection({
               <th className="w-32 px-4 py-2 text-left font-normal">User</th>
               <th className="w-20 px-4 py-2 text-left font-normal">PID</th>
               <th className="w-44 px-4 py-2 text-left font-normal">Command</th>
-              <th className="px-4 py-2 text-left font-normal">Args</th>
             </tr>
           </thead>
           <tbody>
@@ -1007,9 +1039,6 @@ function ProcessesSection({
                 <td className="px-4 py-1.5 font-mono text-xs text-fg-muted">{p.user}</td>
                 <td className="px-4 py-1.5 font-mono text-xs text-fg-muted">{p.pid}</td>
                 <td className="px-4 py-1.5 font-mono text-xs text-fg">{p.comm}</td>
-                <td className="px-4 py-1.5 truncate font-mono text-[11px] text-fg-subtle">
-                  {p.args}
-                </td>
               </tr>
             ))}
           </tbody>

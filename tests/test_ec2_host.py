@@ -97,6 +97,17 @@ def test_adapter_omits_snapshot_event_when_absent():
     assert not any(e.action == "host.state.snapshot" for e in events)
 
 
+def test_fim_change_without_whodata_actor_uses_empty_actor():
+    rpt = _report([])
+    rpt["fim_changes"] = [{"path": "/etc/ssh/sshd_config", "change_type": "modified"}]
+
+    events = Ec2HostAdapter().parse(rpt, _ctx())
+
+    change = next(e for e in events if e.action == "host.fim.modified")
+    assert change.actor is not None
+    assert change.actor.principal is None
+
+
 def test_diff_no_change_emits_nothing():
     snap = {"ports": [], "users": [], "authorized_keys": [], "sudoers": {}}
     assert diff_snapshots(snap, snap) == []
@@ -281,6 +292,7 @@ from blackwatch.hosts.projection import (
     _compute_state_transitions,
     _is_cpu_anomalous,
     _update_cpu_baseline,
+    _preserve_legacy_process_arguments,
 )
 
 
@@ -480,3 +492,16 @@ def test_stalled_collectors_set_diff():
     actions = [(a, e) for a, e in out]
     assert ("host.collector.recovered", {"collector": "packages"}) in actions
     assert not any(a == "host.collector.stalled" for a, _ in actions)
+
+
+def test_schema_upgrade_preserves_old_process_arguments_without_collecting_new_ones():
+    from datetime import datetime, timezone
+
+    previous = {"processes": [{"user": "root", "pid": "7", "comm": "worker",
+                               "args": "worker --legacy-secret=retained"}]}
+    current = {"processes": [{"user": "root", "pid": "7", "comm": "worker"}]}
+    result = _preserve_legacy_process_arguments(
+        previous, current, datetime(2026, 10, 30, tzinfo=timezone.utc),
+    )
+    assert "args" not in result["processes"][0]
+    assert result["legacy_process_args_retained"][0]["processes"] == previous["processes"]

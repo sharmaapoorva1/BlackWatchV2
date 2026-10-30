@@ -25,6 +25,7 @@ class Transport(str, Enum):
     syslog = "syslog"
     queue = "queue"
     api = "api"
+    https = "https"
     file = "file"
 
 

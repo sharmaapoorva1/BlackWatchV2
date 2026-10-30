@@ -87,13 +87,19 @@ def diff_snapshots(prev: dict[str, Any], current: dict[str, Any]) -> list[tuple[
             kind = "added" if a is None else "removed" if b is None else "changed"
             out.append((action_name, {"path": path, "change": kind}))
 
-    # --- systemd unit-files (list of names) ---------------------------------
-    prev_units = set(prev.get("systemd_units") or [])
-    cur_units = set(current.get("systemd_units") or [])
-    for u in cur_units - prev_units:
+    # --- systemd enabled configuration and active runtime inventory ---------
+    prev_systemd = prev.get("systemd_units") or []
+    cur_systemd = current.get("systemd_units") or []
+    prev_enabled = set(prev_systemd.get("enabled") or []) if isinstance(prev_systemd, dict) else set(prev_systemd)
+    cur_enabled = set(cur_systemd.get("enabled") or []) if isinstance(cur_systemd, dict) else set(cur_systemd)
+    prev_active = set(prev_systemd.get("active") or []) if isinstance(prev_systemd, dict) else set()
+    cur_active = set(cur_systemd.get("active") or []) if isinstance(cur_systemd, dict) else set()
+    for u in cur_enabled - prev_enabled:
         out.append(("host.service.added", {"unit": u}))
-    for u in prev_units - cur_units:
+    for u in prev_enabled - cur_enabled:
         out.append(("host.service.removed", {"unit": u}))
+    # Active units are retained in the snapshot/UI. Do not alert on every
+    # start/stop transition: oneshot services and timers would create noise.
 
     # --- SUID binaries (list of paths) --------------------------------------
     prev_suid = set(prev.get("suid") or [])
@@ -145,21 +151,40 @@ def diff_snapshots(prev: dict[str, Any], current: dict[str, Any]) -> list[tuple[
         c_state = _disk_state(c_pct)
         # Treat the hysteresis band as "no change unless prev_state was normal".
         # That stops a hover near 90% from flapping warn/recovered.
-        if c_state == "warn_recovering":
-            continue
-        if p_state == c_state:
-            continue
-        info = {
-            "mount": mount,
-            "used_pct": c_pct,
-            "total": cur_disk[mount].get("total"),
-            "fs_type": cur_disk[mount].get("fs_type"),
-        }
-        if c_state == "critical":
-            out.append(("host.disk.critical", info))
-        elif c_state == "warn":
-            out.append(("host.disk.warn", info))
-        else:  # normal — fell back below 85
-            out.append(("host.disk.recovered", info))
+        if c_state != "warn_recovering" and p_state != c_state:
+            info = {
+                "mount": mount,
+                "used_pct": c_pct,
+                "total": cur_disk[mount].get("total"),
+                "fs_type": cur_disk[mount].get("fs_type"),
+            }
+            if c_state == "critical":
+                out.append(("host.disk.critical", info))
+            elif c_state == "warn":
+                out.append(("host.disk.warn", info))
+            else:  # normal — fell back below 85
+                out.append(("host.disk.recovered", info))
+
+        # Inode exhaustion is independent of byte capacity. Emit transition
+        # alerts using the same warn/critical/recovery edges and hysteresis.
+        prev_inode = prev_disk[mount].get("inodes_used_pct")
+        cur_inode = cur_disk[mount].get("inodes_used_pct")
+        if isinstance(prev_inode, int) and isinstance(cur_inode, int):
+            p_inode_state = _disk_state(prev_inode)
+            c_inode_state = _disk_state(cur_inode)
+            if c_inode_state != "warn_recovering" and p_inode_state != c_inode_state:
+                inode_info = {
+                    "mount": mount, "used_pct": cur_inode,
+                    "value": cur_inode, "capacity_kind": "inodes",
+                    "threshold": 95 if c_inode_state == "critical" else 90 if c_inode_state == "warn" else 85,
+                    "inodes_total": cur_disk[mount].get("inodes_total"),
+                    "inodes_used": cur_disk[mount].get("inodes_used"),
+                }
+                if c_inode_state == "critical":
+                    out.append(("host.disk.critical", inode_info))
+                elif c_inode_state == "warn":
+                    out.append(("host.disk.warn", inode_info))
+                elif c_inode_state == "normal":
+                    out.append(("host.disk.recovered", inode_info))
 
     return out

@@ -36,6 +36,7 @@ Requires: python3, boto3, journald, root (to read shadow / FIM / journal).
 
 from __future__ import annotations  # AL2's python3 is 3.7 — keeps annotations lazy.
 
+import base64
 import hashlib
 import json
 import os
@@ -54,7 +55,7 @@ try:
 except ImportError:  # imported as scripts.ec2_agent during local tests
     from scripts.agent_transport import LocalSpool, Transport, build_transport, priority_for_report, stamp_report
 
-AGENT_VERSION = "1.8"  # Phase 3 critical cadence + transfer metrics
+AGENT_VERSION = "1.9"  # Privacy-safe inventory, collector freshness, schema v2
 IMDS = "http://169.254.169.254"
 
 TRANSPORT_NAME = os.environ.get("BLACKWATCH_TRANSPORT", "sqs").lower()
@@ -353,39 +354,43 @@ def read_auth_events(lookback_seconds: int) -> list[str]:
 # ---------- Snapshot collectors -------------------------------------------
 
 def snapshot_ports():
-    """Listening sockets with the binding process name (ss -tlnp).
-    Falls back to ss -tln if -p fails (rare). Process info comes as e.g.
+    """TCP and UDP listening sockets with the binding process name.
+    Falls back to ss -tuln if process details are unavailable. Process info comes e.g.
     `users:(("sshd",pid=1234,fd=3))` — we pluck out the comm string."""
     try:
-        out = subprocess.run(["ss", "-tlnp"], capture_output=True, text=True, timeout=10)
+        out = subprocess.run(["ss", "-tulnp"], capture_output=True, text=True, timeout=10)
     except Exception:
         return None
     if out.returncode != 0:
         try:
-            out = subprocess.run(["ss", "-tln"], capture_output=True, text=True, timeout=10)
+            out = subprocess.run(["ss", "-tuln"], capture_output=True, text=True, timeout=10)
         except Exception:
             return None
         if out.returncode != 0:
             return None
     rows = []
     for line in out.stdout.splitlines()[1:]:
-        parts = line.split(None, 5)
-        if len(parts) < 4:
+        parts = line.split(None, 6)
+        if len(parts) < 5:
             continue
-        local = parts[3]
+        proto = parts[0].lower()
+        if proto not in ("tcp", "tcp6", "udp", "udp6"):
+            continue
+        proto = "udp" if proto.startswith("udp") else "tcp"
+        local = parts[4]
         port = local.rsplit(":", 1)[-1]
         addr = local.rsplit(":", 1)[0].strip("[]")
         process = None
-        if len(parts) >= 6 and "users:" in parts[5]:
+        if len(parts) >= 7 and "users:" in parts[6]:
             # users:(("sshd",pid=1234,fd=3),...)
             try:
                 # Match the first comm in quotes — robust to multi-process bindings.
-                quoted = parts[5].split('"')
+                quoted = parts[6].split('"')
                 if len(quoted) >= 2:
                     process = quoted[1]
             except Exception:
                 pass
-        rows.append({"proto": "tcp", "address": addr, "port": port, "process": process})
+        rows.append({"proto": proto, "address": addr, "port": port, "process": process})
     return rows
 
 
@@ -424,14 +429,26 @@ def snapshot_authorized_keys() -> list:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            fp = hashlib.sha256(line.encode()).hexdigest()[:16]
+            parts = line.split(None, 2)
+            key_type = parts[0] if parts and parts[0].startswith(("ssh-", "ecdsa-", "sk-")) else None
+            key_blob = parts[1] if len(parts) > 1 else ""
+            try:
+                fp = ssh_key_fingerprint(key_blob)
+            except (ValueError, TypeError):
+                # Ignore malformed entries rather than treating a comment or
+                # incomplete line as a usable credential.
+                continue
             # Extract key type (ssh-rsa / ssh-ed25519 / ecdsa-*) without the
             # key body or comment — type is useful for posture (weak algos)
             # but the body would leak partial pubkey material.
-            parts = line.split(None, 2)
-            key_type = parts[0] if parts and parts[0].startswith(("ssh-", "ecdsa-", "sk-")) else None
             keys.append({"user": user_dir.name, "fingerprint": fp, "type": key_type})
     return keys
+
+
+def ssh_key_fingerprint(key_blob: str) -> str:
+    """Return the standard OpenSSH SHA256 fingerprint of a base64 key blob."""
+    decoded = base64.b64decode(key_blob, validate=True)
+    return "SHA256:" + base64.b64encode(hashlib.sha256(decoded).digest()).decode().rstrip("=")
 
 
 def snapshot_sudoers() -> dict:
@@ -508,7 +525,18 @@ def snapshot_systemd_units():
         parts = line.split()
         if parts:
             units.append(parts[0])
-    return sorted(set(units))
+    try:
+        active_out = subprocess.run(
+            ["systemctl", "list-units", "--state=active", "--no-legend",
+             "--no-pager", "--type=service,timer"],
+            capture_output=True, text=True, timeout=15,
+        )
+    except Exception:
+        return None
+    if active_out.returncode != 0:
+        return None
+    active = sorted({line.split()[0] for line in active_out.stdout.splitlines() if line.split()})
+    return {"enabled": sorted(set(units)), "active": active}
 
 
 def snapshot_suid():
@@ -519,10 +547,13 @@ def snapshot_suid():
              "-perm", "-4000", "-type", "f", "-print"],
             capture_output=True, text=True, timeout=30,
         )
-    except Exception:
-        return None
-    # find prints to stderr for permission-denied subdirs but still returns
-    # useful output; accept partial results (don't gate on returncode).
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("SUID scan timed out; inventory is incomplete") from exc
+    except Exception as exc:
+        raise RuntimeError("SUID scan failed: " + str(exc)[:120]) from exc
+    if out.returncode != 0 or out.stderr.strip():
+        detail = (out.stderr.strip() or f"find exited {out.returncode}")[:120]
+        raise RuntimeError("SUID scan incomplete: " + detail)
     return sorted(line for line in out.stdout.splitlines() if line.strip())
 
 
@@ -558,10 +589,10 @@ def snapshot_packages():
 
 
 def snapshot_processes():
-    """Visibility-only — kernel threads excluded, args truncated."""
+    """Compact process inventory; command-line arguments are never collected."""
     try:
         out = subprocess.run(
-            ["ps", "-eo", "user,pid,comm,args"],
+            ["ps", "-eo", "user,pid,comm"],
             capture_output=True, text=True, timeout=15,
         )
     except Exception:
@@ -573,23 +604,13 @@ def snapshot_processes():
         lines = lines[1:]
     procs = []
     for line in lines:
-        parts = line.split(None, 3)
+        parts = line.split(None, 2)
         if len(parts) < 3:
             continue
         user, pid, comm = parts[0], parts[1], parts[2]
-        args = parts[3] if len(parts) > 3 else comm
-        a = args.strip()
-        if (comm.startswith("[") and comm.endswith("]")) or \
-           (a.startswith("[") and a.endswith("]")):
+        if comm.startswith("[") and comm.endswith("]"):
             continue   # kernel thread
-        # Scrub before truncating — scrubbing replaces known-bad fragments
-        # with `***` which doesn't change length much, but doing it after
-        # truncation could leave a half-hidden secret (e.g. "-ppassword12"
-        # truncated to "-pp" then scrub no-ops).
-        procs.append({
-            "user": user, "pid": pid, "comm": comm,
-            "args": (scrub(args) or "")[:240],
-        })
+        procs.append({"user": user, "pid": pid, "comm": comm})
     return procs or None
 
 
@@ -598,10 +619,22 @@ def snapshot_disk():
     Skips tmpfs/devtmpfs/overlay (containers' fake mounts)."""
     try:
         out = subprocess.run(["df", "-P", "-T"], capture_output=True, text=True, timeout=10)
+        inode_out = subprocess.run(["df", "-P", "-i"], capture_output=True, text=True, timeout=10)
     except Exception:
         return None
-    if out.returncode != 0 or not out.stdout.strip():
+    if out.returncode != 0 or not out.stdout.strip() or inode_out.returncode != 0:
         return None
+    inode_by_mount = {}
+    for line in inode_out.stdout.splitlines()[1:]:
+        fields = line.split()
+        if len(fields) >= 6:
+            try:
+                inode_by_mount[fields[5]] = {
+                    "inodes_total": int(fields[1]), "inodes_used": int(fields[2]),
+                    "inodes_free": int(fields[3]), "inodes_used_pct": int(fields[4].rstrip("%")),
+                }
+            except ValueError:
+                continue
     rows = []
     for line in out.stdout.splitlines()[1:]:
         parts = line.split()
@@ -616,7 +649,8 @@ def snapshot_disk():
             mount = parts[6]
             used_pct = int(round(used * 100 / total)) if total > 0 else 0
             rows.append({"mount": mount, "fs_type": fs_type, "total": total,
-                         "used": used, "used_pct": used_pct})
+                         "used": used, "used_pct": used_pct,
+                         **inode_by_mount.get(mount, {})})
         except (ValueError, ZeroDivisionError):
             continue
     return rows or None
@@ -881,15 +915,15 @@ def detect_rpm_db_corruption() -> dict | None:
 
 # ---------- Staggered collector runner -------------------------------------
 #
-# Each collector has its own cadence. Heavy ones (SUID find, package query,
-# kernel modules) run every 10 min by default. FIM-relevant collectors stay
+# Each collector has its own cadence. Heavy scans run every 10 min by default,
+# while package inventory runs hourly. FIM-relevant collectors stay
 # tight (every 2 min). Fast ones every minute. All overridable via env.
 # `diffable=False` excludes processes from the change-hash so a busy process
 # table doesn't force the snapshot to ship on every tick.
 
 class Collector:
     __slots__ = ("name", "fn", "interval", "diffable",
-                 "next_run", "value", "error", "last_success_at")
+                 "next_run", "value", "error", "last_success_at", "last_attempt_at")
 
     def __init__(self, name: str, fn, interval: int, diffable: bool = True):
         self.name = name
@@ -900,10 +934,12 @@ class Collector:
         self.value = None
         self.error: str | None = None
         self.last_success_at = 0.0  # epoch seconds of last successful collection
+        self.last_attempt_at = 0.0
 
     def maybe_run(self, now: float) -> None:
         if now < self.next_run:
             return
+        self.last_attempt_at = now
         try:
             new_value = self.fn()
             if new_value is not None:
@@ -921,6 +957,27 @@ class Collector:
         except Exception as exc:
             self.error = str(exc)[:160]
         self.next_run = now + self.interval
+
+    def status(self, now: float) -> dict:
+        age = max(0, int(now - self.last_success_at)) if self.last_success_at else None
+        if self.error:
+            state = "error"
+        elif not self.last_success_at:
+            state = "pending"
+        elif self.is_stalled(now):
+            state = "stale"
+        else:
+            state = "ok"
+        return {
+            "state": state,
+            "interval_seconds": self.interval,
+            "last_attempt_at": datetime.fromtimestamp(self.last_attempt_at, timezone.utc).isoformat()
+                if self.last_attempt_at else None,
+            "last_success_at": datetime.fromtimestamp(self.last_success_at, timezone.utc).isoformat()
+                if self.last_success_at else None,
+            "age_seconds": age,
+            "error": self.error,
+        }
 
     def is_stalled(self, now: float) -> bool:
         """A collector is 'stalled' when it has succeeded before but not within
@@ -952,9 +1009,9 @@ COLLECTORS: list[Collector] = [
     Collector("sudoers",         snapshot_sudoers,         _env_int("COLLECT_SUDOERS_SEC", 120)),
     Collector("critical_files",  snapshot_critical_files,  _env_int("COLLECT_CRITICAL_FILES_SEC", 120)),
     Collector("cron",            snapshot_cron,            _env_int("COLLECT_CRON_SEC", 120)),
-    # Heavy — every 10 min. SUID find is I/O-heavy; package queries can hit
-    # rpm DB lock contention; kernel modules are stable.
-    Collector("packages",        snapshot_packages,        _env_int("COLLECT_PACKAGES_SEC", 600)),
+    # Package inventory is supporting context and can contend with RPM operations,
+    # so it runs hourly. Other heavier scans retain a ten-minute cadence.
+    Collector("packages",        snapshot_packages,        _env_int("COLLECT_PACKAGES_SEC", 3600)),
     Collector("systemd_units",   snapshot_systemd_units,   _env_int("COLLECT_SYSTEMD_UNITS_SEC", 600)),
     Collector("suid",            snapshot_suid,            _env_int("COLLECT_SUID_SEC", 600)),
     Collector("kernel_modules",  snapshot_kernel_modules,  _env_int("COLLECT_KERNEL_MODULES_SEC", 600)),
@@ -986,6 +1043,10 @@ def collector_errors() -> dict:
     return {c.name: c.error for c in COLLECTORS if c.error}
 
 
+def collector_status(now: float) -> dict:
+    return {c.name: c.status(now) for c in COLLECTORS}
+
+
 def stalled_collectors(now: float) -> list[str]:
     return [c.name for c in COLLECTORS if c.is_stalled(now)]
 
@@ -994,12 +1055,14 @@ def stalled_collectors(now: float) -> list[str]:
 
 _last_snapshot_hash: str | None = None
 _last_full_send_at: float = 0.0
+_last_process_snapshot_sent_at: float = 0.0
 _FULL_RESYNC_SECONDS = 3600
+_PROCESS_SNAPSHOT_SEND_SECONDS = _env_int("COLLECT_PROCESSES_REPORT_SEC", 300)
 
 
 def build_report(*, critical_only: bool = False) -> dict | None:
     """Build one report, or only emit a report when critical data is ready."""
-    global _last_snapshot_hash, _last_full_send_at
+    global _last_snapshot_hash, _last_full_send_at, _last_process_snapshot_sent_at
 
     tick_start = time.perf_counter()
     collected_at = datetime.now(timezone.utc).isoformat()
@@ -1016,6 +1079,7 @@ def build_report(*, critical_only: bool = False) -> dict | None:
         and (
         snap_hash != _last_snapshot_hash
         or (now - _last_full_send_at) > _FULL_RESYNC_SECONDS
+        or (now - _last_process_snapshot_sent_at) > _PROCESS_SNAPSHOT_SEND_SECONDS
         )
     )
 
@@ -1033,6 +1097,7 @@ def build_report(*, critical_only: bool = False) -> dict | None:
 
     report: dict = {
         "kind": "ec2_report",
+        "report_schema_version": 2,
         "host": identity,
         "agent_id": identity.get("instance_id"),
         "boot_id": boot_id(),
@@ -1049,11 +1114,13 @@ def build_report(*, critical_only: bool = False) -> dict | None:
         "active_sessions": snapshot_active_sessions(),
         "rpm_db_corrupted": detect_rpm_db_corruption(),
         "stalled_collectors": stalled_collectors(now),
+        "collector_status": collector_status(now),
         "oom_events": oom_events,
     }
     if include_snaps and snapshots:
         report["snapshots"] = snapshots
         _last_snapshot_hash = snap_hash
+        _last_process_snapshot_sent_at = now
         if (now - _last_full_send_at) > _FULL_RESYNC_SECONDS:
             _last_full_send_at = now
 

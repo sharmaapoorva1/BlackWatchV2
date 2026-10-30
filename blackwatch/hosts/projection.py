@@ -437,29 +437,43 @@ def _compute_state_transitions(
 
 # ---------- Snapshot handler (existing functionality preserved) -------------
 
+def _preserve_legacy_process_arguments(
+    previous: dict[str, Any] | None, current: dict[str, Any], retained_at: datetime,
+) -> dict[str, Any]:
+    """Keep pre-v2 command-line evidence when a new privacy-safe snapshot replaces it."""
+    if not previous:
+        return current
+    archive = list(previous.get("legacy_process_args_retained") or [])
+    old_processes = [
+        process for process in previous.get("processes") or []
+        if isinstance(process, dict) and isinstance(process.get("args"), str)
+    ]
+    new_processes = current.get("processes") or []
+    if old_processes and not any(
+        isinstance(process, dict) and isinstance(process.get("args"), str)
+        for process in new_processes
+    ):
+        archive.append({
+            "retained_at": retained_at.isoformat(),
+            "reason": "preserve_pre_schema_v2_evidence",
+            "processes": old_processes,
+        })
+    if archive:
+        current = {**current, "legacy_process_args_retained": archive}
+    return current
+
 def _project_snapshot(event: Event, instance_id: str) -> list[Event]:
     current = event.extra.get("snapshots") or {}
     previous = storage.get_host_snapshots(instance_id)
 
-    # First-seen process detection. The agent's `processes` snapshot lists
-    # current procs; we carry a monotonically-growing `seen_process_comms`
-    # set in stored snapshots (the agent never sends this — projection-owned).
-    first_seen_extras: list[dict[str, Any]] = []
-    prev_seen = set((previous or {}).get("seen_process_comms") or [])
-    cur_comms = {p.get("comm") for p in current.get("processes") or [] if p.get("comm")}
-    # Suppress baseline floods. TWO baseline cases must stay silent:
-    #   (a) first-ever snapshot for a host (previous is None),
-    #   (b) existing host where the seen-set machinery just landed
-    #       (previous exists but `seen_process_comms` was missing — that's
-    #       what a v0.2 → v1.0 agent/code upgrade looks like).
-    prev_had_seen_set = (
-        previous is not None and "seen_process_comms" in (previous or {})
+    # Keep any legacy projection-owned field already stored for backward
+    # compatibility, but stop growing it and stop treating ordinary process
+    # inventory changes as security events.
+    if previous is not None and "seen_process_comms" in previous:
+        current = {**current, "seen_process_comms": previous["seen_process_comms"]}
+    current = _preserve_legacy_process_arguments(
+        previous, current, event.event_time or datetime.now(timezone.utc),
     )
-    if prev_had_seen_set and cur_comms:
-        for comm in sorted(cur_comms - prev_seen):
-            first_seen_extras.append({"comm": comm})
-    if cur_comms or prev_seen:
-        current = {**current, "seen_process_comms": sorted(prev_seen | cur_comms)}
 
     storage.set_host_snapshots(
         instance_id, current, event.event_time or datetime.now(timezone.utc),
@@ -470,8 +484,6 @@ def _project_snapshot(event: Event, instance_id: str) -> list[Event]:
         _make_derived(event, instance_id, action, extra)
         for action, extra in diff_snapshots(previous, current)
     ]
-    for fe in first_seen_extras:
-        derived.append(_make_derived(event, instance_id, "host.process.first_seen", fe))
     return derived
 
 
@@ -492,7 +504,7 @@ def _make_derived(parent: Event, instance_id: str, action: str, extra: dict[str,
     resolved_name = display_name or parent.target.name or instance_id
     return Event(
         source=Source(module=_MODULE, vendor="aws", account=parent.source.account,
-                      region=parent.source.region, transport=Transport.queue),
+                      region=parent.source.region, transport=parent.source.transport),
         event_time=datetime.now(timezone.utc),
         category=Category.host,
         action=action,

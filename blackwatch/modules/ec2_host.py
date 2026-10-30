@@ -115,8 +115,14 @@ class Ec2HostAdapter(Adapter):
         region = (host.get("region") if isinstance(host.get("region"), str) else None) or ctx.region
 
         def src() -> Source:
+            transport = {
+                "https": Transport.https,
+                "api": Transport.api,
+                "sqs": Transport.queue,
+                "queue": Transport.queue,
+            }.get(ctx.transport, Transport.queue)
             return Source(module=self.module, vendor="aws", account=account, region=region,
-                          transport=Transport.queue)
+                          transport=transport)
 
         def target() -> Target:
             return Target(id=instance_id, type="ec2.instance", name=hostname)
@@ -143,7 +149,7 @@ class Ec2HostAdapter(Adapter):
         # liveness so a delayed queue message is not mistaken for a dead host.
         for key in (
             "agent_id", "boot_id", "sequence", "report_id", "collected_at", "sent_at",
-            "priority_counts",
+            "priority_counts", "report_schema_version",
         ):
             if raw.get(key) is not None:
                 hb_extra[key] = raw[key]
@@ -153,6 +159,8 @@ class Ec2HostAdapter(Adapter):
             hb_extra["tick_duration_ms"] = raw["tick_duration_ms"]
         if raw.get("collector_errors"):
             hb_extra["collector_errors"] = raw["collector_errors"]
+        if isinstance(raw.get("collector_status"), dict):
+            hb_extra["collector_status"] = raw["collector_status"]
         # v1.1 fields — always passed through. Projection compares each tick to
         # its previous state (or rolling baseline for CPU) to decide transitions.
         for k in ("memory", "cpu", "active_sessions", "rpm_db_corrupted"):
@@ -332,7 +340,7 @@ class Ec2HostAdapter(Adapter):
                     category=Category.host,
                     action=_ACTION_BY_CHANGE_TYPE[change_type],
                     outcome=Outcome.success,
-                    actor=actor_obj,
+                    actor=actor_obj or Actor(),
                     target=target(),
                     extra={
                         "instance_id": instance_id,

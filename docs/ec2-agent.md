@@ -7,7 +7,7 @@ against, and how to verify it's working.
 The quick-start install is at [`deploy/ec2/README.md`](../deploy/ec2/README.md);
 read this when you want the *full* picture or are debugging at 3am.
 
-Current agent version: **v1.8** (direct HTTPS transport, priority-aware recovery, critical cadence, transfer metrics, delivery metadata, hardened, full File Integrity Monitoring).
+Current agent version: **v1.9** (privacy-safe process inventory, per-collector freshness, report schema v2, expanded network/disk/service coverage, direct HTTPS, and full File Integrity Monitoring).
 
 Recent version history:
 - **v1.2** — scrubbing, systemd sandbox, watchdog, size caps, send backoff
@@ -17,6 +17,7 @@ Recent version history:
 - **v1.6** — stable report identity, sequence tracking, and server-side delivery timing
 - **v1.8** — critical-event cadence, immutable send timestamps, rollout labels, and transfer latency metrics
 - **v1.7** — selectable BlackWatch HTTPS ingress with SQS rollback and priority-aware local recovery
+- **v1.9** — process command-line removal, collector freshness, UDP/inode/active-service coverage, schema v2, and corrected HTTPS transport labels
 
 For a deep dive on FIM specifically (architecture, every detection path,
 auditd rules, the UI surfaces, troubleshooting), see [`docs/fim.md`](fim.md).
@@ -187,14 +188,15 @@ roll back without deleting local or server data.
 |---|---|---|
 | `COLLECT_PORTS_SEC` | 60 | listening sockets |
 | `COLLECT_PROCESSES_SEC` | 60 | process table (visibility-only, non-diffable) |
+| `COLLECT_PROCESSES_REPORT_SEC` | 300 | maximum process inventory send interval |
 | `COLLECT_DISK_SEC` | 60 | per-mount fill |
 | `COLLECT_USERS_SEC` | 120 | `getent passwd` |
 | `COLLECT_AUTHORIZED_KEYS_SEC` | 120 | `~/.ssh/authorized_keys` per user |
 | `COLLECT_SUDOERS_SEC` | 120 | `/etc/sudoers` + `/etc/sudoers.d/*` hashes |
 | `COLLECT_CRITICAL_FILES_SEC` | 120 | FIM on `/etc/passwd`, `/etc/shadow`, `sshd_config`, etc. |
 | `COLLECT_CRON_SEC` | 120 | `/etc/cron.*`, `/var/spool/cron` |
-| `COLLECT_PACKAGES_SEC` | 600 | `rpm -qa` or `dpkg-query` |
-| `COLLECT_SYSTEMD_UNITS_SEC` | 600 | enabled service+timer units |
+| `COLLECT_PACKAGES_SEC` | 3600 | `rpm -qa` or `dpkg-query` |
+| `COLLECT_SYSTEMD_UNITS_SEC` | 600 | enabled and active service+timer units |
 | `COLLECT_SUID_SEC` | 600 | `find / -perm -4000` (scoped) |
 | `COLLECT_KERNEL_MODULES_SEC` | 600 | `lsmod` |
 
@@ -206,21 +208,36 @@ roll back without deleting local or server data.
 
 | Collector | Cadence | Diffable | What it captures |
 |---|---|---|---|
-| `ports` | 60s | ✓ | `ss -tlnp` — proto, addr, port, binding process |
-| `processes` | 60s | ✗ | `ps -eo user,pid,comm,args` — args truncated to 240 chars, **scrubbed** |
-| `disk` | 60s | ✓ | `df -PT` — per-mount fill, skips tmpfs/devtmpfs/overlay |
+| `ports` | 60s | ✓ | `ss -tulnp` — TCP and UDP listener, address, port, binding process |
+| `processes` | 60s collect / 300s send | ✗ | `ps -eo user,pid,comm` — user, PID, executable name; **no command-line arguments** |
+| `disk` | 60s | ✓ | `df -PT` + `df -Pi` — per-mount byte and inode fill, skips pseudo filesystems |
 | `users` | 120s | ✓ | `getent passwd` — name, uid, shell |
-| `authorized_keys` | 120s | ✓ | Per-user keys → `{user, fingerprint, type}`. **No pubkey body, no comment.** |
+| `authorized_keys` | 120s | ✓ | Per-user keys → `{user, OpenSSH SHA256 fingerprint, type}`. Fingerprint hashes only the key blob; no key body or comment is sent. |
 | `sudoers` | 120s | ✓ | SHA256 of `/etc/sudoers` + each `/etc/sudoers.d/*` |
 | `critical_files` | 120s | ✓ | SHA256 of `/etc/passwd`, `/etc/shadow`, `sshd_config`, `hosts`, `resolv.conf`, `pam.d/{sshd,sudo,openvpn}`, `crontab` |
 | `cron` | 120s | ✓ | SHA256 of `/etc/crontab`, `/etc/cron.{d,hourly,daily,weekly,monthly}/*`, `/var/spool/cron/*` |
-| `packages` | 600s | ✓ | Sorted set of installed package names (RPM or DPKG, auto-detected) |
-| `systemd_units` | 600s | ✓ | Sorted set of enabled `.service` + `.timer` units |
-| `suid` | 600s | ✓ | `find /usr /opt /bin /sbin -xdev -perm -4000 -type f` |
+| `packages` | 3600s | ✓ | Sorted set of installed package names (RPM or DPKG, auto-detected) |
+| `systemd_units` | 600s | ✓ | Enabled and currently active `.service` + `.timer` units, separately |
+| `suid` | 600s | ✓ | `find /usr /opt /bin /sbin -xdev -perm -4000 -type f`; failures or partial output are surfaced, not treated as complete inventory |
 | `kernel_modules` | 600s | ✓ | Sorted set of loaded modules from `lsmod` |
 
 **Snapshots only ship when something changed** (hash of all diffable
 collectors). Forced full resync every 1 hour even if unchanged.
+
+Every report includes `report_schema_version: 2` and a `collector_status`
+object. Each collector records state (`ok`, `error`, or `pending`), cadence,
+last attempt, last success, age since success, and current error. A cached
+snapshot can remain visible after a transient failure, with its age and error
+shown separately. Ingress continues accepting unversioned/v1 queued reports.
+
+The server keeps both cumulative historical sequence gaps and unresolved
+sequence gaps. Urgent reports can overtake bulk reports during spool replay;
+a late report resolves its matching gap. Tracking is bounded and overflow is
+shown as uncertainty rather than exact loss.
+
+The agent no longer collects process command-line arguments, and the server no
+longer emits `host.process.first_seen` from ordinary process inventory. Existing
+historical event and snapshot records are retained.
 
 ### Always-on heartbeat fields (every tick)
 

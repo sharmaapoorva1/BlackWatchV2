@@ -5,6 +5,7 @@ from __future__ import annotations
 import gzip
 import json
 import secrets
+from datetime import datetime
 from typing import Any
 
 
@@ -75,6 +76,36 @@ def validate_report(payload: object, authenticated_agent_id: str, max_bytes: int
             raise IngressValidationError("report is missing " + key)
     if payload["agent_id"] != authenticated_agent_id:
         raise IngressValidationError("report agent identity does not match credential")
+    schema_version = payload.get("report_schema_version", 1)
+    if isinstance(schema_version, bool) or not isinstance(schema_version, int) or schema_version not in (1, 2):
+        raise IngressValidationError("unsupported report schema version")
+    try:
+        collected_at = datetime.fromisoformat(payload["collected_at"].replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise IngressValidationError("report collected_at must be an ISO-8601 timestamp") from exc
+    if collected_at.tzinfo is None:
+        raise IngressValidationError("report collected_at must include a timezone")
+    if payload.get("sent_at") is not None:
+        try:
+            sent_at = datetime.fromisoformat(payload["sent_at"].replace("Z", "+00:00"))
+        except (AttributeError, ValueError) as exc:
+            raise IngressValidationError("report sent_at must be an ISO-8601 timestamp") from exc
+        if sent_at.tzinfo is None:
+            raise IngressValidationError("report sent_at must include a timezone")
+    if schema_version >= 2:
+        host = payload.get("host")
+        if not isinstance(host, dict):
+            raise IngressValidationError("version 2 report host must be an object")
+        if host.get("instance_id") != authenticated_agent_id:
+            raise IngressValidationError("version 2 report host identity does not match credential")
+        if not isinstance(payload.get("collector_status"), dict):
+            raise IngressValidationError("version 2 collector_status must be an object")
+    host = payload.get("host")
+    if isinstance(host, dict) and host.get("instance_id") not in (None, authenticated_agent_id):
+        raise IngressValidationError("report host identity does not match credential")
+    if schema_version >= 2:
+        if "snapshots" in payload and not isinstance(payload["snapshots"], dict):
+            raise IngressValidationError("version 2 snapshots must be an object")
     sequence = payload.get("sequence")
     if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence < 0:
         raise IngressValidationError("report sequence must be a non-negative integer")

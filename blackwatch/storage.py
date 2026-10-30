@@ -12,6 +12,7 @@ from psycopg.types.json import Jsonb
 
 from .db import get_pool
 from .event import Event
+from .agents.delivery import update_missing_sequence_ranges
 
 _INSERT = """
 INSERT INTO events (
@@ -1331,7 +1332,8 @@ def set_host_active(instance_id: str, active: bool) -> None:
 _DELIVERY_COLS = (
     "agent_id, boot_id, last_sequence, last_report_id, last_observed_at, "
     "last_collected_at, last_sent_at, last_accepted_at, last_processed_at, queue_delay_seconds, "
-    "processing_delay_seconds, sequence_gaps, last_error, updated_at, transport, rollout"
+    "processing_delay_seconds, sequence_gaps, last_error, updated_at, transport, rollout, "
+    "pending_sequence_gaps, sequence_tracking_overflow, missing_sequence_ranges"
 )
 
 
@@ -1348,7 +1350,10 @@ def _delivery_row(row: tuple[Any, ...]) -> dict[str, Any]:
         "last_processed_at": row[8],
         "queue_delay_seconds": float(row[9]) if row[9] is not None else None,
         "processing_delay_seconds": float(row[10]) if row[10] is not None else None,
-        "sequence_gaps": int(row[11] or 0),
+        "sequence_gaps": int(row[16] or 0),
+        "sequence_gaps_total": int(row[11] or 0),
+        "sequence_tracking_overflow": bool(row[17]),
+        "missing_sequence_ranges": row[18] or [],
         "last_error": row[12],
         "updated_at": row[13],
         "transport": row[14],
@@ -1365,9 +1370,9 @@ def record_agent_delivery(
 ) -> None:
     """Record server-side acceptance and processing for one agent report.
 
-    The upsert is monotonic within a boot: redelivered or out-of-order SQS
-    messages cannot move the latest sequence backwards. A new boot starts a
-    fresh sequence while preserving the accumulated gap counter.
+    The upsert is monotonic within a boot. Cumulative sequence gaps remain as
+    historical evidence, while a bounded range list tracks gaps still pending
+    after priority-reordered delivery. A new boot resets only pending gaps.
     """
     agent_id = metadata.get("agent_id")
     if not agent_id:
@@ -1387,18 +1392,49 @@ def record_agent_delivery(
     sequence = metadata.get("sequence")
     boot_id = metadata.get("boot_id")
     with get_pool().connection() as conn:
+        # Serialize first insert and updates for one agent within this
+        # transaction; more than one worker may process independent receipts.
+        conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (str(agent_id),))
+        previous = conn.execute(
+            "SELECT boot_id, last_sequence, sequence_gaps, missing_sequence_ranges, "
+            "pending_sequence_gaps, sequence_tracking_overflow "
+            "FROM agent_delivery_status WHERE agent_id = %s FOR UPDATE",
+            (agent_id,),
+        ).fetchone()
+        previous_boot = previous[0] if previous else None
+        previous_sequence = int(previous[1]) if previous and previous[1] is not None else None
+        cumulative_gaps = int(previous[2] or 0) if previous else 0
+        boot_changed = bool(previous and previous_boot != boot_id)
+        ranges = previous[3] or [] if previous and not boot_changed else []
+        pending_gaps = int(previous[4] or 0) if previous and not boot_changed else 0
+        tracking_overflow = bool(previous[5]) if previous and not boot_changed else False
+        if sequence is not None and boot_id and not tracking_overflow:
+            if previous is None or boot_changed or previous_sequence is None:
+                ranges, pending_gaps, tracking_overflow = [], 0, False
+            elif previous_boot == boot_id:
+                ranges, pending_gaps, overflow_now = update_missing_sequence_ranges(
+                    ranges, previous_sequence, int(sequence)
+                )
+                tracking_overflow = tracking_overflow or overflow_now
+        if (
+            previous is not None and not boot_changed and sequence is not None
+            and previous_sequence is not None and sequence > previous_sequence + 1
+        ):
+            cumulative_gaps += sequence - previous_sequence - 1
         conn.execute(
             f"""
             INSERT INTO agent_delivery_status (
                 agent_id, boot_id, last_sequence, last_report_id,
                 last_observed_at, last_collected_at, last_sent_at, last_accepted_at,
-                last_processed_at, queue_delay_seconds,
-                processing_delay_seconds, sequence_gaps, last_error, transport, rollout
+                last_processed_at, queue_delay_seconds, processing_delay_seconds,
+                sequence_gaps, last_error, transport, rollout,
+                missing_sequence_ranges, pending_sequence_gaps, sequence_tracking_overflow
             ) VALUES (
                 %(agent_id)s, %(boot_id)s, %(sequence)s, %(report_id)s,
                 %(collected_at)s, %(collected_at)s, %(sent_at)s, %(accepted_at)s,
-                %(processed_at)s, %(queue_delay)s, %(processing_delay)s,
-                0, %(error)s, %(transport)s, %(rollout)s
+                %(processed_at)s, %(queue_delay)s, %(processing_delay)s, %(sequence_gaps)s,
+                %(error)s, %(transport)s, %(rollout)s, %(missing_ranges)s,
+                %(pending_gaps)s, %(tracking_overflow)s
             )
             ON CONFLICT (agent_id) DO UPDATE SET
                 boot_id = CASE
@@ -1454,14 +1490,10 @@ def record_agent_delivery(
                     WHEN EXCLUDED.processing_delay_seconds IS NOT NULL
                     THEN EXCLUDED.processing_delay_seconds
                     ELSE agent_delivery_status.processing_delay_seconds END,
-                sequence_gaps = agent_delivery_status.sequence_gaps + CASE
-                    WHEN agent_delivery_status.boot_id IS DISTINCT FROM EXCLUDED.boot_id
-                         OR EXCLUDED.last_sequence IS NULL
-                         OR agent_delivery_status.last_sequence IS NULL
-                         OR EXCLUDED.last_sequence <= agent_delivery_status.last_sequence + 1
-                    THEN 0
-                    ELSE EXCLUDED.last_sequence - agent_delivery_status.last_sequence - 1
-                END,
+                sequence_gaps = GREATEST(agent_delivery_status.sequence_gaps, EXCLUDED.sequence_gaps),
+                missing_sequence_ranges = EXCLUDED.missing_sequence_ranges,
+                pending_sequence_gaps = EXCLUDED.pending_sequence_gaps,
+                sequence_tracking_overflow = EXCLUDED.sequence_tracking_overflow,
                 last_error = CASE
                     WHEN EXCLUDED.last_processed_at IS NOT NULL THEN NULL
                     ELSE EXCLUDED.last_error END,
@@ -1480,6 +1512,10 @@ def record_agent_delivery(
                 "processed_at": processed_at,
                 "queue_delay": queue_delay,
                 "processing_delay": processing_delay,
+                "sequence_gaps": cumulative_gaps,
+                "missing_ranges": Jsonb(ranges),
+                "pending_gaps": pending_gaps,
+                "tracking_overflow": tracking_overflow,
                 "error": error,
                 "transport": metadata.get("transport"),
                 "rollout": metadata.get("rollout"),

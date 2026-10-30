@@ -1,4 +1,5 @@
 from pathlib import Path
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -71,3 +72,122 @@ def test_phase3_installer_carries_cadence_and_rollout_settings():
     installer = (ROOT / "deploy" / "ec2" / "install-agent.sh").read_text(encoding="utf-8")
     assert "BLACKWATCH_ROLLOUT" in installer
     assert "CRITICAL_INTERVAL_SEC" in installer
+
+
+def test_process_snapshot_excludes_command_line_arguments(monkeypatch):
+    import subprocess
+    import scripts.ec2_agent as agent
+
+    monkeypatch.setattr(agent.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        args=a[0], returncode=0,
+        stdout="USER PID COMMAND\nroot 1 systemd\n",
+        stderr="",
+    ))
+    assert agent.snapshot_processes() == [{"user": "root", "pid": "1", "comm": "systemd"}]
+
+
+def test_agent_reports_per_collector_state_and_cadence():
+    import scripts.ec2_agent as agent
+
+    collector = agent.Collector("sample", lambda: [1], 30)
+    collector.maybe_run(100.0)
+    status = collector.status(110.0)
+    assert status == {
+        "state": "ok", "interval_seconds": 30,
+        "last_attempt_at": "1970-01-01T00:01:40+00:00",
+        "last_success_at": "1970-01-01T00:01:40+00:00",
+        "age_seconds": 10, "error": None,
+    }
+    assert collector.status(191.0)["state"] == "stale"
+
+
+def test_sequence_gap_tracker_resolves_out_of_order_reports_and_bounds_ranges():
+    from blackwatch.agents.delivery import update_missing_sequence_ranges
+
+    ranges, gaps, overflow = update_missing_sequence_ranges([], 0, 10, max_ranges=8)
+    assert ranges == [[1, 9]] and gaps == 9 and overflow is False
+    ranges, gaps, overflow = update_missing_sequence_ranges(ranges, 10, 5, max_ranges=8)
+    assert ranges == [[1, 4], [6, 9]] and gaps == 8 and overflow is False
+    ranges, gaps, overflow = update_missing_sequence_ranges(ranges, 10, 3, max_ranges=8)
+    assert ranges == [[1, 2], [4, 4], [6, 9]] and gaps == 7 and overflow is False
+    split_ranges = [[n, n] for n in range(1, 12, 2)]
+    bounded, _, overflow = update_missing_sequence_ranges(split_ranges, 11, 12, max_ranges=4)
+    assert len(bounded) == 4 and overflow is True
+
+
+def test_report_schema_v2_is_validated_but_legacy_v1_remains_accepted():
+    from blackwatch.agents.ingress import validate_report, IngressValidationError
+    legacy = {
+        "agent_id": "i-123", "report_id": "r-1", "boot_id": "boot-1",
+        "sequence": 1, "collected_at": "2026-10-21T12:00:00+00:00",
+    }
+    assert validate_report(legacy, "i-123", 10_000) == legacy
+    current = {**legacy, "report_schema_version": 2, "host": {"instance_id": "i-123"},
+               "collector_status": {"ports": {"state": "ok"}}}
+    assert validate_report(current, "i-123", 10_000) == current
+    bad_time = {**current, "collected_at": "not-a-time"}
+    with pytest.raises(IngressValidationError):
+        validate_report(bad_time, "i-123", 10_000)
+    wrong_host = {**current, "host": {"instance_id": "i-other"}}
+    with pytest.raises(IngressValidationError):
+        validate_report(wrong_host, "i-123", 10_000)
+
+
+def test_adapter_keeps_https_as_the_event_transport():
+    from datetime import datetime, timezone
+    from blackwatch.modules.base import IngestContext
+    from blackwatch.modules.ec2_host import Ec2HostAdapter
+
+    raw = {"kind": "ec2_report", "host": {"instance_id": "i-abc12345"},
+           "collected_at": "2026-10-21T12:00:00+00:00", "report_schema_version": 2}
+    event = Ec2HostAdapter().parse(raw, IngestContext(
+        module="ec2.host", transport="https",
+        received_at=datetime(2026, 10, 21, 12, 0, 1, tzinfo=timezone.utc),
+    ))[0]
+    assert event.source.transport.value == "https"
+    assert event.extra["report_schema_version"] == 2
+
+
+def test_agent_collects_tcp_and_udp_listeners(monkeypatch):
+    import subprocess
+    import scripts.ec2_agent as agent
+
+    monkeypatch.setattr(agent.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        args=a[0], returncode=0,
+        stdout=("Netid State Recv-Q Send-Q Local Address:Port Peer Address:Port Process\n"
+                'tcp LISTEN 0 128 0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=1,fd=3))\n'
+                'udp UNCONN 0 0 0.0.0.0:53 0.0.0.0:* users:(("dns",pid=2,fd=3))\n'),
+        stderr="",
+    ))
+    assert agent.snapshot_ports() == [
+        {"proto": "tcp", "address": "0.0.0.0", "port": "22", "process": "sshd"},
+        {"proto": "udp", "address": "0.0.0.0", "port": "53", "process": "dns"},
+    ]
+
+
+def test_authorized_key_fingerprint_uses_openssh_sha256_format():
+    import base64
+    import scripts.ec2_agent as agent
+
+    blob = base64.b64encode(b"example-public-key-blob").decode()
+    assert agent.ssh_key_fingerprint(blob) == agent.ssh_key_fingerprint(blob)
+    assert agent.ssh_key_fingerprint(blob).startswith("SHA256:")
+
+
+def test_host_diff_tracks_active_service_state_and_inode_pressure():
+    from blackwatch.hosts.diff import diff_snapshots
+
+    previous = {
+        "systemd_units": {"enabled": ["sshd.service"], "active": ["sshd.service"]},
+        "disk": [{"mount": "/", "fs_type": "xfs", "used_pct": 50,
+                  "inodes_used_pct": 50, "inodes_total": 1000, "inodes_used": 500}],
+    }
+    current = {
+        "systemd_units": {"enabled": ["sshd.service"], "active": ["sshd.service", "timer.service"]},
+        "disk": [{"mount": "/", "fs_type": "xfs", "used_pct": 50,
+                  "inodes_used_pct": 96, "inodes_total": 1000, "inodes_used": 960}],
+    }
+    changes = dict(diff_snapshots(previous, current))
+    assert not any(action.startswith("host.service.") for action in changes)
+    assert changes["host.disk.critical"]["mount"] == "/"
+    assert changes["host.disk.critical"]["capacity_kind"] == "inodes"

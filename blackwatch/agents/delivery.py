@@ -11,6 +11,49 @@ from datetime import datetime, timezone
 from typing import Any
 
 
+def update_missing_sequence_ranges(
+    ranges: list[list[int]], high_water: int, sequence: int, *, max_ranges: int = 256,
+) -> tuple[list[list[int]], int, bool]:
+    """Update compact unresolved sequence gaps for priority-reordered reports.
+
+    Ranges are inclusive ``[first, last]`` pairs. Advancing the high-water
+    mark adds a missing interval; receiving an older report removes that one
+    sequence from the pending intervals. The range count is bounded, and an
+    overflow is explicit because exact loss tracking can no longer be claimed.
+    """
+    normalized = sorted(
+        [[int(pair[0]), int(pair[1])] for pair in (ranges or [])
+         if isinstance(pair, (list, tuple)) and len(pair) == 2 and int(pair[0]) <= int(pair[1])]
+    )
+    if sequence > high_water:
+        if sequence > high_water + 1:
+            normalized.append([high_water + 1, sequence - 1])
+            normalized.sort()
+            merged: list[list[int]] = []
+            for first, last in normalized:
+                if merged and first <= merged[-1][1] + 1:
+                    merged[-1][1] = max(merged[-1][1], last)
+                else:
+                    merged.append([first, last])
+            normalized = merged
+    else:
+        remaining: list[list[int]] = []
+        for first, last in normalized:
+            if sequence < first or sequence > last:
+                remaining.append([first, last])
+            else:
+                if first < sequence:
+                    remaining.append([first, sequence - 1])
+                if sequence < last:
+                    remaining.append([sequence + 1, last])
+        normalized = remaining
+    overflow = len(normalized) > max_ranges
+    if overflow:
+        normalized = normalized[:max_ranges]
+    pending = sum(last - first + 1 for first, last in normalized)
+    return normalized, pending, overflow
+
+
 def parse_report_time(value: Any) -> datetime | None:
     if not isinstance(value, str) or not value:
         return None
@@ -62,6 +105,7 @@ def delivery_health(
     processing_delay_seconds: float | None,
     collector_degraded: bool,
     sequence_gaps: int = 0,
+    sequence_tracking_overflow: bool = False,
     silent_after_seconds: int = 180,
     delay_after_seconds: int = 60,
 ) -> dict[str, Any]:
@@ -75,7 +119,9 @@ def delivery_health(
     if last_accepted_at is not None:
         age_seconds = max(0, int((now - last_accepted_at).total_seconds()))
 
-    if sequence_gaps > 0:
+    if sequence_tracking_overflow:
+        state, reason = "data_loss_risk", "sequence gap tracking exceeded its safe bound"
+    elif sequence_gaps > 0:
         state, reason = "data_loss_risk", f"{sequence_gaps} report sequence gap(s) detected"
     elif age_seconds is None or age_seconds > silent_after_seconds:
         state, reason = "silent", "no report has been accepted recently"
@@ -95,4 +141,5 @@ def delivery_health(
         "queue_delay_seconds": queue_delay_seconds,
         "processing_delay_seconds": processing_delay_seconds,
         "sequence_gaps": sequence_gaps,
+        "sequence_tracking_overflow": sequence_tracking_overflow,
     }

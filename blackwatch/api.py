@@ -941,6 +941,7 @@ def _delivery_view(
             host_extra.get("collector_errors") or host_extra.get("stalled_collectors")
         ),
         sequence_gaps=int((row or {}).get("sequence_gaps") or 0),
+        sequence_tracking_overflow=bool((row or {}).get("sequence_tracking_overflow")),
         silent_after_seconds=_HOST_STALE_AFTER,
     )
     return {
@@ -957,6 +958,8 @@ def _delivery_view(
         "last_error": (row or {}).get("last_error"),
         "transport": (row or {}).get("transport"),
         "rollout": (row or {}).get("rollout"),
+        "sequence_gaps_total": int((row or {}).get("sequence_gaps_total") or 0),
+        "missing_sequence_ranges": (row or {}).get("missing_sequence_ranges") or [],
     }
 
 

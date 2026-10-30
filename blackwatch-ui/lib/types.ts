@@ -750,6 +750,9 @@ export interface AgentDeliveryStatus {
   queue_delay_seconds: number | null;
   processing_delay_seconds: number | null;
   sequence_gaps: number;
+  sequence_gaps_total?: number;
+  sequence_tracking_overflow?: boolean;
+  missing_sequence_ranges?: number[][];
   agent_id: string | null;
   boot_id: string | null;
   last_sequence: number | null;
@@ -1069,6 +1072,14 @@ export interface HostExtra {
   tick_duration_ms?: number | null;
   tags?: Record<string, string> | null;
   collector_errors?: Record<string, string> | null;
+  collector_status?: Record<string, {
+    state: "ok" | "error" | "pending" | string;
+    interval_seconds: number;
+    last_attempt_at: string | null;
+    last_success_at: string | null;
+    age_seconds: number | null;
+    error: string | null;
+  }> | null;
   stalled_collectors?: string[] | null;
   active_sessions?: HostSession[] | null;
   rpm_db_corrupted?: { lock_count: number } | null;
@@ -1103,7 +1114,7 @@ export interface HostSnapshots {
   sudoers?: Record<string, string>;
   critical_files?: Record<string, string>;
   cron?: Record<string, string>;
-  systemd_units?: string[];
+  systemd_units?: string[] | { enabled?: string[]; active?: string[] };
   kernel_modules?: string[];
   suid?: string[];
   packages?: string[];
@@ -1121,7 +1132,6 @@ export interface HostProcess {
   user: string;
   pid: number;
   comm: string;
-  args: string;
 }
 
 export interface HostUser {
@@ -1142,6 +1152,9 @@ export interface HostDisk {
   used_pct: number;
   used: number;
   total: number;
+  inodes_used_pct?: number;
+  inodes_used?: number;
+  inodes_total?: number;
 }
 
 // --- Services --------------------------------------------------------------
