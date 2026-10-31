@@ -439,7 +439,7 @@ function HostActivitySection({
             <tbody>
               {activity.map((item) => (
                 <tr key={item.key} className="border-b border-line-soft last:border-0 hover:bg-surface-2">
-                  <td className="whitespace-nowrap px-3 py-2.5"><TimestampCell value={item.at || null} /></td>
+                  <td className="whitespace-nowrap px-3 py-2.5">{item.at ? <TimestampCell value={item.at} /> : <span className="text-fg-disabled">—</span>}</td>
                   <td className="px-3 py-2.5 text-xs text-fg-muted">{item.kind}</td>
                   <td className="px-3 py-2.5">
                     {item.severity ? <SeverityBadge severity={item.severity} /> : <span className="text-xs text-fg-subtle">—</span>}
