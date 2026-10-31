@@ -174,16 +174,91 @@ def test_authorized_key_fingerprint_uses_openssh_sha256_format():
     assert agent.ssh_key_fingerprint(blob).startswith("SHA256:")
 
 
+def test_user_snapshot_classifies_accounts_and_includes_groups(monkeypatch):
+    import subprocess
+    import scripts.ec2_agent as agent
+    def run(args, **kwargs):
+        if args[:2] == ["getent", "passwd"]:
+            return subprocess.CompletedProcess(args, 0, "alice:x:1001:1001::/home/alice:/bin/bash\nsvc:x:80:80::/nonexistent:/usr/sbin/nologin\n", "")
+        if args[:2] == ["getent", "group"]:
+            return subprocess.CompletedProcess(args, 0, "sudo:x:27:alice\nwheel:x:10:alice\n", "")
+        raise AssertionError(args)
+    monkeypatch.setattr(agent.subprocess, "run", run)
+    users = agent.snapshot_users()
+    alice = next(u for u in users if u["name"] == "alice")
+    assert alice["account_type"] == "human_or_local"
+    assert alice["groups"] == ["sudo", "wheel"]
+    assert alice["sudo_wheel_member"] is True
+    assert alice["account_status"] == "unknown"
+
+
+def test_disk_snapshot_has_distinct_sample_times(monkeypatch):
+    import subprocess
+    import scripts.ec2_agent as agent
+    calls = iter([
+        subprocess.CompletedProcess([], 0, "Filesystem Type 1024-blocks Used Available Capacity Mounted on\n/dev/x ext4 1000 500 500 50% /\n", ""),
+        subprocess.CompletedProcess([], 0, "Filesystem Inodes IUsed IFree IUse% Mounted on\n/dev/x 100 50 50 50% /\n", ""),
+    ])
+    monkeypatch.setattr(agent.subprocess, "run", lambda *a, **k: next(calls))
+    stamps = iter(["bytes-time", "inode-time"])
+    monkeypatch.setattr(agent, "_utc_now", lambda: next(stamps))
+    row = agent.snapshot_disk()[0]
+    assert row["bytes_sampled_at"] == "bytes-time"
+    assert row["inodes_sampled_at"] == "inode-time"
+
+
+def test_sudo_journal_records_drop_arbitrary_command_arguments(monkeypatch):
+    import json
+    import subprocess
+    import scripts.ec2_agent as agent
+    now = agent.datetime.now(agent.timezone.utc)
+    payload = {"__CURSOR": "c1", "__REALTIME_TIMESTAMP": str(int(now.timestamp() * 1_000_000)),
+               "MESSAGE": "sudo: alice : TTY=pts/0 ; PWD=/tmp ; USER=root ; COMMAND=/usr/bin/cat --token=secret /etc/shadow"}
+    monkeypatch.setattr(agent.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess([], 0, json.dumps(payload), ""))
+    result = agent.read_auth_events(300)
+    parsed = json.loads(result[0])
+    assert parsed["MESSAGE"] == "sudo: alice : USER=root ; COMMAND=cat"
+    assert parsed["__CURSOR"] == "c1"
+
+
+def test_systemd_snapshot_separates_enabled_active_and_running(monkeypatch):
+    import subprocess
+    import scripts.ec2_agent as agent
+    results = iter([
+        subprocess.CompletedProcess([], 0, "sshd.service enabled enabled\nbackup.service disabled disabled\n", ""),
+        subprocess.CompletedProcess([], 0,
+            "sshd.service loaded active running OpenSSH\nbackup.service loaded active exited Backup\ncleanup.timer loaded active waiting Cleanup\n", ""),
+    ])
+    monkeypatch.setattr(agent.subprocess, "run", lambda *a, **k: next(results))
+    assert agent.snapshot_systemd_units() == {
+        "enabled": ["sshd.service"],
+        "active": ["backup.service", "cleanup.timer", "sshd.service"],
+        "running": ["sshd.service"],
+    }
+
+
+def test_package_details_label_install_time_source(monkeypatch):
+    import subprocess
+    import scripts.ec2_agent as agent
+    monkeypatch.setattr(agent, "distro_family", lambda: "dpkg")
+    monkeypatch.setattr(agent.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        args=a[0], returncode=0, stdout="openssh\t9.2-1\n", stderr=""))
+    assert agent.snapshot_package_details() == [{
+        "name": "openssh", "version": "9.2-1", "installed_at": None,
+        "install_time_source": "unavailable",
+    }]
+
+
 def test_host_diff_tracks_active_service_state_and_inode_pressure():
     from blackwatch.hosts.diff import diff_snapshots
 
     previous = {
-        "systemd_units": {"enabled": ["sshd.service"], "active": ["sshd.service"]},
+        "systemd_units": {"enabled": ["sshd.service"], "active": ["sshd.service"], "running": ["sshd.service"]},
         "disk": [{"mount": "/", "fs_type": "xfs", "used_pct": 50,
                   "inodes_used_pct": 50, "inodes_total": 1000, "inodes_used": 500}],
     }
     current = {
-        "systemd_units": {"enabled": ["sshd.service"], "active": ["sshd.service", "timer.service"]},
+        "systemd_units": {"enabled": ["sshd.service"], "active": ["sshd.service", "timer.service"], "running": ["sshd.service"]},
         "disk": [{"mount": "/", "fs_type": "xfs", "used_pct": 50,
                   "inodes_used_pct": 96, "inodes_total": 1000, "inodes_used": 960}],
     }

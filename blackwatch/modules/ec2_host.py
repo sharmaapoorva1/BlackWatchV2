@@ -263,10 +263,16 @@ class Ec2HostAdapter(Adapter):
             entry = line if isinstance(line, dict) else _load(line)
             if entry is None:
                 continue
-            parsed = self._classify(_journal_message(entry))
-            if parsed is None:
-                continue
-            action, outcome, user, ip, extra = parsed
+            if isinstance(entry.get("action"), str) and entry.get("outcome") in ("success", "failure"):
+                action = entry["action"]
+                outcome = Outcome.success if entry["outcome"] == "success" else Outcome.failure
+                user, ip = entry.get("user"), entry.get("source_ip")
+                extra = {k: entry[k] for k in ("method", "command", "arguments_omitted") if k in entry}
+            else:
+                parsed = self._classify(_journal_message(entry))
+                if parsed is None:
+                    continue
+                action, outcome, user, ip, extra = parsed
             cursor = entry.get("__CURSOR") or f"{entry.get('__REALTIME_TIMESTAMP','')}{_journal_message(entry)}"
             observables = []
             if ip:
@@ -285,7 +291,11 @@ class Ec2HostAdapter(Adapter):
                     target=target(),
                     observables=observables,
                     extra={"instance_id": instance_id, **extra, **tags_extra},
-                    raw=entry,
+                    raw={
+                        "kind": "ec2_report.auth_event",
+                        "cursor": cursor,
+                        "timestamp": entry.get("__REALTIME_TIMESTAMP"),
+                    },
                 )
             )
 
@@ -322,7 +332,12 @@ class Ec2HostAdapter(Adapter):
             # agent's auditd reader had a recent hit for this path. Both
             # the inner extra.actor (rules engine) and the top-level
             # event.actor (UI / notifier) get populated.
-            actor_dict = ch.get("actor") if isinstance(ch.get("actor"), dict) else None
+            source_actor = ch.get("actor") if isinstance(ch.get("actor"), dict) else None
+            actor_dict = (
+                {key: source_actor[key] for key in ("uid", "gid", "pid", "comm", "exe")
+                 if source_actor.get(key) is not None}
+                if source_actor else None
+            )
             actor_obj = None
             if actor_dict:
                 principal_parts = []
@@ -355,10 +370,20 @@ class Ec2HostAdapter(Adapter):
                         "owner_before": ch.get("owner_before"),
                         "owner_after": ch.get("owner_after"),
                         "detection": ch.get("detection") or "baseline",
+                        "detection_source": ch.get("detection") or "baseline",
+                        "actor_confidence": "best_effort" if actor_dict and any(
+                            actor_dict.get(k) is not None for k in ("uid", "pid", "comm", "exe")
+                        ) else "unknown",
                         **({"actor": actor_dict} if actor_dict else {}),
                         **tags_extra,
                     },
-                    raw={"kind": "ec2_report.fim_change", "change": ch},
+                    raw={
+                        "kind": "ec2_report.fim_change",
+                        "change": {
+                            **{key: value for key, value in ch.items() if key != "actor"},
+                            **({"actor": actor_dict} if actor_dict else {}),
+                        },
+                    },
                 )
             )
 
@@ -415,7 +440,10 @@ class Ec2HostAdapter(Adapter):
         if "sudo:" in msg:
             m = _SUDO_OK.search(msg)
             if m:
-                return "host.sudo.exec", Outcome.success, m.group(1), None, {"command": m.group(2).strip()}
+                command = m.group(2).strip().split()[0] if m.group(2).strip() else "unknown"
+                return "host.sudo.exec", Outcome.success, m.group(1), None, {
+                    "command": command, "arguments_omitted": True,
+                }
             if any(marker in msg for marker in _SUDO_FAIL_MARKERS):
                 um = _SUDO_USER.search(msg)
                 return "host.sudo.failure", Outcome.failure, (um.group(1) if um else None), None, {}

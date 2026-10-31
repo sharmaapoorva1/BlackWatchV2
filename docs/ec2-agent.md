@@ -7,7 +7,7 @@ against, and how to verify it's working.
 The quick-start install is at [`deploy/ec2/README.md`](../deploy/ec2/README.md);
 read this when you want the *full* picture or are debugging at 3am.
 
-Current agent version: **v1.9** (privacy-safe process inventory, per-collector freshness, report schema v2, expanded network/disk/service coverage, direct HTTPS, and full File Integrity Monitoring).
+Current agent version: **v1.10** (safer authentication events, richer host context, structured policy-change summaries, and explicit coverage semantics).
 
 Recent version history:
 - **v1.2** — scrubbing, systemd sandbox, watchdog, size caps, send backoff
@@ -18,6 +18,7 @@ Recent version history:
 - **v1.8** — critical-event cadence, immutable send timestamps, rollout labels, and transfer latency metrics
 - **v1.7** — selectable BlackWatch HTTPS ingress with SQS rollback and priority-aware local recovery
 - **v1.9** — process command-line removal, collector freshness, UDP/inode/active-service coverage, schema v2, and corrected HTTPS transport labels
+- **v1.10** — sudo argument omission, account/group and package-version context, per-sample disk times, running-service distinction, and safe policy summaries
 
 For a deep dive on FIM specifically (architecture, every detection path,
 auditd rules, the UI surfaces, troubleshooting), see [`docs/fim.md`](fim.md).
@@ -211,13 +212,15 @@ roll back without deleting local or server data.
 | `ports` | 60s | ✓ | `ss -tulnp` — TCP and UDP listener, address, port, binding process |
 | `processes` | 60s collect / 300s send | ✗ | `ps -eo user,pid,comm` — user, PID, executable name; **no command-line arguments** |
 | `disk` | 60s | ✓ | `df -PT` + `df -Pi` — per-mount byte and inode fill, skips pseudo filesystems |
-| `users` | 120s | ✓ | `getent passwd` — name, uid, shell |
+| `users` | 120s | ✓ | Name, UID, shell, interactive/system classification, groups, sudo/wheel membership, and separately labeled password/account status. “Human or local” is a heuristic classification, not identity proof. |
 | `authorized_keys` | 120s | ✓ | Per-user keys → `{user, OpenSSH SHA256 fingerprint, type}`. Fingerprint hashes only the key blob; no key body or comment is sent. |
 | `sudoers` | 120s | ✓ | SHA256 of `/etc/sudoers` + each `/etc/sudoers.d/*` |
 | `critical_files` | 120s | ✓ | SHA256 of `/etc/passwd`, `/etc/shadow`, `sshd_config`, `hosts`, `resolv.conf`, `pam.d/{sshd,sudo,openvpn}`, `crontab` |
 | `cron` | 120s | ✓ | SHA256 of `/etc/crontab`, `/etc/cron.{d,hourly,daily,weekly,monthly}/*`, `/var/spool/cron/*` |
-| `packages` | 3600s | ✓ | Sorted set of installed package names (RPM or DPKG, auto-detected) |
-| `systemd_units` | 600s | ✓ | Enabled and currently active `.service` + `.timer` units, separately |
+| `packages` | 3600s | ✓ | Installed package names, retained as supporting context |
+| `package_details` | 3600s | ✓ | Package versions; RPM install times where available, otherwise explicitly unavailable. Not CVE, publisher, or signature verification. |
+| `policy_summaries` | 120s | ✓ | Allowlisted SSH daemon directives and counts of active sudo/cron entries. Never sends file text or scheduled commands. |
+| `systemd_units` | 600s | ✓ | Enabled unit files, active services/timers, and running services as separate sets |
 | `suid` | 600s | ✓ | `find /usr /opt /bin /sbin -xdev -perm -4000 -type f`; failures or partial output are surfaced, not treated as complete inventory |
 | `kernel_modules` | 600s | ✓ | Sorted set of loaded modules from `lsmod` |
 
@@ -229,6 +232,11 @@ object. Each collector records state (`ok`, `error`, or `pending`), cadence,
 last attempt, last success, age since success, and current error. A cached
 snapshot can remain visible after a transient failure, with its age and error
 shown separately. Ingress continues accepting unversioned/v1 queued reports.
+
+Disk rows include separate byte and inode sample times. FIM rows label the
+detection source and actor confidence; auditd attribution is best-effort, and
+full process command lines (`PROCTITLE`) are ignored because they can contain
+secrets.
 
 The server keeps both cumulative historical sequence gaps and unresolved
 sequence gaps. Urgent reports can overtake bulk reports during spool replay;
@@ -257,8 +265,12 @@ historical event and snapshot records are retained.
 Read every tick with overlap window `INTERVAL + 120s`. Deterministic
 event IDs via journal `__CURSOR` → dedup at insert.
 
-**`MESSAGE` field is scrubbed before shipping** (see [scrubber](#84-secret-scrubbing-patterns)).
-`__CURSOR` and `__REALTIME_TIMESTAMP` are preserved so dedup still works.
+SSH messages are conservatively scrubbed before shipping. Sudo messages are
+reduced to the user, target account, and executable; command arguments, TTY,
+and working directory are omitted because regex scrubbing cannot guarantee
+their safety. `__CURSOR` and `__REALTIME_TIMESTAMP` are preserved so overlap
+deduplication and event time remain reliable. The adapter stores only the
+reduced event fields, not the complete journal record.
 
 ---
 
@@ -274,7 +286,7 @@ events. Action names you'll see in `/events`:
 | `host.state.snapshot.rejected` | snapshot > 512 KB | Synthetic event so operator sees something went wrong instead of silently dropping. |
 | `host.auth.ssh.success` | `Accepted publickey for ec2-user from …` | One per match. `actor.principal=user`, `actor.source_ip=ip`. |
 | `host.auth.ssh.failure` | `Failed publickey for …` OR `Invalid user …` | Includes `extra.reason=invalid_user` for the latter. |
-| `host.sudo.exec` | `sudo: user : COMMAND=...` | `extra.command` populated (scrubbed). |
+| `host.sudo.exec` | `sudo: user : COMMAND=...` | `extra.command` contains only the executable path/name; arbitrary arguments are omitted. |
 | `host.sudo.failure` | `authentication failure`, `NOT in the sudoers`, etc. | |
 | `host.oom_kill` | matched kernel OOM message | Includes truncated kernel message. Severity `failure`. |
 
@@ -397,10 +409,11 @@ Since we can't drop privileges, we sandbox aggressively instead.
 | `LimitNOFILE=1024` | Open file descriptor cap |
 | `Nice=10` | De-prioritized vs. workloads |
 
-### 8.4 Secret scrubbing patterns
+### 8.4 Secret handling
 
-Applied to: process `args`, sudo `COMMAND=...` lines, sshd journal
-`MESSAGE` fields. Implemented in `scripts/ec2_agent.py::scrub()`.
+Sudo command arguments are not transmitted. SSH journal messages use the
+following pattern-based scrubber; this reduces accidental exposure but cannot
+guarantee that every sensitive value in arbitrary SSH log text is removed.
 
 | Pattern | Example match | Replaced with |
 |---|---|---|
@@ -415,8 +428,9 @@ Applied to: process `args`, sudo `COMMAND=...` lines, sshd journal
 
 False-positive risk: the broad uppercase pattern catches `LDAP_PASSWORD`,
 `MY_API_KEY`, etc. — desired. Doesn't match lowercase generic words.
-False-negative known: shell-quoted secrets like `mysql -p "hunter2"`
-won't match the `-p` pattern; quoting is rare in real ps output.
+Because arbitrary sudo arguments are omitted, command-line quoting no longer
+affects sudo secret handling. Keep SSH event fields limited to parsed access
+details and avoid adding arbitrary message or command text to reports.
 
 ### 8.5 Spool permissions
 
@@ -426,7 +440,7 @@ won't match the `-p` pattern; quoting is rare in real ps output.
 | `/var/lib/blackwatch-agent/spool/` | `0700 root:root` |
 | `/var/lib/blackwatch-agent/spool/*.json` | `0600 root:root` (created with explicit `os.open(..., 0o600)`, umask-independent) |
 
-Contains: scrubbed journal lines, scrubbed process args, snapshots. Even
+Contains: reduced SSH/sudo events, privacy-safe process inventory, snapshots. Even
 post-scrubbing, treat as sensitive — never `chmod` to anything else.
 
 ### 8.6 SQS URL allowlist

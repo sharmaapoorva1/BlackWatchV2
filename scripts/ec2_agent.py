@@ -42,6 +42,7 @@ import json
 import os
 import re
 import shutil
+import shlex
 import subprocess
 import sys
 import time
@@ -55,7 +56,7 @@ try:
 except ImportError:  # imported as scripts.ec2_agent during local tests
     from scripts.agent_transport import LocalSpool, Transport, build_transport, priority_for_report, stamp_report
 
-AGENT_VERSION = "1.9"  # Privacy-safe inventory, collector freshness, schema v2
+AGENT_VERSION = "1.10"  # Safer auth, richer inventory context, policy summaries
 IMDS = "http://169.254.169.254"
 
 TRANSPORT_NAME = os.environ.get("BLACKWATCH_TRANSPORT", "sqs").lower()
@@ -148,6 +149,10 @@ def scrub(s: str | None) -> str | None:
     for pat, repl in _SCRUB_PATTERNS:
         out = pat.sub(repl, out)
     return out
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 # ---------- Watchdog --------------------------------------------------------
@@ -324,9 +329,9 @@ def read_auth_events(lookback_seconds: int) -> list[str]:
         )
         if out.returncode != 0:
             print(f"journalctl exit={out.returncode}: {out.stderr[:200]}", file=sys.stderr)
-        # Scrub MESSAGE in-place so sudo COMMAND= lines don't ship secrets.
-        # We touch only MESSAGE; __CURSOR / __REALTIME_TIMESTAMP stay
-        # intact so the adapter's dedup keys still work.
+        # Reduce sudo records to executable identity. Pattern scrubbing cannot
+        # guarantee secrets are removed from arbitrary command arguments.
+        # Keep journal cursor/time so overlapping reads still deduplicate.
         out_lines = []
         for ln in out.stdout.splitlines():
             if not ln.strip():
@@ -338,10 +343,10 @@ def read_auth_events(lookback_seconds: int) -> list[str]:
                 continue
             msg = obj.get("MESSAGE")
             if isinstance(msg, str):
-                obj["MESSAGE"] = scrub(msg)
+                obj["MESSAGE"] = _safe_auth_message(msg)
             elif isinstance(msg, list):
                 try:
-                    obj["MESSAGE"] = scrub(bytes(msg).decode("utf-8", "replace"))
+                    obj["MESSAGE"] = _safe_auth_message(bytes(msg).decode("utf-8", "replace"))
                 except Exception:
                     pass
             out_lines.append(json.dumps(obj, separators=(",", ":")))
@@ -349,6 +354,33 @@ def read_auth_events(lookback_seconds: int) -> list[str]:
     except Exception as exc:
         print(f"journalctl failed: {exc}", file=sys.stderr)
         return []
+
+
+_SUDO_COMMAND = re.compile(r"(COMMAND=)(.*)$")
+
+
+def _safe_auth_message(message: str) -> str:
+    """Keep SSH details after redaction; strip all sudo args and env data."""
+    if "sudo:" not in message:
+        return scrub(message) or ""
+    match = _SUDO_COMMAND.search(message)
+    if not match:
+        return scrub(message) or ""
+    try:
+        command = shlex.split(match.group(2), posix=True)
+    except ValueError:
+        command = match.group(2).split()
+    executable = next((part for part in command if "=" not in part), "unknown")
+    executable = Path(executable).name
+    if not re.fullmatch(r"[A-Za-z0-9._+-]{1,120}", executable):
+        executable = "unknown"
+    # Sudo's other fields (PWD, TTY) are not required to classify an event.
+    prefix = message[:message.find("sudo:") + len("sudo:")]
+    user_match = re.search(r"sudo:\s+(\S+)\s+:", message)
+    user = user_match.group(1) if user_match else "unknown"
+    target_match = re.search(r";\s*USER=(\S+)", message)
+    target_user = target_match.group(1) if target_match else "unknown"
+    return f"{prefix} {user} : USER={target_user} ; COMMAND={executable}"
 
 
 # ---------- Snapshot collectors -------------------------------------------
@@ -401,12 +433,56 @@ def snapshot_users():
         return None
     if out.returncode != 0:
         return None
+    try:
+        groups_out = subprocess.run(["getent", "group"], capture_output=True, text=True, timeout=5)
+    except Exception:
+        groups_out = None
+    groups_by_user, groups_by_gid = {}, {}
+    if groups_out and groups_out.returncode == 0:
+        for line in groups_out.stdout.splitlines():
+            parts = line.split(":")
+            if len(parts) >= 4:
+                groups_by_gid[parts[2]] = parts[0]
+                for member in filter(None, parts[3].split(",")):
+                    groups_by_user.setdefault(member, []).append(parts[0])
+    shadow_status = {}
+    try:
+        shadow_out = subprocess.run(["getent", "shadow"], capture_output=True, text=True, timeout=5)
+        if shadow_out.returncode == 0:
+            for shadow_line in shadow_out.stdout.splitlines():
+                shadow_fields = shadow_line.split(":")
+                if len(shadow_fields) > 1:
+                    marker = shadow_fields[1]
+                    shadow_status[shadow_fields[0]] = (
+                        "locked" if marker.startswith(("!", "*")) else "no_password" if not marker else "password_set"
+                    )
+    except Exception:
+        pass
     users = []
     for line in out.stdout.splitlines():
         parts = line.split(":")
         if len(parts) >= 7:
-            users.append({"name": parts[0], "uid": parts[2], "shell": parts[6]})
+            name, uid, shell = parts[0], int(parts[2]), parts[6]
+            groups = sorted(set(groups_by_user.get(name, []) + ([groups_by_gid[parts[3]]] if parts[3] in groups_by_gid else [])))
+            interactive = shell not in ("/sbin/nologin", "/usr/sbin/nologin", "/bin/false", "/usr/bin/false")
+            password_status = shadow_status.get(name, "unknown")
+            users.append({"name": name, "uid": uid, "shell": shell,
+                          "account_type": "system" if uid < _uid_min() or not interactive else "human_or_local",
+                          "interactive": interactive, "groups": groups,
+                          "sudo_wheel_member": bool(set(groups) & {"sudo", "wheel"}),
+                          "account_status": "unknown", "password_status": password_status})
     return users
+
+
+def _uid_min() -> int:
+    try:
+        for line in Path("/etc/login.defs").read_text().splitlines():
+            match = re.match(r"\s*UID_MIN\s+(\d+)", line)
+            if match:
+                return int(match.group(1))
+    except Exception:
+        pass
+    return 1000
 
 
 def snapshot_authorized_keys() -> list:
@@ -509,6 +585,51 @@ def snapshot_cron() -> dict:
     return out
 
 
+_SSHD_SAFE_DIRECTIVES = {
+    "passwordauthentication", "pubkeyauthentication", "permitrootlogin",
+    "permitemptypasswords", "maxauthtries", "x11forwarding",
+    "allowagentforwarding", "allowtcpforwarding", "clientaliveinterval",
+    "clientalivecountmax",
+}
+
+
+def snapshot_policy_summaries() -> dict:
+    """Emit bounded, structured policy context; never file text or commands."""
+    result = {}
+    targets = [Path("/etc/ssh/sshd_config"), Path("/etc/sudoers"), Path("/etc/crontab")]
+    sudo_dir = Path("/etc/sudoers.d")
+    cron_dir = Path("/etc/cron.d")
+    if sudo_dir.is_dir():
+        targets.extend(sorted(p for p in sudo_dir.iterdir() if p.is_file()))
+    if cron_dir.is_dir():
+        targets.extend(sorted(p for p in cron_dir.iterdir() if p.is_file()))
+    for path in targets:
+        try:
+            lines = path.read_text(errors="replace").splitlines()
+        except Exception:
+            continue
+        name = str(path)
+        if path.name == "sshd_config":
+            directives = {}
+            for line in lines:
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                parts = stripped.split(None, 1)
+                key = parts[0].lower()
+                if key in _SSHD_SAFE_DIRECTIVES and len(parts) == 2:
+                    directives[key] = parts[1][:120]
+            result[name] = {"kind": "sshd_allowlisted_directives", "directives": directives}
+        elif "sudoers" in str(path):
+            active = [line for line in lines if line.strip() and not line.lstrip().startswith(("#", "Defaults"))]
+            result[name] = {"kind": "sudo_policy_counts", "active_rule_lines": len(active),
+                            "alias_definitions": sum(bool(re.match(r"\s*(User|Runas|Host|Cmnd)_Alias\s+", line)) for line in lines)}
+        else:
+            entries = [line for line in lines if line.strip() and not line.lstrip().startswith("#")]
+            result[name] = {"kind": "cron_schedule_counts", "active_entries": len(entries)}
+    return result
+
+
 def snapshot_systemd_units():
     try:
         out = subprocess.run(
@@ -535,8 +656,15 @@ def snapshot_systemd_units():
         return None
     if active_out.returncode != 0:
         return None
-    active = sorted({line.split()[0] for line in active_out.stdout.splitlines() if line.split()})
-    return {"enabled": sorted(set(units)), "active": active}
+    active, running = set(), set()
+    for line in active_out.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 4:
+            unit, _, state, sub = parts[:4]
+            active.add(unit)
+            if unit.endswith(".service") and state == "active" and sub == "running":
+                running.add(unit)
+    return {"enabled": sorted(set(units)), "active": sorted(active), "running": sorted(running)}
 
 
 def snapshot_suid():
@@ -557,34 +685,64 @@ def snapshot_suid():
     return sorted(line for line in out.stdout.splitlines() if line.strip())
 
 
+_PACKAGE_DETAILS_CACHE = None
+
+
 def snapshot_packages():
-    """Distro-portable. rpm -qa on RHEL family, dpkg-query on Debian family."""
-    fam = distro_family()
-    if fam == "rpm":
+    """Distro-portable names derived from the detailed hourly inventory query."""
+    rows = snapshot_package_details(force=True)
+    if not rows:
+        return None
+    return sorted({row["name"] for row in rows if row.get("name")}) or None
+
+
+def snapshot_package_details(force=False):
+    """Supporting package evidence: versions, with install time only if reliable."""
+    global _PACKAGE_DETAILS_CACHE
+    if _PACKAGE_DETAILS_CACHE is not None and not force:
+        return _PACKAGE_DETAILS_CACHE
+    if force:
+        _PACKAGE_DETAILS_CACHE = None
+    family = distro_family()
+    if family == "rpm":
         try:
             out = subprocess.run(
-                ["rpm", "-qa", "--queryformat", "%{NAME}\n"],
-                capture_output=True, text=True, timeout=20,
+                ["rpm", "-qa", "--queryformat", "%{NAME}\t%{VERSION}-%{RELEASE}.%{ARCH}\t%{INSTALLTIME}\n"],
+                capture_output=True, text=True, timeout=30,
             )
         except Exception:
             return None
-        # Gate on returncode AND non-empty output — catches the BDB-corruption case
-        # (rpm errors to stderr, exits non-zero, may produce empty stdout) so we
-        # don't ship a misleading "no packages" snapshot.
         if out.returncode != 0 or not out.stdout.strip():
             return None
-        return sorted({line.strip() for line in out.stdout.splitlines() if line.strip()})
-    elif fam == "dpkg":
+        rows = []
+        for line in out.stdout.splitlines():
+            parts = line.split("\t")
+            if len(parts) != 3:
+                continue
+            try:
+                installed_at = datetime.fromtimestamp(int(parts[2]), timezone.utc).isoformat()
+            except (ValueError, OverflowError, OSError):
+                installed_at = None
+            rows.append({"name": parts[0], "version": parts[1],
+                         "installed_at": installed_at, "install_time_source": "rpm_database"})
+        _PACKAGE_DETAILS_CACHE = sorted(rows, key=lambda row: row["name"]) or None
+        return _PACKAGE_DETAILS_CACHE
+    if family == "dpkg":
         try:
-            out = subprocess.run(
-                ["dpkg-query", "-W", "-f=${Package}\n"],
-                capture_output=True, text=True, timeout=20,
-            )
+            out = subprocess.run(["dpkg-query", "-W", "-f=${Package}\t${Version}\n"],
+                                 capture_output=True, text=True, timeout=30)
         except Exception:
             return None
         if out.returncode != 0 or not out.stdout.strip():
             return None
-        return sorted({line.strip() for line in out.stdout.splitlines() if line.strip()})
+        rows = []
+        for line in out.stdout.splitlines():
+            parts = line.split("\t", 1)
+            if len(parts) == 2:
+                rows.append({"name": parts[0], "version": parts[1], "installed_at": None,
+                             "install_time_source": "unavailable"})
+        _PACKAGE_DETAILS_CACHE = sorted(rows, key=lambda row: row["name"]) or None
+        return _PACKAGE_DETAILS_CACHE
     return None
 
 
@@ -618,7 +776,9 @@ def snapshot_disk():
     """Per-mount fill levels via `df -P` — POSIX format keeps the columns sane.
     Skips tmpfs/devtmpfs/overlay (containers' fake mounts)."""
     try:
+        bytes_sampled_at = _utc_now()
         out = subprocess.run(["df", "-P", "-T"], capture_output=True, text=True, timeout=10)
+        inodes_sampled_at = _utc_now()
         inode_out = subprocess.run(["df", "-P", "-i"], capture_output=True, text=True, timeout=10)
     except Exception:
         return None
@@ -650,6 +810,8 @@ def snapshot_disk():
             used_pct = int(round(used * 100 / total)) if total > 0 else 0
             rows.append({"mount": mount, "fs_type": fs_type, "total": total,
                          "used": used, "used_pct": used_pct,
+                         "bytes_sampled_at": bytes_sampled_at,
+                         "inodes_sampled_at": inodes_sampled_at,
                          **inode_by_mount.get(mount, {})})
         except (ValueError, ZeroDivisionError):
             continue
@@ -1009,9 +1171,11 @@ COLLECTORS: list[Collector] = [
     Collector("sudoers",         snapshot_sudoers,         _env_int("COLLECT_SUDOERS_SEC", 120)),
     Collector("critical_files",  snapshot_critical_files,  _env_int("COLLECT_CRITICAL_FILES_SEC", 120)),
     Collector("cron",            snapshot_cron,            _env_int("COLLECT_CRON_SEC", 120)),
+    Collector("policy_summaries", snapshot_policy_summaries, _env_int("COLLECT_POLICY_SUMMARIES_SEC", 120)),
     # Package inventory is supporting context and can contend with RPM operations,
     # so it runs hourly. Other heavier scans retain a ten-minute cadence.
     Collector("packages",        snapshot_packages,        _env_int("COLLECT_PACKAGES_SEC", 3600)),
+    Collector("package_details", snapshot_package_details, _env_int("COLLECT_PACKAGES_SEC", 3600)),
     Collector("systemd_units",   snapshot_systemd_units,   _env_int("COLLECT_SYSTEMD_UNITS_SEC", 600)),
     Collector("suid",            snapshot_suid,            _env_int("COLLECT_SUID_SEC", 600)),
     Collector("kernel_modules",  snapshot_kernel_modules,  _env_int("COLLECT_KERNEL_MODULES_SEC", 600)),

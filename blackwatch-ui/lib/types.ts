@@ -923,13 +923,14 @@ export interface FimChange {
   event_id: string | null;
   // Which detection path caught this change.
   detection: "baseline" | "inotify" | "auditd" | null;
+  detection_source?: "baseline" | "inotify" | "auditd" | string;
+  actor_confidence?: "best_effort" | "unknown" | string;
   // Part 3 — populated only when auditd whodata had a fresh hit.
   actor_uid: number | null;
   actor_gid: number | null;
   actor_pid: number | null;
   actor_comm: string | null;
   actor_exe: string | null;
-  actor_proctitle: string | null;
 }
 
 // FIM cross-host view (drives the /fim top-level page).
@@ -1114,10 +1115,11 @@ export interface HostSnapshots {
   sudoers?: Record<string, string>;
   critical_files?: Record<string, string>;
   cron?: Record<string, string>;
-  systemd_units?: string[] | { enabled?: string[]; active?: string[] };
+  systemd_units?: string[] | { enabled?: string[]; active?: string[]; running?: string[] };
   kernel_modules?: string[];
   suid?: string[];
   packages?: string[];
+  package_details?: HostPackageDetail[];
   disk?: HostDisk[];
 }
 
@@ -1138,6 +1140,19 @@ export interface HostUser {
   name: string;
   uid: number;
   shell: string;
+  account_type?: "system" | "human_or_local" | string;
+  interactive?: boolean;
+  groups?: string[];
+  sudo_wheel_member?: boolean;
+  account_status?: "locked" | "password_set" | "unknown" | string;
+  password_status?: "locked" | "password_set" | "no_password" | "unknown" | string;
+}
+
+export interface HostPackageDetail {
+  name: string;
+  version: string;
+  installed_at: string | null;
+  install_time_source: "rpm_database" | "unavailable" | string;
 }
 
 export interface HostAuthorizedKey {
@@ -1155,6 +1170,8 @@ export interface HostDisk {
   inodes_used_pct?: number;
   inodes_used?: number;
   inodes_total?: number;
+  bytes_sampled_at?: string;
+  inodes_sampled_at?: string;
 }
 
 // --- Services --------------------------------------------------------------

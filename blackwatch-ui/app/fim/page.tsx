@@ -303,22 +303,18 @@ function ChangeTypePill({
 
 function ActorCell({ change }: { change: FimChangeWithInstance }) {
   if (change.actor_comm == null && change.actor_uid == null) {
-    return <span className="text-xs text-fg-disabled">—</span>;
+    return <span className="text-xs text-fg-disabled" title="A change was detected, but auditd did not attribute it to a process.">unknown · no attribution</span>;
   }
   const comm = change.actor_comm ?? "?";
   const uid = change.actor_uid != null ? `uid=${change.actor_uid}` : null;
   return (
     <span
       className="text-xs text-fg"
-      title={
-        change.actor_proctitle ??
-        [comm, uid, change.actor_pid != null ? `pid=${change.actor_pid}` : null]
-          .filter(Boolean)
-          .join(" · ")
-      }
+      title="Best-effort auditd attribution based on process metadata; not definitive identity proof."
     >
       <span className="font-mono">{comm}</span>
       {uid && <span className="ml-1.5 text-fg-muted">{uid}</span>}
+      <span className="ml-1.5 text-fg-subtle">best-effort</span>
     </span>
   );
 }

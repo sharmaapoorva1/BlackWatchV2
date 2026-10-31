@@ -77,3 +77,24 @@ During deployment, the app accepted direct HTTPS agent reports with HTTP 202, wh
 The audit summary now records only the content-encoding label and compressed byte count for encoded bodies. Unencoded bodies replace literal NUL characters before persistence. Regression coverage reproduces gzip input and literal-NUL text. Verification: 76 relevant regression tests passed, Python compileall passed, and `git diff --check` passed.
 
 This follow-up is local and must be committed and deployed to the app before treating audit logging as clean. The agent rollout should wait until this app hotfix is running.
+
+## Follow-up implementation — 2026-10-30: retained telemetry quality improvements
+
+The retained categories from the operator audit now carry clearer, safer context. This entry supplements the initial audit and does not rewrite prior decisions.
+
+- **SSH/sudo:** keep the overlapping journal read, cursor deduplication, and event timestamp. SSH text still uses conservative pattern scrubbing, which is not a guarantee. Sudo records now keep the acting user, target account, and executable only; arbitrary command arguments, TTY, and working directory are removed before transport. Normalized auth-event raw data contains only the reduced message and cursor/time fields.
+- **FIM:** retain periodic, inotify, and auditd detection. Events explicitly expose `detection_source` and `actor_confidence`; an absent actor is displayed as unknown/no attribution, never as evidence that the change had no actor. The actor-less adapter fix is included in the deployed baseline.
+- **Delivery:** preserve cumulative gaps and the bounded unresolved missing-range tracker. A late, out-of-order report resolves its missing sequence; cumulative history remains historical evidence rather than a current loss count.
+- **Disk:** retain bytes and inode usage, adding independent sample timestamps for each measurement so freshness is visible per field.
+- **Authorized keys:** retain user, key type, and OpenSSH SHA256 fingerprint over the key blob only; key body and comment are not sent.
+- **Policy files:** retain hashes. Add safe summaries: an allowlist of SSH daemon directives, counts of active sudo policy lines/aliases, and counts of cron entries. Change events can include before/after structured summaries; file contents, sudo command text, and cron commands are excluded.
+- **Users:** retain passwd inventory and add heuristic account class, interactive-shell state, supplementary and primary groups, sudo/wheel membership, password-state indicator, and an explicit unknown account-status field. The “human or local” class is a UID/shell heuristic, not verified identity. Password hashes are never serialized.
+- **systemd:** keep enabled and active unit sets and add a separate `running` service set. Active timers and active oneshot/exited services are not mislabeled as running.
+- **Kernel modules:** keep appeared/disappeared inventory changes, with an explicit interpretation that a module change alone is not evidence of compromise.
+- **Packages:** keep this lower-priority, hourly supporting inventory. Add versions and RPM database install time where available; Debian install times are labeled unavailable. The UI explicitly says this is not vulnerability, publisher, or signature verification.
+
+Agent version is now v1.10. The additions are backward-compatible snapshot fields; server-side ingestion already accepts the report schema v2 and legacy snapshots. No SQL migration or historical evidence deletion is required.
+
+Additional privacy clarification: auditd `PROCTITLE` records are now ignored; FIM attribution uses syscall process metadata only. The earlier compressed-audit follow-up’s “local and must be deployed” note was superseded by the subsequent server rollout confirmed in deployment logs on 2026-10-30.
+
+Auth-event storage clarification: normalized SSH/sudo events retain parsed action/outcome, user, source IP/method where available, plus journal cursor and timestamp for deduplication. The original journal message is not copied into the normalized event's raw payload.

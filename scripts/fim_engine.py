@@ -708,8 +708,6 @@ _AUDIT_NAME_RE = re.compile(r'\bname="([^"]*)"')
 _AUDIT_NAME_HEX_RE = re.compile(r'\bname=([0-9A-F]+)\b')  # name= can be hex if special chars
 _AUDIT_KV_QUOTED_RE = re.compile(r'\b(\w+)="([^"]*)"')
 _AUDIT_KV_BARE_RE = re.compile(r'\b(\w+)=(\S+)')
-_AUDIT_PROCTITLE_HEX_RE = re.compile(r'\bproctitle=([0-9A-F]+)\b')
-_AUDIT_PROCTITLE_QUOTED_RE = re.compile(r'\bproctitle="([^"]*)"')
 
 # Fields we want from the SYSCALL line.
 _ACTOR_FIELDS = ("uid", "gid", "euid", "egid", "pid", "ppid", "comm", "exe", "tty")
@@ -725,7 +723,7 @@ class AuditReaderThread:
         type=SYSCALL  msg=audit(1782486231.594:12345): uid=1000 pid=22 comm="vim" exe="..." key="bw_fim"
         type=CWD      msg=audit(1782486231.594:12345): cwd="/root"
         type=PATH     msg=audit(1782486231.594:12345): item=0 name="/etc/sudoers" ...
-        type=PROCTITLE msg=audit(1782486231.594:12345): proctitle="vim /etc/sudoers"
+        type=PROCTITLE msg=audit(1782486231.594:12345): command arguments (ignored)
 
     We accumulate partial events keyed by audit_id and commit when we see
     PROCTITLE (usually the last record) or after a 5-second timeout.
@@ -870,9 +868,8 @@ class AuditReaderThread:
             partial = self._partials.get(audit_id)
             if partial is None:
                 return
-            proctitle = self._parse_proctitle(line)
-            if proctitle:
-                partial["actor"]["proctitle"] = proctitle
+            # PROCTITLE contains the full command line and may include secrets.
+            # Ignore its contents; syscall exe/comm fields give best-effort context.
             self._commit(audit_id, partial)
 
     def _commit(self, audit_id: str, partial: dict) -> None:
@@ -951,23 +948,6 @@ class AuditReaderThread:
         if "nametype=DELETE" in line:
             return True
         return False
-
-    @staticmethod
-    def _parse_proctitle(line: str) -> str | None:
-        m = _AUDIT_PROCTITLE_QUOTED_RE.search(line)
-        if m:
-            return m.group(1)
-        m = _AUDIT_PROCTITLE_HEX_RE.search(line)
-        if m:
-            try:
-                # Audit hex-encodes proctitle when it has spaces or nulls;
-                # nulls separate argv entries — replace with space.
-                raw = binascii.unhexlify(m.group(1))
-                return raw.replace(b"\x00", b" ").decode("utf-8", "replace").strip()
-            except (binascii.Error, ValueError):
-                return None
-        return None
-
 
 # --- helpers ------------------------------------------------------------------
 

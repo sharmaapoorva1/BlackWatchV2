@@ -42,6 +42,7 @@ export default async function HostDetailPage({
   const systemd = snapshots?.systemd_units;
   const enabledSystemdUnits = Array.isArray(systemd) ? systemd : systemd?.enabled ?? [];
   const activeSystemdUnits = Array.isArray(systemd) ? [] : systemd?.active ?? [];
+  const runningSystemdUnits = Array.isArray(systemd) ? [] : systemd?.running ?? [];
 
   return (
     <>
@@ -131,12 +132,15 @@ export default async function HostDetailPage({
             <ScrollableList title="enabled systemd units" items={enabledSystemdUnits} />
           )}
           {activeSystemdUnits.length > 0 && (
-            <ScrollableList title="active systemd units" items={activeSystemdUnits} />
+            <ScrollableList title="active services and timers" items={activeSystemdUnits} />
+          )}
+          {runningSystemdUnits.length > 0 && (
+            <ScrollableList title="running services" items={runningSystemdUnits} />
           )}
 
           {(snapshots.kernel_modules?.length ?? 0) > 0 && (
             <ScrollableList
-              title="kernel modules"
+              title="kernel modules · inventory only, not a rootkit verdict"
               items={snapshots.kernel_modules!}
               columns={3}
             />
@@ -148,8 +152,11 @@ export default async function HostDetailPage({
 
           {(snapshots.packages?.length ?? 0) > 0 && (
             <ScrollableList
-              title={`installed packages · showing first 100 of ${snapshots.packages!.length}`}
-              items={snapshots.packages!.slice(0, 100)}
+              title={`supporting package inventory · ${snapshots.packages!.length} packages; context only, not vulnerability or signature verification`}
+              items={snapshots.packages!.slice(0, 100).map((name) => {
+                const detail = snapshots.package_details?.find((item) => item.name === name);
+                return detail ? `${name} · ${detail.version}${detail.installed_at ? ` · installed ${new Date(detail.installed_at).toLocaleDateString()}` : ""}` : name;
+              })}
               columns={3}
             />
           )}
@@ -746,7 +753,7 @@ function FimChangesTable({ changes }: { changes: FimChange[] }) {
       <thead>
         <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
           <th className="w-32 px-4 py-2 text-left font-normal">Time</th>
-          <th className="w-24 px-4 py-2 text-left font-normal">Detected</th>
+          <th className="w-28 px-4 py-2 text-left font-normal">Source</th>
           <th className="w-24 px-4 py-2 text-left font-normal">Change</th>
           <th className="px-4 py-2 text-left font-normal">Path</th>
           <th className="w-44 px-4 py-2 text-left font-normal">Who</th>
@@ -767,7 +774,7 @@ function FimChangesTable({ changes }: { changes: FimChange[] }) {
               )}
             </td>
             <td className="px-4 py-2.5">
-              <FimDetectionPill detection={c.detection} />
+              <FimDetectionPill detection={c.detection_source ?? c.detection} />
             </td>
             <td className="px-4 py-2.5">
               <FimChangePill type={c.change_type} />
@@ -800,7 +807,7 @@ function FimChangesTable({ changes }: { changes: FimChange[] }) {
 function FimActorCell({ change }: { change: FimChange }) {
   if (change.actor_comm == null && change.actor_uid == null) {
     return (
-      <span className="text-xs text-fg-disabled">—</span>
+      <span className="text-xs text-fg-disabled" title="A change was detected, but auditd did not attribute it to a process.">unknown · no attribution</span>
     );
   }
   const comm = change.actor_comm ?? "?";
@@ -808,17 +815,13 @@ function FimActorCell({ change }: { change: FimChange }) {
   return (
     <span
       className="text-xs text-fg"
-      title={
-        change.actor_proctitle ??
-        [comm, uid, change.actor_pid != null ? `pid=${change.actor_pid}` : null]
-          .filter(Boolean)
-          .join(" · ")
-      }
+      title="Best-effort auditd attribution based on process metadata; not definitive identity proof."
     >
       <span className="font-mono">{comm}</span>
       {uid && (
         <span className="ml-1.5 text-fg-muted">{uid}</span>
       )}
+      <span className="ml-1.5 text-fg-subtle">best-effort</span>
     </span>
   );
 }
@@ -826,7 +829,7 @@ function FimActorCell({ change }: { change: FimChange }) {
 function FimDetectionPill({
   detection,
 }: {
-  detection: FimChange["detection"];
+  detection: string | null;
 }) {
   if (detection === "inotify") {
     return (
@@ -937,6 +940,7 @@ function DiskSection({
               <th className="w-24 px-4 py-2 text-left font-normal">Used %</th>
               <th className="w-28 px-4 py-2 text-left font-normal">Inodes %</th>
               <th className="px-4 py-2 text-left font-normal">Used / Total</th>
+              <th className="px-4 py-2 text-left font-normal">Sampled</th>
             </tr>
           </thead>
           <tbody>
@@ -955,6 +959,10 @@ function DiskSection({
                 </td>
                 <td className="px-4 py-2 font-mono text-xs text-fg-muted">
                   {d.used} / {d.total} KB
+                </td>
+                <td className="px-4 py-2 font-mono text-[11px] text-fg-subtle">
+                  {d.bytes_sampled_at ? new Date(d.bytes_sampled_at).toLocaleTimeString() : "—"}
+                  {d.inodes_sampled_at ? ` · inodes ${new Date(d.inodes_sampled_at).toLocaleTimeString()}` : ""}
                 </td>
               </tr>
             ))}
@@ -1065,6 +1073,8 @@ function UsersSection({
             <tr className="sticky top-0 border-b border-line-soft bg-surface-1 text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
               <th className="w-44 px-4 py-2 text-left font-normal">Name</th>
               <th className="w-20 px-4 py-2 text-left font-normal">UID</th>
+              <th className="px-4 py-2 text-left font-normal">Class / access</th>
+              <th className="px-4 py-2 text-left font-normal">Groups</th>
               <th className="px-4 py-2 text-left font-normal">Shell</th>
             </tr>
           </thead>
@@ -1073,6 +1083,11 @@ function UsersSection({
               <tr key={u.name} className="border-b border-line-soft last:border-0">
                 <td className="px-4 py-1.5 text-xs text-fg">{u.name}</td>
                 <td className="px-4 py-1.5 font-mono text-xs text-fg-muted">{u.uid}</td>
+                <td className="px-4 py-1.5 text-xs text-fg-muted">
+                  {u.account_type ?? "unclassified"} · {u.interactive == null ? "access unknown" : u.interactive ? "interactive" : "non-interactive"}
+                  {u.sudo_wheel_member ? " · sudo/wheel member" : ""} · account {u.account_status ?? "unknown"} · password {u.password_status ?? "unknown"}
+                </td>
+                <td className="px-4 py-1.5 font-mono text-xs text-fg-muted">{u.groups?.join(", ") || "—"}</td>
                 <td className="px-4 py-1.5 font-mono text-xs text-fg-muted">{u.shell}</td>
               </tr>
             ))}

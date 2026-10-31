@@ -2772,12 +2772,13 @@ def list_fim_history(instance_id: str, limit: int = 50) -> list[dict[str, Any]]:
             "owner_after": r[10],
             "event_id": str(r[11]) if r[11] else None,
             "detection": r[12],
+            "detection_source": r[12] or "baseline",
+            "actor_confidence": "best_effort" if any(r[i] is not None for i in (13, 15, 16, 17)) else "unknown",
             "actor_uid": r[13],
             "actor_gid": r[14],
             "actor_pid": r[15],
             "actor_comm": r[16],
             "actor_exe": r[17],
-            "actor_proctitle": r[18],
         }
         for r in rows
     ]
@@ -2933,12 +2934,13 @@ def list_recent_fim_history(limit: int = 100) -> list[dict[str, Any]]:
             "owner_after": r[11],
             "event_id": str(r[12]) if r[12] else None,
             "detection": r[13],
+            "detection_source": r[13] or "baseline",
+            "actor_confidence": "best_effort" if any(r[i] is not None for i in (14, 16, 17, 18)) else "unknown",
             "actor_uid": r[14],
             "actor_gid": r[15],
             "actor_pid": r[16],
             "actor_comm": r[17],
             "actor_exe": r[18],
-            "actor_proctitle": r[19],
         }
         for r in rows
     ]

@@ -42,6 +42,14 @@ def diff_snapshots(prev: dict[str, Any], current: dict[str, Any]) -> list[tuple[
         out.append(("host.user.added", {"user": name, "uid": u.get("uid"), "shell": u.get("shell")}))
     for name in prev_users - cur_users:
         out.append(("host.user.removed", {"user": name}))
+    prev_user_map = {u.get("name"): u for u in prev.get("users") or [] if u.get("name")}
+    for name in cur_users & prev_users:
+        old, new = prev_user_map.get(name, {}), cur_user_map.get(name, {})
+        fields = ("uid", "shell", "account_type", "interactive", "groups", "sudo_wheel_member", "account_status", "password_status")
+        changed = {field: {"before": old.get(field), "after": new.get(field)}
+                   for field in fields if old.get(field) != new.get(field)}
+        if changed:
+            out.append(("host.user.changed", {"user": name, "changes": changed}))
 
     # --- authorized_keys (identity: user + fingerprint) ----------------------
     def _kkey(k):
@@ -73,7 +81,15 @@ def diff_snapshots(prev: dict[str, Any], current: dict[str, Any]) -> list[tuple[
         else:
             changes[path] = "changed"
     if changes:
-        out.append(("host.sudoers.changed", {"changes": changes}))
+        summaries = current.get("policy_summaries") or {}
+        prior_summaries = prev.get("policy_summaries") or {}
+        out.append(("host.sudoers.changed", {
+            "changes": changes,
+            "safe_summary_changes": {
+                path: {"before": prior_summaries.get(path), "after": summaries.get(path)}
+                for path in changes if path in summaries or path in prior_summaries
+            },
+        }))
 
     # --- critical files / cron files (both dict {path: sha256}) -------------
     for key, action_name in (("critical_files", "host.file.changed"),
@@ -85,7 +101,13 @@ def diff_snapshots(prev: dict[str, Any], current: dict[str, Any]) -> list[tuple[
             if a == b:
                 continue
             kind = "added" if a is None else "removed" if b is None else "changed"
-            out.append((action_name, {"path": path, "change": kind}))
+            summaries = current.get("policy_summaries") or {}
+            prior_summaries = prev.get("policy_summaries") or {}
+            out.append((action_name, {
+                "path": path, "change": kind,
+                **({"safe_summary_before": prior_summaries[path]} if path in prior_summaries else {}),
+                **({"safe_summary_after": summaries[path]} if path in summaries else {}),
+            }))
 
     # --- systemd enabled configuration and active runtime inventory ---------
     prev_systemd = prev.get("systemd_units") or []
@@ -114,21 +136,36 @@ def diff_snapshots(prev: dict[str, Any], current: dict[str, Any]) -> list[tuple[
     cur_pkgs = set(current.get("packages") or [])
     added = sorted(cur_pkgs - prev_pkgs)
     removed = sorted(prev_pkgs - cur_pkgs)
-    if added or removed:
+    prev_details = {p.get("name"): p for p in prev.get("package_details") or [] if p.get("name")}
+    cur_details = {p.get("name"): p for p in current.get("package_details") or [] if p.get("name")}
+    version_changes = {
+        name: {"before": prev_details[name].get("version"), "after": cur_details[name].get("version")}
+        for name in prev_details.keys() & cur_details.keys()
+        if prev_details[name].get("version") != cur_details[name].get("version")
+    }
+    if added or removed or version_changes:
         out.append(("host.packages.changed", {
             "added": added[:50],
             "removed": removed[:50],
             "added_count": len(added),
             "removed_count": len(removed),
+            "version_changes": dict(sorted(version_changes.items())[:50]),
+            "version_change_count": len(version_changes),
         }))
 
-    # --- kernel modules (list of names) — rootkit primitive ------------------
+    # --- kernel-module inventory changes (not a standalone threat verdict) --
     prev_mods = set(prev.get("kernel_modules") or [])
     cur_mods = set(current.get("kernel_modules") or [])
     for m in sorted(cur_mods - prev_mods):
-        out.append(("host.kernel.module.added", {"module": m}))
+        out.append(("host.kernel.module.added", {
+            "module": m,
+            "interpretation": "module appeared in loaded-module inventory; this alone is not evidence of compromise",
+        }))
     for m in sorted(prev_mods - cur_mods):
-        out.append(("host.kernel.module.removed", {"module": m}))
+        out.append(("host.kernel.module.removed", {
+            "module": m,
+            "interpretation": "module disappeared from loaded-module inventory; this alone is not evidence of compromise",
+        }))
 
     # --- disk fill thresholds (transitions only, hysteresis on recover) -----
     # WARN >=90, CRITICAL >=95, RECOVER <85. Edges fire one event per mount.

@@ -60,7 +60,8 @@ def test_sudo_exec_and_failure():
     )
     ex = next(e for e in events if e.action == "host.sudo.exec")
     assert ex.actor.principal == "ec2-user"
-    assert "cat /etc/shadow" in ex.extra["command"]
+    assert ex.extra["command"] == "/bin/cat"
+    assert ex.extra["arguments_omitted"] is True
     fail = next(e for e in events if e.action == "host.sudo.failure")
     assert fail.actor.principal == "baduser"
 
@@ -106,6 +107,8 @@ def test_fim_change_without_whodata_actor_uses_empty_actor():
     change = next(e for e in events if e.action == "host.fim.modified")
     assert change.actor is not None
     assert change.actor.principal is None
+    assert change.extra["actor_confidence"] == "unknown"
+    assert change.extra["detection_source"] == "baseline"
 
 
 def test_diff_no_change_emits_nothing():
@@ -190,6 +193,15 @@ def test_diff_packages_summary():
     assert pkg["added_count"] == 2 and pkg["removed_count"] == 1
 
 
+def test_diff_reports_package_version_change_without_security_claim():
+    prev = {"packages": ["openssh"], "package_details": [
+        {"name": "openssh", "version": "9.0", "installed_at": None}]}
+    cur = {"packages": ["openssh"], "package_details": [
+        {"name": "openssh", "version": "9.1", "installed_at": None}]}
+    event = dict(diff_snapshots(prev, cur))["host.packages.changed"]
+    assert event["version_changes"]["openssh"] == {"before": "9.0", "after": "9.1"}
+
+
 def test_diff_skips_new_category_baseline():
     # Phase B -> Phase C scenario: previous snapshot didn't have suid/packages.
     # The new categories must NOT flood as "all added" — they baseline silently.
@@ -248,7 +260,9 @@ def test_diff_kernel_modules_added_and_removed():
     prev = {"kernel_modules": ["xfs", "ext4"]}
     cur = {"kernel_modules": ["xfs", "ext4", "evil_lkm"]}
     out = list(diff_snapshots(prev, cur))
-    assert ("host.kernel.module.added", {"module": "evil_lkm"}) in out
+    event = next(extra for action, extra in out if action == "host.kernel.module.added")
+    assert event["module"] == "evil_lkm"
+    assert "not evidence of compromise" in event["interpretation"]
 
 
 def test_diff_disk_crosses_warn_threshold():
