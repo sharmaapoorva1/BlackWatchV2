@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { fetchHostDetail, hostLabel } from "@/lib/api";
 import { HostDisplayNameEditor } from "@/components/domain/HostDisplayNameEditor";
 import { HostMetricsChart } from "@/components/domain/HostMetricsChart";
+import { HostInventoryTable, type HostInventoryRow } from "@/components/domain/HostInventoryTable";
 import type {
   HostRecord,
   HostSnapshots,
@@ -19,6 +20,7 @@ import { DataPanel } from "@/components/layout/DataPanel";
 import { Table } from "@/components/ui/Table";
 import { SectionLabel } from "@/components/layout/SectionLabel";
 import { KeyValueRow } from "@/components/layout/KeyValueRow";
+import { Disclosure } from "@/components/ui/Disclosure";
 import { TimestampCell } from "@/components/domain/TimestampCell";
 import { IpCell } from "@/components/domain/IpCell";
 import {
@@ -43,6 +45,29 @@ export default async function HostDetailPage({
   const enabledSystemdUnits = Array.isArray(systemd) ? systemd : systemd?.enabled ?? [];
   const activeSystemdUnits = Array.isArray(systemd) ? [] : systemd?.active ?? [];
   const runningSystemdUnits = Array.isArray(systemd) ? [] : systemd?.running ?? [];
+  const accessCount = auth_events.length
+    + (host?.extra?.active_sessions?.length ?? 0)
+    + (snapshots.users?.length ?? 0)
+    + (snapshots.authorized_keys?.length ?? 0)
+    + Object.keys(snapshots.sudoers ?? {}).length;
+  const integrityCount = fim_recent_changes.length
+    + state_changes.length
+    + (fim_coverage?.files_tracked ?? 0)
+    + (fim_coverage?.configured_paths
+      ? fim_coverage.configured_paths.critical_files.length
+        + fim_coverage.configured_paths.critical_dirs.length
+        + fim_coverage.configured_paths.binary_dirs.length
+      : 0)
+    + Object.keys(snapshots.critical_files ?? {}).length
+    + Object.keys(snapshots.cron ?? {}).length
+    + enabledSystemdUnits.length
+    + activeSystemdUnits.length
+    + runningSystemdUnits.length
+    + (snapshots.suid?.length ?? 0)
+    + (snapshots.kernel_modules?.length ?? 0);
+  const runtimeCount = (snapshots.ports?.length ?? 0) + (snapshots.processes?.length ?? 0);
+  const capacityCount = (snapshots.disk?.length ?? 0) + (snapshots.packages?.length ?? 0);
+  const packageDetails = new Map((snapshots.package_details ?? []).map((item) => [item.name, item]));
 
   return (
     <>
@@ -66,108 +91,94 @@ export default async function HostDetailPage({
 
       {host && (
         <>
-          <StatusSection
-            host={host}
-            ageSeconds={age_seconds}
-            stale={stale}
-            healthState={health_state}
-            healthReason={health_reason}
-            delivery={delivery}
-          />
+          <div className="mt-5 grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.6fr)]">
+            <div className="order-2 min-w-0 space-y-5 xl:order-1">
+              <StatusSection
+                host={host}
+                ageSeconds={age_seconds}
+                stale={stale}
+                healthState={health_state}
+                healthReason={health_reason}
+                delivery={delivery}
+              />
+              <HostMetricsChart instanceId={host.instance_id} />
+            </div>
+            <div className="order-1 min-w-0 xl:order-2">
+              <HostActivitySection
+                alerts={alerts}
+                authEvents={auth_events}
+                stateChanges={state_changes}
+                fimChanges={fim_recent_changes}
+              />
+            </div>
+          </div>
 
-          <HostMetricsChart instanceId={host.instance_id} />
+          <section className="mt-8 space-y-3" aria-label="Host evidence and inventories">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <SectionLabel>host evidence</SectionLabel>
+              <span className="text-[11px] text-fg-subtle">search and paginate within each inventory</span>
+            </div>
 
-          {(host.extra?.active_sessions?.length ?? 0) > 0 && (
-            <SessionsSection sessions={host.extra!.active_sessions!} />
-          )}
+            <div className="border border-line bg-surface-1 px-3 py-2">
+              <Disclosure label={`Access and identity · ${accessCount} items`}>
+                <div className="space-y-5 border-t border-line-soft px-1 pb-3 pt-1">
+                {(host.extra?.active_sessions?.length ?? 0) > 0 && <SessionsSection sessions={host.extra!.active_sessions!} />}
+                {auth_events.length > 0 && <EventsSection title="SSH and sudo history" events={auth_events} />}
+                {(snapshots.users?.length ?? 0) > 0 && <UsersSection rows={snapshots.users!} />}
+                {(snapshots.authorized_keys?.length ?? 0) > 0 && <AuthorizedKeysSection rows={snapshots.authorized_keys!} />}
+                {snapshots.sudoers && Object.keys(snapshots.sudoers).length > 0 && <FileHashSection title="sudoers policy files" data={snapshots.sudoers} />}
+                </div>
+              </Disclosure>
+            </div>
 
-          {alerts.length > 0 && (
-            <AlertsSection alerts={alerts} />
-          )}
+            <div className="border border-line bg-surface-1 px-3 py-2">
+              <Disclosure label={`Integrity and persistence · ${integrityCount} items`}>
+                <div className="space-y-5 border-t border-line-soft px-1 pb-3 pt-1">
+                {(fim_coverage || fim_recent_changes.length > 0) && <FimSection coverage={fim_coverage} changes={fim_recent_changes} />}
+                {state_changes.length > 0 && <EventsSection title="Host configuration and inventory changes" events={state_changes} />}
+                {snapshots.critical_files && Object.keys(snapshots.critical_files).length > 0 && <FileHashSection title="critical file hashes · FIM" data={snapshots.critical_files} />}
+                {snapshots.cron && Object.keys(snapshots.cron).length > 0 && <FileHashSection title="cron file hashes" data={snapshots.cron} />}
+                {enabledSystemdUnits.length > 0 && <ScrollableList title="enabled systemd units" items={enabledSystemdUnits} />}
+                {activeSystemdUnits.length > 0 && <ScrollableList title="active services and timers" items={activeSystemdUnits} />}
+                {runningSystemdUnits.length > 0 && <ScrollableList title="running services" items={runningSystemdUnits} />}
+                {(snapshots.suid?.length ?? 0) > 0 && <ScrollableList title="SUID binaries" items={snapshots.suid!} />}
+                {(snapshots.kernel_modules?.length ?? 0) > 0 && <ScrollableList title="kernel modules · inventory only, not a rootkit verdict" items={snapshots.kernel_modules!} />}
+                </div>
+              </Disclosure>
+            </div>
 
-          {(fim_coverage || fim_recent_changes.length > 0) && (
-            <FimSection
-              coverage={fim_coverage}
-              changes={fim_recent_changes}
-            />
-          )}
+            <div className="border border-line bg-surface-1 px-3 py-2">
+              <Disclosure label={`Runtime and network · ${runtimeCount} items`}>
+                <div className="space-y-5 border-t border-line-soft px-1 pb-3 pt-1">
+                <PortsSection rows={snapshots.ports ?? []} />
+                {(snapshots.processes?.length ?? 0) > 0 && <ProcessesSection rows={snapshots.processes!} />}
+                </div>
+              </Disclosure>
+            </div>
 
-          {(snapshots.disk?.length ?? 0) > 0 && (
-            <DiskSection rows={snapshots.disk!} />
-          )}
+            <div className="border border-line bg-surface-1 px-3 py-2">
+              <Disclosure label={`Capacity and software · ${capacityCount} items`}>
+                <div className="space-y-5 border-t border-line-soft px-1 pb-3 pt-1">
+                {(snapshots.disk?.length ?? 0) > 0 && <DiskSection rows={snapshots.disk!} />}
+                {(snapshots.packages?.length ?? 0) > 0 && (
+                  <ScrollableList
+                    title={`Supporting package inventory · ${snapshots.packages!.length}; context only, not vulnerability or signature verification`}
+                    items={snapshots.packages!.map((name) => {
+                      const detail = packageDetails.get(name);
+                      return detail
+                        ? `${name} · ${detail.version}${detail.installed_at ? ` · installed ${new Date(detail.installed_at).toLocaleDateString()}` : ""}`
+                        : name;
+                    })}
+                  />
+                )}
+                </div>
+              </Disclosure>
+            </div>
 
-          <PortsSection rows={snapshots.ports ?? []} />
-
-          {(snapshots.processes?.length ?? 0) > 0 && (
-            <ProcessesSection rows={snapshots.processes!} />
-          )}
-
-          {(snapshots.users?.length ?? 0) > 0 && (
-            <UsersSection rows={snapshots.users!} />
-          )}
-
-          {(snapshots.authorized_keys?.length ?? 0) > 0 && (
-            <AuthorizedKeysSection rows={snapshots.authorized_keys!} />
-          )}
-
-          {snapshots.sudoers && Object.keys(snapshots.sudoers).length > 0 && (
-            <FileHashSection
-              title="sudoers files"
-              data={snapshots.sudoers}
-            />
-          )}
-
-          {snapshots.critical_files && Object.keys(snapshots.critical_files).length > 0 && (
-            <FileHashSection
-              title="critical files · FIM"
-              data={snapshots.critical_files}
-            />
-          )}
-
-          {snapshots.cron && Object.keys(snapshots.cron).length > 0 && (
-            <FileHashSection title="cron files" data={snapshots.cron} />
-          )}
-
-          {enabledSystemdUnits.length > 0 && (
-            <ScrollableList title="enabled systemd units" items={enabledSystemdUnits} />
-          )}
-          {activeSystemdUnits.length > 0 && (
-            <ScrollableList title="active services and timers" items={activeSystemdUnits} />
-          )}
-          {runningSystemdUnits.length > 0 && (
-            <ScrollableList title="running services" items={runningSystemdUnits} />
-          )}
-
-          {(snapshots.kernel_modules?.length ?? 0) > 0 && (
-            <ScrollableList
-              title="kernel modules · inventory only, not a rootkit verdict"
-              items={snapshots.kernel_modules!}
-              columns={3}
-            />
-          )}
-
-          {(snapshots.suid?.length ?? 0) > 0 && (
-            <ScrollableList title="suid binaries" items={snapshots.suid!} />
-          )}
-
-          {(snapshots.packages?.length ?? 0) > 0 && (
-            <ScrollableList
-              title={`supporting package inventory · ${snapshots.packages!.length} packages; context only, not vulnerability or signature verification`}
-              items={snapshots.packages!.slice(0, 100).map((name) => {
-                const detail = snapshots.package_details?.find((item) => item.name === name);
-                return detail ? `${name} · ${detail.version}${detail.installed_at ? ` · installed ${new Date(detail.installed_at).toLocaleDateString()}` : ""}` : name;
-              })}
-              columns={3}
-            />
-          )}
-
-          {auth_events.length > 0 && (
-            <EventsSection title="recent SSH / sudo" events={auth_events} />
-          )}
-
-          {state_changes.length > 0 && (
-            <EventsSection title="recent state changes" events={state_changes} />
-          )}
+            <DataPanel className="px-4 py-3 text-[11px] leading-relaxed text-fg-subtle">
+              This page presents the telemetry BlackWatch currently collects from this host. It does not provide full outbound network-flow history, process ancestry, memory capture, or executable signature verification.
+            </DataPanel>
+          </section>
         </>
       )}
     </>
@@ -201,254 +212,334 @@ function StatusSection({
   const cpu = extra.cpu;
   const cpuAnomaly = extra._state?.cpu_anomaly_active === true;
   const baselineN = extra._baseline_cpu?.n ?? 0;
+  const collectorStatuses = extra.collector_status ?? {};
+  const collectorErrors = extra.collector_errors ?? {};
+  const stalledCollectors = extra.stalled_collectors ?? [];
+  const hasCollectorState = Object.keys(collectorStatuses).length > 0
+    || Object.keys(collectorErrors).length > 0
+    || stalledCollectors.length > 0;
 
   return (
     <section className="space-y-2">
       <SectionLabel>status</SectionLabel>
-      <DataPanel>
-        <dl>
+      <DataPanel className="space-y-1 px-4 py-3">
+        <dl className="divide-y divide-line-soft">
           <KeyValueRow label="Agent">
             <span className="inline-flex items-center gap-2" title={healthReason}>
-              <span
-                aria-hidden
-                className={clsx(
-                  "h-1.5 w-1.5 rounded-full",
-                  reporting ? "bg-sev-resolved" : warning ? "bg-sev-medium" : "bg-sev-critical",
-                )}
-              />
+              <span aria-hidden className={clsx(
+                "h-1.5 w-1.5 rounded-full",
+                reporting ? "bg-sev-resolved" : warning ? "bg-sev-medium" : "bg-sev-critical",
+              )} />
               <span className={clsx(reporting ? "text-fg" : warning ? "text-sev-medium" : "text-sev-critical")}>
                 {state.replaceAll("_", " ")}
               </span>
             </span>
           </KeyValueRow>
-          {delivery && (
-            <>
-              <KeyValueRow label="Delivery">
-                <span className="font-mono text-xs text-fg-muted">
-                  {delivery.transport ?? "unknown"}
-                  {delivery.rollout ? ` · ${delivery.rollout}` : ""}
-                  {" · "}
-                  queue {delivery.queue_delay_seconds === null ? "—" : `${Math.round(delivery.queue_delay_seconds)}s`}
-                  {" · "}
-                  processing {delivery.processing_delay_seconds === null ? "—" : `${Math.round(delivery.processing_delay_seconds)}s`}
-                </span>
-              </KeyValueRow>
-              <KeyValueRow label="Sequence">
-                <span className="font-mono text-xs text-fg-muted">
-                  {delivery.last_sequence ?? "—"}
-                  {delivery.sequence_gaps > 0 ? ` · ${delivery.sequence_gaps} gap(s)` : ""}
-                  {delivery.sequence_tracking_overflow ? " · tracking limit exceeded" : ""}
-                </span>
-              </KeyValueRow>
-              <KeyValueRow label="Last accepted">
-                <span className="font-mono text-xs text-fg-muted">
-                  {delivery.last_accepted_at
-                    ? new Date(delivery.last_accepted_at).toLocaleString()
-                    : "—"}
-                </span>
-              </KeyValueRow>
-              <KeyValueRow label="Last processed">
-                <span className="font-mono text-xs text-fg-muted">
-                  {delivery.last_processed_at
-                    ? new Date(delivery.last_processed_at).toLocaleString()
-                    : "—"}
-                </span>
-              </KeyValueRow>
-              {delivery.last_error && (
-                <KeyValueRow label="Delivery error">
-                  <span className="text-xs text-sev-critical">{delivery.last_error}</span>
-                </KeyValueRow>
-              )}
-            </>
-          )}
           <KeyValueRow label="Last seen">
             {ageSeconds === null ? (
               <span className="text-fg-disabled">—</span>
             ) : (
               <span className="font-mono text-xs">
                 <span className="text-fg-muted">{ageSeconds}s ago</span>
-                {stale && (
-                  <span className="ml-2 text-[10px] uppercase tracking-wider text-sev-medium">
-                    stale
-                  </span>
-                )}
+                {stale && <span className="ml-2 text-[10px] uppercase tracking-wider text-sev-medium">stale</span>}
               </span>
             )}
           </KeyValueRow>
-          <KeyValueRow label="Name">
-            <HostDisplayNameEditor
-              instanceId={host.instance_id}
-              initial={host.display_name ?? null}
-            />
-          </KeyValueRow>
-          <KeyValueRow label="Hostname">
-            <span className="font-mono text-xs text-fg">{host.hostname ?? "—"}</span>
-          </KeyValueRow>
-          <KeyValueRow label="Account">
-            <span className="font-mono text-xs text-fg-muted">{host.account ?? "—"}</span>
-          </KeyValueRow>
-          <KeyValueRow label="Region">
-            <span className="font-mono text-xs text-fg-muted">{host.region ?? "—"}</span>
-          </KeyValueRow>
-          {extra.uptime_seconds != null && (
-            <KeyValueRow label="Uptime">
-              <span className="font-mono text-xs text-fg-muted">
-                {extra.uptime_seconds}s
-              </span>
-            </KeyValueRow>
-          )}
-          {extra.agent_version && (
-            <KeyValueRow label="Agent version">
-              <span className="font-mono text-xs text-fg-muted">
-                {extra.agent_version}
-              </span>
-            </KeyValueRow>
-          )}
           {memory && memory.used_pct != null && (
-            <KeyValueRow label="Memory">
+            <KeyValueRow label="Memory · latest report">
               <span className="inline-flex items-baseline gap-2">
-                <span className={clsx("font-mono", memoryColor(memory.used_pct))}>
-                  {memory.used_pct}%
-                </span>
-                <span className="text-[11px] text-fg-subtle">
-                  · {kbToMib(memory.used_kb)} / {kbToMib(memory.total_kb)} MiB
-                </span>
+                <span className={clsx("font-mono", memoryColor(memory.used_pct))}>{memory.used_pct}%</span>
+                <span className="text-[11px] text-fg-subtle">· {kbToMib(memory.used_kb)} / {kbToMib(memory.total_kb)} MiB</span>
               </span>
             </KeyValueRow>
           )}
           {cpu && (
-            <KeyValueRow label="CPU load">
+            <KeyValueRow label="CPU load · latest report">
               <div className="space-y-1">
                 <div className="font-mono text-xs">
                   <span className="text-fg">{cpu.load_1min}</span>
                   <span className="text-fg-subtle"> (1m) · </span>
                   <span className="text-fg">{cpu.load_5min}</span>
-                  <span className="text-fg-subtle">
-                    {" "}
-                    (5m) · {cpu.cpu_count} CPUs · normalized {cpu.load_norm_1min}
-                  </span>
+                  <span className="text-fg-subtle"> (5m) · {cpu.cpu_count} CPUs · normalized {cpu.load_norm_1min}</span>
                 </div>
-                {cpuAnomaly && (
-                  <div className="inline-flex items-center gap-1.5 text-xs text-sev-critical">
-                    <span
-                      aria-hidden
-                      className="h-1.5 w-1.5 rounded-full bg-sev-critical"
-                    />
-                    anomaly active
-                  </div>
-                )}
+                {cpuAnomaly && <div className="inline-flex items-center gap-1.5 text-xs text-sev-critical"><span aria-hidden className="h-1.5 w-1.5 rounded-full bg-sev-critical" />anomaly active</div>}
                 {!cpuAnomaly && baselineN >= 60 && extra._baseline_cpu && (
-                  <div className="text-[11px] text-fg-subtle">
-                    baseline mean {extra._baseline_cpu.mean.toFixed(3)} ({baselineN}{" "}
-                    samples)
-                  </div>
+                  <div className="text-[11px] text-fg-subtle">baseline mean {extra._baseline_cpu.mean.toFixed(3)} ({baselineN} samples)</div>
                 )}
               </div>
             </KeyValueRow>
           )}
-          {extra.rpm_db_corrupted && (
-            <KeyValueRow label="Package DB">
-              <div className="space-y-1">
-                <div className="inline-flex items-center gap-1.5">
-                  <span
-                    aria-hidden
-                    className="h-1.5 w-1.5 rounded-full bg-sev-critical"
-                  />
-                  <span className="text-sev-critical">CORRUPTED</span>
-                  <span className="text-[11px] text-fg-subtle">
-                    · {extra.rpm_db_corrupted.lock_count} stale lock file(s)
-                  </span>
-                </div>
-                <div className="text-[11px] text-fg-subtle">
-                  Fix:{" "}
-                  <code className="text-fg">
-                    sudo rm -f /var/lib/rpm/__db.* &amp;&amp; sudo rpm
-                    --rebuilddb
-                  </code>
-                </div>
-              </div>
-            </KeyValueRow>
-          )}
-          {extra.tick_duration_ms != null && (
-            <KeyValueRow label="Last tick">
-              <span className="font-mono text-xs text-fg-muted">
-                {extra.tick_duration_ms}ms
-              </span>
-            </KeyValueRow>
-          )}
-          {extra.tags && Object.keys(extra.tags).length > 0 && (
-            <KeyValueRow label="Tags">
-              <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs">
-                {Object.entries(extra.tags).map(([k, v]) => (
-                  <code key={k} className="text-fg-muted">
-                    {k}={v}
-                  </code>
-                ))}
-              </div>
-            </KeyValueRow>
-          )}
-          {extra.collector_errors && Object.keys(extra.collector_errors).length > 0 && (
-            <KeyValueRow label="Collector errors">
-              <div className="space-y-1">
-                {Object.entries(extra.collector_errors).map(([name, err]) => (
-                  <div key={name} className="text-xs text-sev-critical">
-                    <span className="font-mono">{name}</span>: {err}
-                  </div>
-                ))}
-              </div>
-            </KeyValueRow>
-          )}
-          {extra.collector_status && Object.keys(extra.collector_status).length > 0 && (
-            <KeyValueRow label="Collector freshness">
-              <div className="grid gap-y-1 text-xs sm:grid-cols-[minmax(8rem,1fr)_5rem_8rem_6rem] sm:gap-x-3">
-                <span className="text-fg-subtle">Collector</span>
-                <span className="text-fg-subtle">State</span>
-                <span className="text-fg-subtle">Last success</span>
-                <span className="text-fg-subtle">Cadence</span>
-                {Object.entries(extra.collector_status).map(([name, status]) => (
-                  <div key={name} className="contents">
-                    <span className="font-mono text-fg">{name}</span>
-                    <span className={status.state === "ok" ? "text-sev-resolved" : "text-sev-medium"}>
-                      {status.state}
-                    </span>
-                    <span className="font-mono text-fg-muted">
-                      {status.age_seconds == null ? "never" : `${status.age_seconds}s ago`}
-                    </span>
-                    <span className="font-mono text-fg-muted">{status.interval_seconds}s</span>
-                    {status.error && (
-                      <span className="col-span-full text-sev-critical">{status.error}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </KeyValueRow>
-          )}
-          {(extra.stalled_collectors?.length ?? 0) > 0 && (
-            <KeyValueRow label="Stalled collectors">
-              <div className="space-y-1">
-                <div className="flex flex-wrap gap-1.5">
-                  {extra.stalled_collectors!.map((name) => (
-                    <span
-                      key={name}
-                      className="inline-flex items-center gap-1.5 border border-line px-1.5 py-0.5 font-mono text-[11px] text-fg"
-                    >
-                      <span
-                        aria-hidden
-                        className="h-1.5 w-1.5 rounded-full bg-sev-medium"
-                      />
-                      {name}
-                    </span>
-                  ))}
-                </div>
-                <div className="text-[11px] text-fg-subtle">
-                  no successful run in 3× their interval
-                </div>
-              </div>
+          {hasCollectorState && (
+            <KeyValueRow label="Collector coverage">
+              <CollectorHealthSummary statuses={collectorStatuses} errors={collectorErrors} stalled={stalledCollectors} />
             </KeyValueRow>
           )}
         </dl>
+        <Disclosure label="Host and delivery details" defaultOpen={Boolean(delivery?.last_error)}>
+          <dl className="divide-y divide-line-soft border-t border-line-soft">
+            <KeyValueRow label="Display name">
+              <HostDisplayNameEditor instanceId={host.instance_id} initial={host.display_name ?? null} />
+            </KeyValueRow>
+            <KeyValueRow label="Hostname">
+              <span className="font-mono text-xs text-fg">{host.hostname ?? "—"}</span>
+            </KeyValueRow>
+            <KeyValueRow label="Account / region">
+              <span className="font-mono text-xs text-fg-muted">{[host.account, host.region].filter(Boolean).join(" · ") || "—"}</span>
+            </KeyValueRow>
+            {extra.uptime_seconds != null && (
+              <KeyValueRow label="Uptime">
+                <span className="font-mono text-xs text-fg-muted">{humanAge(extra.uptime_seconds)}</span>
+              </KeyValueRow>
+            )}
+            {extra.agent_version && (
+              <KeyValueRow label="Agent version">
+                <span className="font-mono text-xs text-fg-muted">{extra.agent_version}</span>
+              </KeyValueRow>
+            )}
+            {extra.tick_duration_ms != null && (
+              <KeyValueRow label="Last collection tick">
+                <span className="font-mono text-xs text-fg-muted">{extra.tick_duration_ms}ms</span>
+              </KeyValueRow>
+            )}
+            {delivery && (
+              <>
+                <KeyValueRow label="Transport / rollout">
+                  <span className="font-mono text-xs text-fg-muted">{delivery.transport ?? "unknown"}{delivery.rollout ? ` · ${delivery.rollout}` : ""}</span>
+                </KeyValueRow>
+                <KeyValueRow label="Sequence / gaps">
+                  <span className="font-mono text-xs text-fg-muted">{delivery.last_sequence ?? "—"}{delivery.sequence_gaps > 0 ? ` · ${delivery.sequence_gaps} reported gap(s)` : ""}{delivery.sequence_tracking_overflow ? " · tracking limit exceeded" : ""}</span>
+                </KeyValueRow>
+                <KeyValueRow label="Queue / processing delay">
+                  <span className="font-mono text-xs text-fg-muted">queue {delivery.queue_delay_seconds === null ? "—" : `${Math.round(delivery.queue_delay_seconds)}s`} · processing {delivery.processing_delay_seconds === null ? "—" : `${Math.round(delivery.processing_delay_seconds)}s`}</span>
+                </KeyValueRow>
+                <KeyValueRow label="Last accepted / processed">
+                  <span className="font-mono text-xs text-fg-muted">{delivery.last_accepted_at ? new Date(delivery.last_accepted_at).toLocaleString() : "—"} · {delivery.last_processed_at ? new Date(delivery.last_processed_at).toLocaleString() : "—"}</span>
+                </KeyValueRow>
+                {delivery.last_error && (
+                  <KeyValueRow label="Delivery error"><span className="text-xs text-sev-critical">{delivery.last_error}</span></KeyValueRow>
+                )}
+              </>
+            )}
+            {extra.rpm_db_corrupted && (
+              <KeyValueRow label="Package DB">
+                <div className="space-y-1">
+                  <div className="inline-flex items-center gap-1.5">
+                    <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-sev-critical" />
+                    <span className="text-sev-critical">CORRUPTED</span>
+                    <span className="text-[11px] text-fg-subtle">· {extra.rpm_db_corrupted.lock_count} stale lock file(s)</span>
+                  </div>
+                  <div className="text-[11px] text-fg-subtle">Fix: <code className="text-fg">sudo rm -f /var/lib/rpm/__db.* &amp;&amp; sudo rpm --rebuilddb</code></div>
+                </div>
+              </KeyValueRow>
+            )}
+            {extra.tags && Object.keys(extra.tags).length > 0 && (
+              <KeyValueRow label="Tags">
+                <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs">
+                  {Object.entries(extra.tags).map(([key, value]) => <code key={key} className="text-fg-muted">{key}={value}</code>)}
+                </div>
+              </KeyValueRow>
+            )}
+          </dl>
+        </Disclosure>
       </DataPanel>
     </section>
+  );
+}
+type HostActivityItem = {
+  key: string;
+  at: string;
+  kind: string;
+  severity: string | null;
+  action: string;
+  actorOrTarget: string;
+  href: string | null;
+};
+
+function HostActivitySection({
+  alerts,
+  authEvents,
+  stateChanges,
+  fimChanges,
+}: {
+  alerts: EventEnvelope[];
+  authEvents: EventEnvelope[];
+  stateChanges: EventEnvelope[];
+  fimChanges: FimChange[];
+}) {
+  const byId = new Map<string, HostActivityItem>();
+  for (const event of [...alerts, ...authEvents, ...stateChanges]) {
+    const action = event.action ?? "host activity";
+    const kind = action.startsWith("host.auth.")
+      ? "Access"
+      : action.startsWith("host.sudo.")
+        ? "Privilege"
+        : action.startsWith("host.packages.")
+          ? "Package change"
+          : action.startsWith("host.")
+            ? "Host change"
+            : event.category ?? "Alert";
+    byId.set(event.event_id, {
+      key: event.event_id,
+      at: event.event_time,
+      kind,
+      severity: event.severity ?? null,
+      action,
+      actorOrTarget: event.actor?.principal
+        ?? event.target?.name
+        ?? event.target?.id
+        ?? "—",
+      href: `/events/${event.event_id}`,
+    });
+  }
+  for (const change of fimChanges) {
+    const key = change.event_id ?? `fim:${change.path}:${change.changed_at ?? "unknown"}`;
+    if (byId.has(key)) continue;
+    byId.set(key, {
+      key,
+      at: change.changed_at ?? "",
+      kind: "File integrity",
+      severity: null,
+      action: `${change.change_type.replaceAll("_", " ")} · ${change.path}`,
+      actorOrTarget: change.actor_comm
+        ? `${change.actor_comm}${change.actor_uid == null ? "" : ` · uid ${change.actor_uid}`}`
+        : "unknown · no attribution",
+      href: change.event_id ? `/events/${change.event_id}` : null,
+    });
+  }
+  const activity = [...byId.values()]
+    .sort((a, b) => {
+      const timeA = Date.parse(a.at);
+      const timeB = Date.parse(b.at);
+      return (Number.isFinite(timeB) ? timeB : 0) - (Number.isFinite(timeA) ? timeA : 0);
+    })
+    .slice(0, 25);
+
+  return (
+    <section className="space-y-2" aria-labelledby="host-activity-title">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <SectionLabel>
+          <span id="host-activity-title">overview · recent security activity</span>
+        </SectionLabel>
+        <span className="text-[11px] text-fg-subtle">newest first · full inventories below</span>
+      </div>
+      <DataPanel scrollX>
+        {activity.length === 0 ? (
+          <div className="px-4 py-6 text-sm text-fg-muted">No recent host alerts or changes.</div>
+        ) : (
+          <Table tableId="host-recent-activity" ariaLabel="Recent host security activity">
+            <thead>
+              <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+                <th className="w-36 px-3 py-2 text-left font-normal">When</th>
+                <th className="w-28 px-3 py-2 text-left font-normal">Type</th>
+                <th className="w-24 px-3 py-2 text-left font-normal">Severity</th>
+                <th className="min-w-56 px-3 py-2 text-left font-normal">Activity</th>
+                <th className="min-w-40 px-3 py-2 text-left font-normal">Actor / target</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activity.map((item) => (
+                <tr key={item.key} className="border-b border-line-soft last:border-0 hover:bg-surface-2">
+                  <td className="whitespace-nowrap px-3 py-2.5"><TimestampCell value={item.at || null} /></td>
+                  <td className="px-3 py-2.5 text-xs text-fg-muted">{item.kind}</td>
+                  <td className="px-3 py-2.5">
+                    {item.severity ? <SeverityBadge severity={item.severity} /> : <span className="text-xs text-fg-subtle">—</span>}
+                  </td>
+                  <td className="max-w-[30rem] break-words px-3 py-2.5">
+                    {item.href ? (
+                      <Link href={item.href} className="font-mono text-xs text-fg hover:text-signal">{item.action}</Link>
+                    ) : <span className="font-mono text-xs text-fg">{item.action}</span>}
+                  </td>
+                  <td className="max-w-56 break-words px-3 py-2.5 text-xs text-fg-muted">{item.actorOrTarget}</td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </DataPanel>
+    </section>
+  );
+}
+
+type CollectorHealth = {
+  state: string;
+  interval_seconds: number;
+  last_attempt_at: string | null;
+  last_success_at: string | null;
+  age_seconds: number | null;
+  error: string | null;
+};
+
+function CollectorHealthSummary({
+  statuses,
+  errors,
+  stalled,
+}: {
+  statuses: Record<string, CollectorHealth>;
+  errors: Record<string, string>;
+  stalled: string[];
+}) {
+  const names = [...new Set([
+    ...Object.keys(statuses),
+    ...Object.keys(errors),
+    ...stalled,
+  ])].sort();
+  const failed = names.filter((name) =>
+    statuses[name]?.state === "error" || Boolean(statuses[name]?.error) || Boolean(errors[name]),
+  );
+  const failedSet = new Set(failed);
+  const stale = names.filter((name) =>
+    !failedSet.has(name) && (statuses[name]?.state === "stale" || stalled.includes(name)),
+  );
+  const staleSet = new Set(stale);
+  const pending = names.filter((name) =>
+    !failedSet.has(name) && !staleSet.has(name) && statuses[name]?.state === "pending",
+  );
+  const pendingSet = new Set(pending);
+  const current = names.filter((name) =>
+    !failedSet.has(name) && !staleSet.has(name) && !pendingSet.has(name),
+  );
+  const needsAttention = failed.length > 0 || stale.length > 0;
+
+  return (
+    <details open={needsAttention} className="max-w-full text-xs">
+      <summary className="cursor-pointer text-fg hover:text-signal focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal">
+        <span className={current.length > 0 && !needsAttention ? "text-sev-resolved" : "text-fg-muted"}>
+          {current.length} current
+        </span>
+        {stale.length > 0 && <span className="ml-2 text-sev-medium">{stale.length} stale</span>}
+        {failed.length > 0 && <span className="ml-2 text-sev-critical">{failed.length} failed</span>}
+        {pending.length > 0 && <span className="ml-2 text-fg-subtle">{pending.length} pending</span>}
+        <span className="ml-2 text-fg-subtle">· details</span>
+      </summary>
+      <div className="mt-3 space-y-2 border-t border-line-soft pt-2">
+        {names.map((name) => {
+          const status = statuses[name];
+          const error = status?.error ?? errors[name];
+          const state = failedSet.has(name) ? "failed" : staleSet.has(name) ? "stale" : status?.state ?? "unknown";
+          return (
+            <div key={name} className="border-b border-line-soft pb-2 last:border-b-0">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <span className="font-mono text-fg">{name}</span>
+                <span className={
+                  state === "ok" ? "text-sev-resolved" :
+                    state === "failed" ? "text-sev-critical" :
+                      state === "stale" ? "text-sev-medium" : "text-fg-subtle"
+                }>{state}</span>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px] text-fg-subtle">
+                <span>last success {status?.age_seconds == null ? "never" : `${status.age_seconds}s ago`}</span>
+                {status && <span>every {status.interval_seconds}s</span>}
+                {status?.last_attempt_at && (
+                  <span>last attempt {new Date(status.last_attempt_at).toLocaleString()}</span>
+                )}
+              </div>
+              {error && <div className="mt-1 break-words text-sev-critical">{error}</div>}
+            </div>
+          );
+        })}
+        {names.length === 0 && <div className="text-fg-subtle">No collector status reported.</div>}
+      </div>
+    </details>
   );
 }
 
@@ -634,18 +725,13 @@ function PathColumn({
   label: string;
   paths: string[];
 }) {
+  const rows: HostInventoryRow[] = paths.map((path) => ({ key: path, cells: [path] }));
   return (
-    <div>
-      <div className="mb-1 text-[10px] uppercase tracking-[0.08em] text-fg-subtle">
+    <div className="min-w-0">
+      <div className="mb-1 flex items-baseline justify-between text-[10px] uppercase tracking-[0.08em] text-fg-subtle">
         {label} <span className="text-fg-disabled">({paths.length})</span>
       </div>
-      <ul className="space-y-0.5">
-        {paths.map((p) => (
-          <li key={p} className="font-mono text-[11px] text-fg-muted">
-            {p}
-          </li>
-        ))}
-      </ul>
+      <HostInventoryTable title={`${label} FIM paths`} columns={[{ label: "Path", mono: true }]} rows={rows} />
     </div>
   );
 }
@@ -923,6 +1009,20 @@ function DiskSection({
 }: {
   rows: NonNullable<HostSnapshots["disk"]>;
 }) {
+  const inventoryRows: HostInventoryRow[] = rows.map((disk) => ({
+    key: disk.mount,
+    cells: [
+      disk.mount,
+      disk.fs_type,
+      `${disk.used_pct}%`,
+      disk.inodes_used_pct == null ? "—" : `${disk.inodes_used_pct}%`,
+      `${disk.used} / ${disk.total} KB`,
+      [
+        disk.bytes_sampled_at ? `bytes ${new Date(disk.bytes_sampled_at).toLocaleString()}` : "",
+        disk.inodes_sampled_at ? `inodes ${new Date(disk.inodes_sampled_at).toLocaleString()}` : "",
+      ].filter(Boolean).join(" · ") || "—",
+    ],
+  }));
   return (
     <section className="mt-6 space-y-2">
       <div className="flex items-baseline justify-between">
@@ -931,43 +1031,12 @@ function DiskSection({
           {rows.length} mount{rows.length === 1 ? "" : "s"}
         </span>
       </div>
-      <DataPanel className="overflow-hidden">
-        <Table>
-          <thead>
-            <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-              <th className="w-64 px-4 py-2 text-left font-normal">Mount</th>
-              <th className="w-32 px-4 py-2 text-left font-normal">FS</th>
-              <th className="w-24 px-4 py-2 text-left font-normal">Used %</th>
-              <th className="w-28 px-4 py-2 text-left font-normal">Inodes %</th>
-              <th className="px-4 py-2 text-left font-normal">Used / Total</th>
-              <th className="px-4 py-2 text-left font-normal">Sampled</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((d) => (
-              <tr
-                key={d.mount}
-                className="border-b border-line-soft last:border-0"
-              >
-                <td className="px-4 py-2 font-mono text-xs text-fg">{d.mount}</td>
-                <td className="px-4 py-2 font-mono text-xs text-fg-muted">{d.fs_type}</td>
-                <td className={clsx("px-4 py-2 font-mono text-xs", memoryColor(d.used_pct))}>
-                  {d.used_pct}%
-                </td>
-                <td className={clsx("px-4 py-2 font-mono text-xs", d.inodes_used_pct == null ? "text-fg-subtle" : memoryColor(d.inodes_used_pct))}>
-                  {d.inodes_used_pct == null ? "—" : `${d.inodes_used_pct}%`}
-                </td>
-                <td className="px-4 py-2 font-mono text-xs text-fg-muted">
-                  {d.used} / {d.total} KB
-                </td>
-                <td className="px-4 py-2 font-mono text-[11px] text-fg-subtle">
-                  {d.bytes_sampled_at ? new Date(d.bytes_sampled_at).toLocaleTimeString() : "—"}
-                  {d.inodes_sampled_at ? ` · inodes ${new Date(d.inodes_sampled_at).toLocaleTimeString()}` : ""}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+      <DataPanel scrollX>
+        <HostInventoryTable title="disk mounts" columns={[
+          { label: "Mount", mono: true }, { label: "Filesystem", mono: true },
+          { label: "Used" }, { label: "Inodes" }, { label: "Used / total", mono: true },
+          { label: "Sampled", mono: true },
+        ]} rows={inventoryRows} />
       </DataPanel>
     </section>
   );
@@ -978,44 +1047,21 @@ function PortsSection({
 }: {
   rows: NonNullable<HostSnapshots["ports"]>;
 }) {
+  const inventoryRows: HostInventoryRow[] = rows.map((port, index) => ({
+    key: `${port.proto}-${port.port}-${index}`,
+    cells: [port.proto, port.address, String(port.port), port.process ?? "—"],
+  }));
   return (
     <section className="mt-6 space-y-2">
       <div className="flex items-baseline justify-between">
         <SectionLabel>listening ports</SectionLabel>
         <span className="text-[11px] text-fg-subtle">{rows.length}</span>
       </div>
-      <DataPanel className="overflow-hidden">
-        {rows.length === 0 ? (
-          <div className="px-6 py-8 text-center text-sm text-fg-muted">
-            No port snapshot yet.
-          </div>
-        ) : (
-          <Table>
-            <thead>
-              <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-                <th className="w-20 px-4 py-2 text-left font-normal">Proto</th>
-                <th className="w-44 px-4 py-2 text-left font-normal">Address</th>
-                <th className="w-24 px-4 py-2 text-left font-normal">Port</th>
-                <th className="px-4 py-2 text-left font-normal">Process</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((p, i) => (
-                <tr
-                  key={`${p.proto}-${p.port}-${i}`}
-                  className="border-b border-line-soft last:border-0"
-                >
-                  <td className="px-4 py-2 font-mono text-xs text-fg-muted">{p.proto}</td>
-                  <td className="px-4 py-2 font-mono text-xs text-fg-muted">{p.address}</td>
-                  <td className="px-4 py-2 font-mono text-xs text-fg">{p.port}</td>
-                  <td className="px-4 py-2 font-mono text-xs text-fg-muted">
-                    {p.process ?? "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
+      <DataPanel scrollX>
+        <HostInventoryTable title="listening ports" columns={[
+          { label: "Protocol", mono: true }, { label: "Address", mono: true },
+          { label: "Port", mono: true }, { label: "Process", mono: true },
+        ]} rows={inventoryRows} />
       </DataPanel>
     </section>
   );
@@ -1026,31 +1072,20 @@ function ProcessesSection({
 }: {
   rows: NonNullable<HostSnapshots["processes"]>;
 }) {
+  const inventoryRows: HostInventoryRow[] = rows.map((process) => ({
+    key: String(process.pid),
+    cells: [process.user, String(process.pid), process.comm],
+  }));
   return (
     <section className="mt-6 space-y-2">
       <div className="flex items-baseline justify-between">
         <SectionLabel>running processes</SectionLabel>
         <span className="text-[11px] text-fg-subtle">{rows.length}</span>
       </div>
-      <DataPanel className="max-h-[380px] overflow-auto">
-        <Table>
-          <thead>
-            <tr className="sticky top-0 border-b border-line-soft bg-surface-1 text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-              <th className="w-32 px-4 py-2 text-left font-normal">User</th>
-              <th className="w-20 px-4 py-2 text-left font-normal">PID</th>
-              <th className="w-44 px-4 py-2 text-left font-normal">Command</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr key={p.pid} className="border-b border-line-soft last:border-0">
-                <td className="px-4 py-1.5 font-mono text-xs text-fg-muted">{p.user}</td>
-                <td className="px-4 py-1.5 font-mono text-xs text-fg-muted">{p.pid}</td>
-                <td className="px-4 py-1.5 font-mono text-xs text-fg">{p.comm}</td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+      <DataPanel scrollX>
+        <HostInventoryTable title="running processes" columns={[
+          { label: "User" }, { label: "PID", mono: true }, { label: "Command", mono: true },
+        ]} rows={inventoryRows} />
       </DataPanel>
     </section>
   );
@@ -1061,38 +1096,27 @@ function UsersSection({
 }: {
   rows: NonNullable<HostSnapshots["users"]>;
 }) {
+  const inventoryRows: HostInventoryRow[] = rows.map((user) => ({
+    key: user.name,
+    cells: [
+      user.name,
+      String(user.uid),
+      `${user.account_type ?? "unclassified"} · ${user.interactive == null ? "access unknown" : user.interactive ? "interactive" : "non-interactive"}${user.sudo_wheel_member ? " · sudo/wheel member" : ""} · account ${user.account_status ?? "unknown"} · password ${user.password_status ?? "unknown"}`,
+      user.groups?.join(", ") || "—",
+      user.shell,
+    ],
+  }));
   return (
     <section className="mt-6 space-y-2">
       <div className="flex items-baseline justify-between">
         <SectionLabel>users</SectionLabel>
         <span className="text-[11px] text-fg-subtle">{rows.length}</span>
       </div>
-      <DataPanel className="max-h-[280px] overflow-auto">
-        <Table>
-          <thead>
-            <tr className="sticky top-0 border-b border-line-soft bg-surface-1 text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-              <th className="w-44 px-4 py-2 text-left font-normal">Name</th>
-              <th className="w-20 px-4 py-2 text-left font-normal">UID</th>
-              <th className="px-4 py-2 text-left font-normal">Class / access</th>
-              <th className="px-4 py-2 text-left font-normal">Groups</th>
-              <th className="px-4 py-2 text-left font-normal">Shell</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((u) => (
-              <tr key={u.name} className="border-b border-line-soft last:border-0">
-                <td className="px-4 py-1.5 text-xs text-fg">{u.name}</td>
-                <td className="px-4 py-1.5 font-mono text-xs text-fg-muted">{u.uid}</td>
-                <td className="px-4 py-1.5 text-xs text-fg-muted">
-                  {u.account_type ?? "unclassified"} · {u.interactive == null ? "access unknown" : u.interactive ? "interactive" : "non-interactive"}
-                  {u.sudo_wheel_member ? " · sudo/wheel member" : ""} · account {u.account_status ?? "unknown"} · password {u.password_status ?? "unknown"}
-                </td>
-                <td className="px-4 py-1.5 font-mono text-xs text-fg-muted">{u.groups?.join(", ") || "—"}</td>
-                <td className="px-4 py-1.5 font-mono text-xs text-fg-muted">{u.shell}</td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+      <DataPanel scrollX>
+        <HostInventoryTable title="users and access" columns={[
+          { label: "Name" }, { label: "UID", mono: true }, { label: "Class and access" },
+          { label: "Groups", mono: true }, { label: "Shell", mono: true },
+        ]} rows={inventoryRows} />
       </DataPanel>
     </section>
   );
@@ -1103,38 +1127,20 @@ function AuthorizedKeysSection({
 }: {
   rows: NonNullable<HostSnapshots["authorized_keys"]>;
 }) {
+  const inventoryRows: HostInventoryRow[] = rows.map((key, index) => ({
+    key: `${key.user}-${key.fingerprint}-${index}`,
+    cells: [key.user, key.fingerprint, key.preview],
+  }));
   return (
     <section className="mt-6 space-y-2">
       <div className="flex items-baseline justify-between">
         <SectionLabel>authorized SSH keys</SectionLabel>
         <span className="text-[11px] text-fg-subtle">{rows.length}</span>
       </div>
-      <DataPanel className="overflow-hidden">
-        <Table>
-          <thead>
-            <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-              <th className="w-32 px-4 py-2 text-left font-normal">User</th>
-              <th className="w-72 px-4 py-2 text-left font-normal">Fingerprint</th>
-              <th className="px-4 py-2 text-left font-normal">Preview</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((k, i) => (
-              <tr
-                key={`${k.user}-${k.fingerprint}-${i}`}
-                className="border-b border-line-soft last:border-0"
-              >
-                <td className="px-4 py-2 text-fg">{k.user}</td>
-                <td className="px-4 py-2 font-mono text-[11px] text-fg-muted">
-                  {k.fingerprint}
-                </td>
-                <td className="truncate px-4 py-2 font-mono text-[11px] text-fg-subtle">
-                  {k.preview}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+      <DataPanel scrollX>
+        <HostInventoryTable title="authorized SSH keys" columns={[
+          { label: "User" }, { label: "Fingerprint", mono: true }, { label: "Key preview", mono: true },
+        ]} rows={inventoryRows} />
       </DataPanel>
     </section>
   );
@@ -1152,31 +1158,20 @@ function FileHashSection({
   data: Record<string, string>;
 }) {
   const rows = Object.entries(data);
+  const inventoryRows: HostInventoryRow[] = rows.map(([path, hash]) => ({
+    key: path,
+    cells: [path, hash],
+  }));
   return (
     <section className="mt-6 space-y-2">
       <div className="flex items-baseline justify-between">
         <SectionLabel>{title}</SectionLabel>
         <span className="text-[11px] text-fg-subtle">{rows.length}</span>
       </div>
-      <DataPanel className="overflow-hidden">
-        <Table>
-          <thead>
-            <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-              <th className="px-4 py-2 text-left font-normal">Path</th>
-              <th className="w-44 px-4 py-2 text-left font-normal">sha256</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(([path, h]) => (
-              <tr key={path} className="border-b border-line-soft last:border-0">
-                <td className="truncate px-4 py-2 font-mono text-xs text-fg">{path}</td>
-                <td className="px-4 py-2 font-mono text-[11px] text-fg-muted">
-                  {h.slice(0, 16)}…
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+      <DataPanel scrollX>
+        <HostInventoryTable title={title} columns={[
+          { label: "Path", mono: true }, { label: "SHA-256", mono: true },
+        ]} rows={inventoryRows} />
       </DataPanel>
     </section>
   );
@@ -1185,28 +1180,22 @@ function FileHashSection({
 function ScrollableList({
   title,
   items,
-  columns = 1,
 }: {
   title: string;
   items: string[];
-  columns?: 1 | 2 | 3;
 }) {
-  const colClass =
-    columns === 3 ? "columns-3" : columns === 2 ? "columns-2" : "columns-1";
+  const inventoryRows: HostInventoryRow[] = items.map((item, index) => ({
+    key: `${index}-${item}`,
+    cells: [item],
+  }));
   return (
     <section className="mt-6 space-y-2">
       <div className="flex items-baseline justify-between">
         <SectionLabel>{title}</SectionLabel>
         <span className="text-[11px] text-fg-subtle">{items.length}</span>
       </div>
-      <DataPanel className="max-h-[240px] overflow-auto p-4">
-        <div className={clsx("gap-x-6 font-mono text-xs text-fg-muted", colClass)}>
-          {items.map((item, i) => (
-            <div key={i} className="break-all">
-              {item}
-            </div>
-          ))}
-        </div>
+      <DataPanel scrollX>
+        <HostInventoryTable title={title} columns={[{ label: "Value", mono: true }]} rows={inventoryRows} />
       </DataPanel>
     </section>
   );

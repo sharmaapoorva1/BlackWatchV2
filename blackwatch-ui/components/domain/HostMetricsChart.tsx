@@ -35,7 +35,7 @@ type Range = 24 | 48 | 168 | 336;  // 24h · 48h · 7d · 14d
 
 const METRICS: Array<{ key: Metric; label: string }> = [
   { key: "mem", label: "Memory %" },
-  { key: "cpu", label: "CPU load %" },
+  { key: "cpu", label: "CPU utilization %" },
 ];
 
 const RANGES: Array<{ hours: Range; label: string }> = [
@@ -114,10 +114,14 @@ export function HostMetricsChart({ instanceId }: { instanceId: string }) {
     const avgs = points.map((p) => p.avg).filter((v): v is number => v !== null);
     const maxes = points.map((p) => p.max).filter((v): v is number => v !== null);
     if (avgs.length === 0) return null;
-    const avg = avgs.reduce((s, x) => s + x, 0) / avgs.length;
+    const avg = avgs.reduce((sum, value) => sum + value, 0) / avgs.length;
     const peak = maxes.length > 0 ? Math.max(...maxes) : null;
     return { avg, peak, samples: rows.reduce((s, r) => s + r.sample_count, 0) };
   }, [points, rows]);
+  const latestBucket = rows.length > 0 ? rows[rows.length - 1].hour_start : null;
+  const latestBucketLabel = latestBucket
+    ? formatTooltipStamp(Math.floor(new Date(latestBucket).getTime() / 1000), tz)
+    : null;
 
   // Ticks show dates only on ranges wider than 24h (short range = time only).
   const showDateOnAxis = range > 24;
@@ -125,7 +129,7 @@ export function HostMetricsChart({ instanceId }: { instanceId: string }) {
   return (
     <section className="mt-6 space-y-2">
       <div className="flex items-baseline justify-between">
-        <SectionLabel>resource metrics · hourly rollup</SectionLabel>
+        <SectionLabel>CPU and memory · hourly history</SectionLabel>
         <div className="flex items-center gap-1">
           {RANGES.map((r) => (
             <Button
@@ -167,9 +171,9 @@ export function HostMetricsChart({ instanceId }: { instanceId: string }) {
           ))}
 
           {summary && (
-            <div className="ml-auto flex items-baseline gap-4 text-[11px] text-fg-subtle">
+            <div className="ml-auto flex flex-wrap items-baseline justify-end gap-x-4 gap-y-1 text-[11px] text-fg-subtle">
               <span>
-                avg{" "}
+                mean hourly avg{" "}
                 <span className="font-mono text-fg">{summary.avg.toFixed(1)}%</span>
               </span>
               {summary.peak !== null && (
@@ -182,6 +186,7 @@ export function HostMetricsChart({ instanceId }: { instanceId: string }) {
                 <span className="font-mono text-fg-muted">{summary.samples}</span>{" "}
                 samples
               </span>
+              {latestBucketLabel && <span>latest hourly bucket {latestBucketLabel}</span>}
             </div>
           )}
         </div>
