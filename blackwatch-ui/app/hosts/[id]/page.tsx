@@ -1,5 +1,6 @@
 import Link from "next/link";
 import clsx from "clsx";
+import { Children, type ReactNode } from "react";
 
 import { fetchHostDetail, hostLabel } from "@/lib/api";
 import { HostDisplayNameEditor } from "@/components/domain/HostDisplayNameEditor";
@@ -20,7 +21,6 @@ import { DataPanel } from "@/components/layout/DataPanel";
 import { Table } from "@/components/ui/Table";
 import { SectionLabel } from "@/components/layout/SectionLabel";
 import { KeyValueRow } from "@/components/layout/KeyValueRow";
-import { Disclosure } from "@/components/ui/Disclosure";
 import { TimestampCell } from "@/components/domain/TimestampCell";
 import { IpCell } from "@/components/domain/IpCell";
 import {
@@ -45,28 +45,6 @@ export default async function HostDetailPage({
   const enabledSystemdUnits = Array.isArray(systemd) ? systemd : systemd?.enabled ?? [];
   const activeSystemdUnits = Array.isArray(systemd) ? [] : systemd?.active ?? [];
   const runningSystemdUnits = Array.isArray(systemd) ? [] : systemd?.running ?? [];
-  const accessCount = auth_events.length
-    + (host?.extra?.active_sessions?.length ?? 0)
-    + (snapshots.users?.length ?? 0)
-    + (snapshots.authorized_keys?.length ?? 0)
-    + Object.keys(snapshots.sudoers ?? {}).length;
-  const integrityCount = fim_recent_changes.length
-    + state_changes.length
-    + (fim_coverage?.files_tracked ?? 0)
-    + (fim_coverage?.configured_paths
-      ? fim_coverage.configured_paths.critical_files.length
-        + fim_coverage.configured_paths.critical_dirs.length
-        + fim_coverage.configured_paths.binary_dirs.length
-      : 0)
-    + Object.keys(snapshots.critical_files ?? {}).length
-    + Object.keys(snapshots.cron ?? {}).length
-    + enabledSystemdUnits.length
-    + activeSystemdUnits.length
-    + runningSystemdUnits.length
-    + (snapshots.suid?.length ?? 0)
-    + (snapshots.kernel_modules?.length ?? 0);
-  const runtimeCount = (snapshots.ports?.length ?? 0) + (snapshots.processes?.length ?? 0);
-  const capacityCount = (snapshots.disk?.length ?? 0) + (snapshots.packages?.length ?? 0);
   const packageDetails = new Map((snapshots.package_details ?? []).map((item) => [item.name, item]));
 
   return (
@@ -90,20 +68,32 @@ export default async function HostDetailPage({
       )}
 
       {host && (
-        <>
-          <div className="mt-5 grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.6fr)]">
-            <div className="order-2 min-w-0 space-y-5 xl:order-1">
+        <div className="mt-5 space-y-8">
+          <nav aria-label="Host detail sections" className="sticky top-12 z-30 -mx-4 border-y border-line bg-canvas/95 px-4 backdrop-blur-sm sm:-mx-6 sm:px-6">
+            <div className="flex min-w-0 gap-1 overflow-x-auto py-2">
+              {[
+                ["overview", "Overview"],
+                ["access", "Access"],
+                ["integrity", "Integrity"],
+                ["runtime", "Runtime"],
+                ["capacity", "Capacity"],
+                ["agent-delivery", "Agent & delivery"],
+              ].map(([sectionId, label]) => (
+                <a key={sectionId} href={`#${sectionId}`} className="inline-flex min-h-9 shrink-0 items-center border border-transparent px-3 text-xs text-fg-muted transition-colors hover:border-line-soft hover:bg-surface-1 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal">
+                  {label}
+                </a>
+              ))}
+            </div>
+          </nav>
+          <section id="overview" aria-labelledby="host-overview-title" className="scroll-mt-20">
+            <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.6fr)]">
               <StatusSection
                 host={host}
                 ageSeconds={age_seconds}
                 stale={stale}
                 healthState={health_state}
                 healthReason={health_reason}
-                delivery={delivery}
               />
-              <HostMetricsChart instanceId={host.instance_id} />
-            </div>
-            <div className="order-1 min-w-0 xl:order-2">
               <HostActivitySection
                 alerts={alerts}
                 authEvents={auth_events}
@@ -111,75 +101,57 @@ export default async function HostDetailPage({
                 fimChanges={fim_recent_changes}
               />
             </div>
-          </div>
-
-          <section className="mt-8 space-y-3" aria-label="Host evidence and inventories">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <SectionLabel>host evidence</SectionLabel>
-              <span className="text-[11px] text-fg-subtle">search and paginate within each inventory</span>
+            <div className="mt-6">
+              <HostMetricsChart instanceId={host.instance_id} />
             </div>
-
-            <div className="border border-line bg-surface-1 px-3 py-2">
-              <Disclosure label={`Access and identity · ${accessCount} items`}>
-                <div className="space-y-5 border-t border-line-soft px-1 pb-3 pt-1">
-                {(host.extra?.active_sessions?.length ?? 0) > 0 && <SessionsSection sessions={host.extra!.active_sessions!} />}
-                {auth_events.length > 0 && <EventsSection title="SSH and sudo history" events={auth_events} />}
-                {(snapshots.users?.length ?? 0) > 0 && <UsersSection rows={snapshots.users!} />}
-                {(snapshots.authorized_keys?.length ?? 0) > 0 && <AuthorizedKeysSection rows={snapshots.authorized_keys!} />}
-                {snapshots.sudoers && Object.keys(snapshots.sudoers).length > 0 && <FileHashSection title="sudoers policy files" data={snapshots.sudoers} />}
-                </div>
-              </Disclosure>
-            </div>
-
-            <div className="border border-line bg-surface-1 px-3 py-2">
-              <Disclosure label={`Integrity and persistence · ${integrityCount} items`}>
-                <div className="space-y-5 border-t border-line-soft px-1 pb-3 pt-1">
-                {(fim_coverage || fim_recent_changes.length > 0) && <FimSection coverage={fim_coverage} changes={fim_recent_changes} />}
-                {state_changes.length > 0 && <EventsSection title="Host configuration and inventory changes" events={state_changes} />}
-                {snapshots.critical_files && Object.keys(snapshots.critical_files).length > 0 && <FileHashSection title="critical file hashes · FIM" data={snapshots.critical_files} />}
-                {snapshots.cron && Object.keys(snapshots.cron).length > 0 && <FileHashSection title="cron file hashes" data={snapshots.cron} />}
-                {enabledSystemdUnits.length > 0 && <ScrollableList title="enabled systemd units" items={enabledSystemdUnits} />}
-                {activeSystemdUnits.length > 0 && <ScrollableList title="active services and timers" items={activeSystemdUnits} />}
-                {runningSystemdUnits.length > 0 && <ScrollableList title="running services" items={runningSystemdUnits} />}
-                {(snapshots.suid?.length ?? 0) > 0 && <ScrollableList title="SUID binaries" items={snapshots.suid!} />}
-                {(snapshots.kernel_modules?.length ?? 0) > 0 && <ScrollableList title="kernel modules · inventory only, not a rootkit verdict" items={snapshots.kernel_modules!} />}
-                </div>
-              </Disclosure>
-            </div>
-
-            <div className="border border-line bg-surface-1 px-3 py-2">
-              <Disclosure label={`Runtime and network · ${runtimeCount} items`}>
-                <div className="space-y-5 border-t border-line-soft px-1 pb-3 pt-1">
-                <PortsSection rows={snapshots.ports ?? []} />
-                {(snapshots.processes?.length ?? 0) > 0 && <ProcessesSection rows={snapshots.processes!} />}
-                </div>
-              </Disclosure>
-            </div>
-
-            <div className="border border-line bg-surface-1 px-3 py-2">
-              <Disclosure label={`Capacity and software · ${capacityCount} items`}>
-                <div className="space-y-5 border-t border-line-soft px-1 pb-3 pt-1">
-                {(snapshots.disk?.length ?? 0) > 0 && <DiskSection rows={snapshots.disk!} />}
-                {(snapshots.packages?.length ?? 0) > 0 && (
-                  <ScrollableList
-                    title={`Supporting package inventory · ${snapshots.packages!.length}; context only, not vulnerability or signature verification`}
-                    items={snapshots.packages!.map((name) => {
-                      const detail = packageDetails.get(name);
-                      return detail
-                        ? `${name} · ${detail.version}${detail.installed_at ? ` · installed ${new Date(detail.installed_at).toLocaleDateString()}` : ""}`
-                        : name;
-                    })}
-                  />
-                )}
-                </div>
-              </Disclosure>
-            </div>
-
-            <DataPanel className="px-4 py-3 text-[11px] leading-relaxed text-fg-subtle">
-              This page presents the telemetry BlackWatch currently collects from this host. It does not provide full outbound network-flow history, process ancestry, memory capture, or executable signature verification.
-            </DataPanel>
           </section>
-        </>
+
+          <HostEvidenceSection id="access" title="Access and identity" description="Authentication, privilege use, interactive accounts, and authorized access." >
+            {(host.extra?.active_sessions?.length ?? 0) > 0 && <SessionsSection sessions={host.extra!.active_sessions!} />}
+            {auth_events.length > 0 && <EventsSection title="SSH and sudo activity" events={auth_events} />}
+            {(snapshots.users?.length ?? 0) > 0 && <UsersSection rows={snapshots.users!} />}
+            {(snapshots.authorized_keys?.length ?? 0) > 0 && <AuthorizedKeysSection rows={snapshots.authorized_keys!} />}
+            {snapshots.sudoers && Object.keys(snapshots.sudoers).length > 0 && <FileHashSection title="Sudo policy files · SHA-256" data={snapshots.sudoers} />}
+          </HostEvidenceSection>
+
+          <HostEvidenceSection id="integrity" title="Integrity and persistence" description="File changes, monitored scope, system configuration, and persistence surfaces." >
+            {(fim_coverage || fim_recent_changes.length > 0) && <FimSection coverage={fim_coverage} changes={fim_recent_changes} />}
+            {state_changes.length > 0 && <EventsSection title="Host configuration and inventory changes" events={state_changes} />}
+            {snapshots.critical_files && Object.keys(snapshots.critical_files).length > 0 && <FileHashSection title="Critical file hashes · FIM" data={snapshots.critical_files} />}
+            {snapshots.cron && Object.keys(snapshots.cron).length > 0 && <FileHashSection title="Cron file hashes" data={snapshots.cron} />}
+            {enabledSystemdUnits.length > 0 && <ScrollableList title="Enabled systemd units" items={enabledSystemdUnits} />}
+            {activeSystemdUnits.length > 0 && <ScrollableList title="Active services and timers" items={activeSystemdUnits} />}
+            {runningSystemdUnits.length > 0 && <ScrollableList title="Running services" items={runningSystemdUnits} />}
+            {(snapshots.suid?.length ?? 0) > 0 && <ScrollableList title="SUID binaries" items={snapshots.suid!} />}
+            {(snapshots.kernel_modules?.length ?? 0) > 0 && <ScrollableList title="Kernel modules · inventory, not a rootkit verdict" items={snapshots.kernel_modules!} />}
+          </HostEvidenceSection>
+
+          <HostEvidenceSection id="runtime" title="Runtime and network" description="Current listening endpoints and process inventory." >
+            <PortsSection rows={snapshots.ports ?? []} />
+            {(snapshots.processes?.length ?? 0) > 0 && <ProcessesSection rows={snapshots.processes!} />}
+          </HostEvidenceSection>
+
+          <HostEvidenceSection id="capacity" title="Capacity and software" description="Storage pressure and the supporting package inventory." >
+            {(snapshots.disk?.length ?? 0) > 0 && <DiskSection rows={snapshots.disk!} />}
+            {(snapshots.packages?.length ?? 0) > 0 && (
+              <ScrollableList
+                title={`Supporting package inventory · ${snapshots.packages!.length} packages; context only, not vulnerability or signature verification`}
+                items={snapshots.packages!.map((name) => {
+                  const detail = packageDetails.get(name);
+                  return detail
+                    ? `${name} · ${detail.version}${detail.installed_at ? ` · installed ${new Date(detail.installed_at).toLocaleDateString()}` : ""}`
+                    : name;
+                })}
+              />
+            )}
+          </HostEvidenceSection>
+
+          <HostAgentDetailsSection host={host} delivery={delivery} />
+
+          <DataPanel className="px-4 py-3 text-[11px] leading-relaxed text-fg-subtle">
+            BlackWatch shows the telemetry currently collected from this host. It does not provide full outbound network-flow history, process ancestry, memory capture, or executable signature verification.
+          </DataPanel>
+        </div>
       )}
     </>
   );
@@ -189,20 +161,105 @@ export default async function HostDetailPage({
 // status
 // =========================================================================
 
+function HostEvidenceSection({
+  id,
+  title,
+  description,
+  children,
+}: {
+  id: string;
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  const sections = Children.toArray(children).filter(Boolean);
+  return (
+    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-24 border-t border-line pt-6">
+      <div className="mb-5 max-w-3xl">
+        <h2 id={`${id}-title`} className="font-display text-lg font-semibold text-fg">{title}</h2>
+        <p className="mt-1 text-sm text-fg-muted">{description}</p>
+      </div>
+      {sections.length > 0 ? (
+        <div className="space-y-5">{sections}</div>
+      ) : (
+        <DataPanel className="px-4 py-5 text-sm text-fg-muted">No records have been reported for this category.</DataPanel>
+      )}
+    </section>
+  );
+}
+
+function HostAgentDetailsSection({
+  host,
+  delivery,
+}: {
+  host: HostRecord;
+  delivery?: AgentDeliveryStatus;
+}) {
+  const extra = host.extra ?? {};
+  const statuses = extra.collector_status ?? {};
+  const errors = extra.collector_errors ?? {};
+  const stalled = extra.stalled_collectors ?? [];
+
+  return (
+    <section id="agent-delivery" aria-labelledby="agent-delivery-title" className="scroll-mt-24 border-t border-line pt-6">
+      <div className="mb-5 max-w-3xl">
+        <h2 id="agent-delivery-title" className="font-display text-lg font-semibold text-fg">Agent and delivery</h2>
+        <p className="mt-1 text-sm text-fg-muted">Agent identity, collection health, and report delivery diagnostics.</p>
+      </div>
+      <div className="grid min-w-0 gap-5 xl:grid-cols-2">
+        <div className="space-y-2">
+          <SectionLabel>host identity</SectionLabel>
+          <DataPanel className="px-4 py-2">
+            <dl className="divide-y divide-line-soft">
+              <KeyValueRow label="Display name"><HostDisplayNameEditor instanceId={host.instance_id} initial={host.display_name ?? null} /></KeyValueRow>
+              <KeyValueRow label="Hostname"><span className="font-mono text-xs text-fg">{host.hostname ?? "—"}</span></KeyValueRow>
+              <KeyValueRow label="Instance ID"><span className="break-all font-mono text-xs text-fg-muted">{host.instance_id}</span></KeyValueRow>
+              <KeyValueRow label="Account / region"><span className="font-mono text-xs text-fg-muted">{[host.account, host.region].filter(Boolean).join(" · ") || "—"}</span></KeyValueRow>
+              {extra.uptime_seconds != null && <KeyValueRow label="Uptime"><span className="font-mono text-xs text-fg-muted">{humanAge(extra.uptime_seconds)}</span></KeyValueRow>}
+              {extra.agent_version && <KeyValueRow label="Agent version"><span className="font-mono text-xs text-fg-muted">{extra.agent_version}</span></KeyValueRow>}
+              {extra.tick_duration_ms != null && <KeyValueRow label="Last collection tick"><span className="font-mono text-xs text-fg-muted">{extra.tick_duration_ms}ms</span></KeyValueRow>}
+              {extra.tags && Object.keys(extra.tags).length > 0 && <KeyValueRow label="Tags"><div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs">{Object.entries(extra.tags).map(([key, value]) => <code key={key} className="text-fg-muted">{key}={value}</code>)}</div></KeyValueRow>}
+              {extra.rpm_db_corrupted && <KeyValueRow label="Package DB"><div className="space-y-1 text-xs text-sev-critical">RPM database reports {extra.rpm_db_corrupted.lock_count} stale lock file(s). <code className="break-words">sudo rm -f /var/lib/rpm/__db.* &amp;&amp; sudo rpm --rebuilddb</code></div></KeyValueRow>}
+            </dl>
+          </DataPanel>
+        </div>
+        <div className="space-y-2">
+          <SectionLabel>collector health</SectionLabel>
+          <DataPanel className="px-4 py-3">
+            <CollectorHealthSummary statuses={statuses} errors={errors} stalled={stalled} />
+          </DataPanel>
+        </div>
+      </div>
+      <div className="mt-5 space-y-2">
+        <SectionLabel>report delivery</SectionLabel>
+        <DataPanel className="px-4 py-2">
+          {delivery ? (
+            <dl className="divide-y divide-line-soft">
+              <KeyValueRow label="Transport / rollout"><span className="font-mono text-xs text-fg-muted">{delivery.transport ?? "unknown"}{delivery.rollout ? ` · ${delivery.rollout}` : ""}</span></KeyValueRow>
+              <KeyValueRow label="Last sequence / reported gaps"><span className="font-mono text-xs text-fg-muted">{delivery.last_sequence ?? "—"}{delivery.sequence_gaps > 0 ? ` · ${delivery.sequence_gaps} reported gap(s)` : ""}{delivery.sequence_tracking_overflow ? " · tracking limit exceeded" : ""}</span></KeyValueRow>
+              <KeyValueRow label="Queue / processing delay"><span className="font-mono text-xs text-fg-muted">queue {delivery.queue_delay_seconds == null ? "—" : `${Math.round(delivery.queue_delay_seconds)}s`} · processing {delivery.processing_delay_seconds == null ? "—" : `${Math.round(delivery.processing_delay_seconds)}s`}</span></KeyValueRow>
+              <KeyValueRow label="Last accepted / processed"><span className="font-mono text-xs text-fg-muted">{delivery.last_accepted_at ? new Date(delivery.last_accepted_at).toLocaleString() : "—"} · {delivery.last_processed_at ? new Date(delivery.last_processed_at).toLocaleString() : "—"}</span></KeyValueRow>
+              {delivery.last_error && <KeyValueRow label="Delivery error"><span className="break-words text-xs text-sev-critical">{delivery.last_error}</span></KeyValueRow>}
+            </dl>
+          ) : <p className="text-sm text-fg-muted">No delivery diagnostics reported.</p>}
+        </DataPanel>
+      </div>
+    </section>
+  );
+}
+
 function StatusSection({
   host,
   ageSeconds,
   stale,
   healthState,
   healthReason,
-  delivery,
 }: {
   host: HostRecord;
   ageSeconds: number | null;
   stale: boolean;
   healthState?: string;
   healthReason?: string;
-  delivery?: AgentDeliveryStatus;
 }) {
   const extra = host.extra ?? {};
   const state = healthState ?? (host.active && !stale ? "healthy" : "silent");
@@ -215,9 +272,6 @@ function StatusSection({
   const collectorStatuses = extra.collector_status ?? {};
   const collectorErrors = extra.collector_errors ?? {};
   const stalledCollectors = extra.stalled_collectors ?? [];
-  const hasCollectorState = Object.keys(collectorStatuses).length > 0
-    || Object.keys(collectorErrors).length > 0
-    || stalledCollectors.length > 0;
 
   return (
     <section className="space-y-2">
@@ -269,78 +323,12 @@ function StatusSection({
               </div>
             </KeyValueRow>
           )}
-          {hasCollectorState && (
+          {(Object.keys(collectorStatuses).length > 0 || Object.keys(collectorErrors).length > 0 || stalledCollectors.length > 0) && (
             <KeyValueRow label="Collector coverage">
-              <CollectorHealthSummary statuses={collectorStatuses} errors={collectorErrors} stalled={stalledCollectors} />
+              <CollectorHealthSummary statuses={collectorStatuses} errors={collectorErrors} stalled={stalledCollectors} compact />
             </KeyValueRow>
           )}
         </dl>
-        <Disclosure label="Host and delivery details" defaultOpen={Boolean(delivery?.last_error)}>
-          <dl className="divide-y divide-line-soft border-t border-line-soft">
-            <KeyValueRow label="Display name">
-              <HostDisplayNameEditor instanceId={host.instance_id} initial={host.display_name ?? null} />
-            </KeyValueRow>
-            <KeyValueRow label="Hostname">
-              <span className="font-mono text-xs text-fg">{host.hostname ?? "—"}</span>
-            </KeyValueRow>
-            <KeyValueRow label="Account / region">
-              <span className="font-mono text-xs text-fg-muted">{[host.account, host.region].filter(Boolean).join(" · ") || "—"}</span>
-            </KeyValueRow>
-            {extra.uptime_seconds != null && (
-              <KeyValueRow label="Uptime">
-                <span className="font-mono text-xs text-fg-muted">{humanAge(extra.uptime_seconds)}</span>
-              </KeyValueRow>
-            )}
-            {extra.agent_version && (
-              <KeyValueRow label="Agent version">
-                <span className="font-mono text-xs text-fg-muted">{extra.agent_version}</span>
-              </KeyValueRow>
-            )}
-            {extra.tick_duration_ms != null && (
-              <KeyValueRow label="Last collection tick">
-                <span className="font-mono text-xs text-fg-muted">{extra.tick_duration_ms}ms</span>
-              </KeyValueRow>
-            )}
-            {delivery && (
-              <>
-                <KeyValueRow label="Transport / rollout">
-                  <span className="font-mono text-xs text-fg-muted">{delivery.transport ?? "unknown"}{delivery.rollout ? ` · ${delivery.rollout}` : ""}</span>
-                </KeyValueRow>
-                <KeyValueRow label="Sequence / gaps">
-                  <span className="font-mono text-xs text-fg-muted">{delivery.last_sequence ?? "—"}{delivery.sequence_gaps > 0 ? ` · ${delivery.sequence_gaps} reported gap(s)` : ""}{delivery.sequence_tracking_overflow ? " · tracking limit exceeded" : ""}</span>
-                </KeyValueRow>
-                <KeyValueRow label="Queue / processing delay">
-                  <span className="font-mono text-xs text-fg-muted">queue {delivery.queue_delay_seconds === null ? "—" : `${Math.round(delivery.queue_delay_seconds)}s`} · processing {delivery.processing_delay_seconds === null ? "—" : `${Math.round(delivery.processing_delay_seconds)}s`}</span>
-                </KeyValueRow>
-                <KeyValueRow label="Last accepted / processed">
-                  <span className="font-mono text-xs text-fg-muted">{delivery.last_accepted_at ? new Date(delivery.last_accepted_at).toLocaleString() : "—"} · {delivery.last_processed_at ? new Date(delivery.last_processed_at).toLocaleString() : "—"}</span>
-                </KeyValueRow>
-                {delivery.last_error && (
-                  <KeyValueRow label="Delivery error"><span className="text-xs text-sev-critical">{delivery.last_error}</span></KeyValueRow>
-                )}
-              </>
-            )}
-            {extra.rpm_db_corrupted && (
-              <KeyValueRow label="Package DB">
-                <div className="space-y-1">
-                  <div className="inline-flex items-center gap-1.5">
-                    <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-sev-critical" />
-                    <span className="text-sev-critical">CORRUPTED</span>
-                    <span className="text-[11px] text-fg-subtle">· {extra.rpm_db_corrupted.lock_count} stale lock file(s)</span>
-                  </div>
-                  <div className="text-[11px] text-fg-subtle">Fix: <code className="text-fg">sudo rm -f /var/lib/rpm/__db.* &amp;&amp; sudo rpm --rebuilddb</code></div>
-                </div>
-              </KeyValueRow>
-            )}
-            {extra.tags && Object.keys(extra.tags).length > 0 && (
-              <KeyValueRow label="Tags">
-                <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs">
-                  {Object.entries(extra.tags).map(([key, value]) => <code key={key} className="text-fg-muted">{key}={value}</code>)}
-                </div>
-              </KeyValueRow>
-            )}
-          </dl>
-        </Disclosure>
       </DataPanel>
     </section>
   );
@@ -367,7 +355,7 @@ function HostActivitySection({
   fimChanges: FimChange[];
 }) {
   const byId = new Map<string, HostActivityItem>();
-  for (const event of [...alerts, ...authEvents, ...stateChanges]) {
+  for (const event of [...authEvents, ...stateChanges]) {
     const action = event.action ?? "host activity";
     const kind = action.startsWith("host.auth.")
       ? "Access"
@@ -412,15 +400,52 @@ function HostActivitySection({
       const timeB = Date.parse(b.at);
       return (Number.isFinite(timeB) ? timeB : 0) - (Number.isFinite(timeA) ? timeA : 0);
     })
-    .slice(0, 25);
+    .slice(0, 12);
+
+  const priorityAlerts = [...alerts]
+    .filter((event) => ["critical", "high"].includes(String(event.severity).toLowerCase()))
+    .sort((a, b) => {
+      const priority = (value: string | null | undefined) => value?.toLowerCase() === "critical" ? 0 : 1;
+      return priority(a.severity) - priority(b.severity) || Date.parse(b.event_time) - Date.parse(a.event_time);
+    })
+    .slice(0, 5);
 
   return (
-    <section className="space-y-2" aria-labelledby="host-activity-title">
+    <section className="min-w-0 space-y-5" aria-labelledby="host-activity-title">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <SectionLabel>
-          <span id="host-activity-title">overview · recent security activity</span>
-        </SectionLabel>
-        <span className="text-[11px] text-fg-subtle">newest first · full inventories below</span>
+        <div>
+          <h2 id="host-activity-title" className="font-display text-base font-semibold text-fg">Needs attention</h2>
+          <p className="mt-1 text-xs text-fg-muted">High and critical alerts, followed by the latest host activity.</p>
+        </div>
+        <Link href="/events" className="text-xs text-signal hover:underline">All events</Link>
+      </div>
+      <DataPanel scrollX>
+        {priorityAlerts.length === 0 ? (
+          <p className="px-4 py-3 text-sm text-fg-muted">No high or critical host alerts.</p>
+        ) : (
+          <ul className="divide-y divide-line-soft">
+            {priorityAlerts.map((alert) => (
+              <li key={alert.event_id} className="flex min-w-[28rem] flex-wrap items-start gap-x-3 gap-y-1 px-4 py-3">
+                <SeverityBadge severity={alert.severity as string} />
+                <div className="min-w-0 flex-1">
+                  <Link href={`/events/${alert.event_id}`} className="break-words font-mono text-xs text-fg hover:text-signal">{alert.action ?? alert.category ?? "Security alert"}</Link>
+                  <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-fg-subtle">
+                    <span>{alert.actor?.principal ?? alert.target?.name ?? "Unattributed"}</span>
+                    <TimestampCell value={alert.event_time} />
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </DataPanel>
+
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold text-fg">Recent activity</h3>
+          <p className="mt-1 text-xs text-fg-muted">Access, privilege, integrity, and host changes · newest first.</p>
+        </div>
+        <span className="text-[11px] text-fg-subtle">{activity.length} entries</span>
       </div>
       <DataPanel scrollX>
         {activity.length === 0 ? (
@@ -473,10 +498,12 @@ function CollectorHealthSummary({
   statuses,
   errors,
   stalled,
+  compact = false,
 }: {
   statuses: Record<string, CollectorHealth>;
   errors: Record<string, string>;
   stalled: string[];
+  compact?: boolean;
 }) {
   const names = [...new Set([
     ...Object.keys(statuses),
@@ -500,46 +527,42 @@ function CollectorHealthSummary({
   );
   const needsAttention = failed.length > 0 || stale.length > 0;
 
+  const summary = (
+    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+      <span className={current.length > 0 && !needsAttention ? "text-sev-resolved" : "text-fg-muted"}>{current.length} current</span>
+      {stale.length > 0 && <span className="text-sev-medium">{stale.length} stale</span>}
+      {failed.length > 0 && <span className="text-sev-critical">{failed.length} failed</span>}
+      {pending.length > 0 && <span className="text-fg-subtle">{pending.length} pending</span>}
+      {names.length === 0 && <span className="text-fg-subtle">No collector status reported</span>}
+    </div>
+  );
+  if (compact) return <a href="#agent-delivery" className="inline-block hover:text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal">{summary}</a>;
+
   return (
-    <details open={needsAttention} className="max-w-full text-xs">
-      <summary className="cursor-pointer text-fg hover:text-signal focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal">
-        <span className={current.length > 0 && !needsAttention ? "text-sev-resolved" : "text-fg-muted"}>
-          {current.length} current
-        </span>
-        {stale.length > 0 && <span className="ml-2 text-sev-medium">{stale.length} stale</span>}
-        {failed.length > 0 && <span className="ml-2 text-sev-critical">{failed.length} failed</span>}
-        {pending.length > 0 && <span className="ml-2 text-fg-subtle">{pending.length} pending</span>}
-        <span className="ml-2 text-fg-subtle">· details</span>
-      </summary>
-      <div className="mt-3 space-y-2 border-t border-line-soft pt-2">
+    <div className="space-y-3">
+      {summary}
+      {names.length > 0 && <div className="grid gap-x-6 sm:grid-cols-2">
         {names.map((name) => {
           const status = statuses[name];
           const error = status?.error ?? errors[name];
           const state = failedSet.has(name) ? "failed" : staleSet.has(name) ? "stale" : status?.state ?? "unknown";
           return (
-            <div key={name} className="border-b border-line-soft pb-2 last:border-b-0">
+            <div key={name} className="min-w-0 border-t border-line-soft py-2">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <span className="font-mono text-fg">{name}</span>
-                <span className={
-                  state === "ok" ? "text-sev-resolved" :
-                    state === "failed" ? "text-sev-critical" :
-                      state === "stale" ? "text-sev-medium" : "text-fg-subtle"
-                }>{state}</span>
+                <span className="break-all font-mono text-xs text-fg">{name}</span>
+                <span className={state === "ok" ? "text-xs text-sev-resolved" : state === "failed" ? "text-xs text-sev-critical" : state === "stale" ? "text-xs text-sev-medium" : "text-xs text-fg-subtle"}>{state}</span>
               </div>
               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px] text-fg-subtle">
                 <span>last success {status?.age_seconds == null ? "never" : `${status.age_seconds}s ago`}</span>
                 {status && <span>every {status.interval_seconds}s</span>}
-                {status?.last_attempt_at && (
-                  <span>last attempt {new Date(status.last_attempt_at).toLocaleString()}</span>
-                )}
+                {status?.last_attempt_at && <span>last attempt {new Date(status.last_attempt_at).toLocaleString()}</span>}
               </div>
-              {error && <div className="mt-1 break-words text-sev-critical">{error}</div>}
+              {error && <div className="mt-1 break-words text-xs text-sev-critical">{error}</div>}
             </div>
           );
         })}
-        {names.length === 0 && <div className="text-fg-subtle">No collector status reported.</div>}
-      </div>
-    </details>
+      </div>}
+    </div>
   );
 }
 
