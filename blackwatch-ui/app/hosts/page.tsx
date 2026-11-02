@@ -2,22 +2,16 @@ import Link from "next/link";
 import clsx from "clsx";
 
 import { fetchAgentIngressDiagnostics, fetchHosts } from "@/lib/api";
-import type {
-  EventEnvelope,
-  HostSummary,
-} from "@/lib/types";
+import type { EventEnvelope } from "@/lib/types";
+import { HostFleetTable } from "@/components/domain/HostFleetTable";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { Table } from "@/components/ui/Table";
-import { SectionLabel } from "@/components/layout/SectionLabel";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { TimestampCell } from "@/components/domain/TimestampCell";
 import { IpCell } from "@/components/domain/IpCell";
 import { EmptyState } from "@/components/ui/EmptyState";
-import {
-  SeverityBadge,
-  severityBorderBg,
-} from "@/components/domain/SeverityBadge";
+import { SeverityBadge, severityBorderBg } from "@/components/domain/SeverityBadge";
 
 export default async function HostsPage() {
   const [{ count, servers, auth, changes }, ingress] = await Promise.all([
@@ -30,402 +24,149 @@ export default async function HostsPage() {
       <AutoRefresh intervalMs={15_000} />
       <PageHeader
         title="Hosts"
-        subtitle={`${count} EC2 host${count === 1 ? "" : "s"} reporting`}
+        subtitle={`${count} EC2 host${count === 1 ? "" : "s"} · fleet health and host activity`}
       />
 
-      {ingress && (
-        <section className="mb-6 space-y-2">
-          <div className="flex items-baseline justify-between">
-            <SectionLabel>direct transfer</SectionLabel>
-            <span className="font-mono text-[11px] text-fg-subtle">
-              {ingress.transport} · {ingress.spool.oldest_active_age_seconds == null
-                ? "queue clear"
-                : `oldest ${Math.round(ingress.spool.oldest_active_age_seconds)}s`}
-            </span>
+      <div className="space-y-8">
+        <HostFleetTable servers={servers} />
+
+        <section className="space-y-3" aria-labelledby="host-activity-title">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 id="host-activity-title" className="font-display text-base font-semibold text-fg">Recent host activity</h2>
+              <p className="mt-1 text-sm text-fg-muted">SSH/sudo access and host configuration changes, newest first.</p>
+            </div>
+            <Link href="/events" className="text-xs text-signal hover:underline">All events</Link>
           </div>
-          <DataPanel className="grid grid-cols-2 gap-px overflow-hidden sm:grid-cols-4">
-            <div className="bg-surface-1 p-3">
-              <div className="text-[10px] uppercase tracking-wider text-fg-subtle">acceptance p95</div>
-              <div className="mt-1 font-mono text-sm text-fg">
-                {ingress.metrics?.acceptance_p95_seconds == null
-                  ? "—"
-                  : `${ingress.metrics.acceptance_p95_seconds.toFixed(2)}s`}
-              </div>
-            </div>
-            <div className="bg-surface-1 p-3">
-              <div className="text-[10px] uppercase tracking-wider text-fg-subtle">processing p95</div>
-              <div className="mt-1 font-mono text-sm text-fg">
-                {ingress.metrics?.processing_p95_seconds == null
-                  ? "—"
-                  : `${ingress.metrics.processing_p95_seconds.toFixed(2)}s`}
-              </div>
-            </div>
-            <div className="bg-surface-1 p-3">
-              <div className="text-[10px] uppercase tracking-wider text-fg-subtle">retrying</div>
-              <div className="mt-1 font-mono text-sm text-fg">{ingress.metrics?.retrying ?? "—"}</div>
-            </div>
-            <div className="bg-surface-1 p-3">
-              <div className="text-[10px] uppercase tracking-wider text-fg-subtle">quarantined</div>
-              <div className="mt-1 font-mono text-sm text-fg">{ingress.metrics?.quarantined ?? "—"}</div>
-            </div>
+          <DataPanel scrollX>
+            {auth.length + changes.length === 0 ? (
+              <EmptyState>No host access or configuration activity recorded yet.</EmptyState>
+            ) : (
+              <HostActivityTable auth={auth} changes={changes} />
+            )}
           </DataPanel>
         </section>
-      )}
 
-      <section className="space-y-2">
-        <SectionLabel>instances</SectionLabel>
-        <DataPanel className="overflow-hidden">
-          {servers.length === 0 ? (
-            <EmptyState>
-              No hosts reporting yet. Install the agent
-              (<code className="text-fg">scripts/ec2_agent.py</code>) and add an SQS
-              connector with target module <code className="text-fg">ec2.host</code>.
-            </EmptyState>
-          ) : (
-            <InstancesTable servers={servers} />
-          )}
-        </DataPanel>
-      </section>
-
-      <section className="mt-6 space-y-2">
-        <div className="flex items-baseline justify-between">
-          <SectionLabel>recent state changes</SectionLabel>
-          <span className="text-[11px] text-fg-subtle">
-            ports · users · keys · sudoers · packages
-          </span>
-        </div>
-        <DataPanel className="overflow-hidden">
-          {changes.length === 0 ? (
-            <EmptyState>No state changes recorded yet.</EmptyState>
-          ) : (
-            <ChangesTable changes={changes} />
-          )}
-        </DataPanel>
-      </section>
-
-      <section className="mt-6 space-y-2">
-        <SectionLabel>recent access (SSH / sudo)</SectionLabel>
-        <DataPanel className="overflow-hidden">
-          {auth.length === 0 ? (
-            <EmptyState>No SSH/sudo activity captured yet.</EmptyState>
-          ) : (
-            <AccessTable rows={auth} />
-          )}
-        </DataPanel>
-      </section>
+        {ingress && (
+          <section className="space-y-3" aria-labelledby="host-ingestion-title">
+            <div>
+              <h2 id="host-ingestion-title" className="font-display text-base font-semibold text-fg">Agent ingestion</h2>
+              <p className="mt-1 text-sm text-fg-muted">Transport and processing health for direct host reports.</p>
+            </div>
+            <DataPanel className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3">
+              <span className="font-mono text-xs uppercase tracking-wider text-signal">{ingress.transport}</span>
+              <IngestionMetric label="accept p95" value={ingress.metrics?.acceptance_p95_seconds == null ? "—" : `${ingress.metrics.acceptance_p95_seconds.toFixed(2)}s`} />
+              <IngestionMetric label="processing p95" value={ingress.metrics?.processing_p95_seconds == null ? "—" : `${ingress.metrics.processing_p95_seconds.toFixed(2)}s`} />
+              <IngestionMetric label="retrying" value={String(ingress.metrics?.retrying ?? "—")} tone={(ingress.metrics?.retrying ?? 0) > 0 ? "warn" : undefined} />
+              <IngestionMetric label="quarantined" value={String(ingress.metrics?.quarantined ?? "—")} tone={(ingress.metrics?.quarantined ?? 0) > 0 ? "critical" : undefined} />
+              <IngestionMetric label="oldest active" value={ingress.spool.oldest_active_age_seconds == null ? "clear" : `${Math.round(ingress.spool.oldest_active_age_seconds)}s`} />
+            </DataPanel>
+          </section>
+        )}
+      </div>
     </>
   );
 }
 
-// --- tables ----------------------------------------------------------------
-
-function InstancesTable({ servers }: { servers: HostSummary[] }) {
+function IngestionMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "warn" | "critical";
+}) {
   return (
-    <Table>
-      <thead>
-        <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-          <th className="w-20 px-4 py-2 text-left font-normal">Env</th>
-          <th className="w-32 px-4 py-2 text-left font-normal">Role</th>
-          <th className="w-36 px-4 py-2 text-left font-normal">Name</th>
-          <th className="w-36 px-4 py-2 text-left font-normal">Instance</th>
-          <th className="w-32 px-4 py-2 text-left font-normal">Hostname</th>
-          <th className="w-28 px-4 py-2 text-left font-normal">Agent</th>
-          <th className="w-20 px-4 py-2 text-left font-normal">Region</th>
-          <th className="w-14 px-4 py-2 text-right font-normal">Ports</th>
-          <th className="w-14 px-4 py-2 text-right font-normal">Users</th>
-          <th className="w-14 px-4 py-2 text-right font-normal">Keys</th>
-          <th className="px-4 py-2 text-left font-normal">Last seen</th>
-        </tr>
-      </thead>
-      <tbody>
-        {servers.map((s) => (
-          <tr
-            key={s.instance_id}
-            className="border-b border-line-soft last:border-0 hover:bg-surface-2"
-          >
-            <td className="truncate px-4 py-2.5 text-xs text-fg">
-              {s.tags?.env ?? "—"}
-            </td>
-            <td className="truncate px-4 py-2.5 text-xs text-fg">
-              {s.tags?.role ?? "—"}
-            </td>
-            <td className="truncate px-4 py-2.5">
-              <Link
-                href={`/hosts/${s.instance_id}`}
-                className="text-xs text-fg transition-colors hover:text-signal"
-                title="Set on the host detail page"
-              >
-                {s.display_name ?? (
-                  <span className="text-fg-disabled">—</span>
-                )}
-              </Link>
-            </td>
-            <td className="truncate px-4 py-2.5">
-              <Link
-                href={`/hosts/${s.instance_id}`}
-                className="font-mono text-xs text-fg-muted transition-colors hover:text-signal"
-              >
-                {s.instance_id}
-              </Link>
-            </td>
-            <td className="truncate px-4 py-2.5 text-xs text-fg-muted">
-              {s.hostname ?? "—"}
-            </td>
-            <td className="px-4 py-2.5">
-              <AgentPill
-                state={s.health_state ?? (s.stale ? "silent" : "healthy")}
-                reason={s.health_reason ?? ""}
-              />
-            </td>
-            <td className="px-4 py-2.5 font-mono text-xs text-fg-muted">
-              {s.region ?? "—"}
-            </td>
-            <td className="px-4 py-2.5 text-right font-mono text-xs text-fg-muted">
-              {s.port_count}
-            </td>
-            <td className="px-4 py-2.5 text-right font-mono text-xs text-fg-muted">
-              {s.user_count}
-            </td>
-            <td className="px-4 py-2.5 text-right font-mono text-xs text-fg-muted">
-              {s.key_count}
-            </td>
-            <td className="px-4 py-2.5">
-              <LastSeenCell
-                ageSeconds={s.age_seconds}
-                stale={s.stale}
-                state={s.health_state ?? (s.stale ? "silent" : "healthy")}
-                delivery={s.delivery}
-              />
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </Table>
+    <div className="min-w-20 space-y-0.5">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">{label}</div>
+      <div className={clsx(
+        "font-mono text-xs",
+        tone === "critical" ? "text-sev-critical" : tone === "warn" ? "text-sev-medium" : "text-fg",
+      )}>{value}</div>
+    </div>
   );
 }
 
-// Prefer the role tag for an event's host display, fall back to hostname,
-// then instance id. Keeps tables readable when "i-08ba075..." is meaningless.
-function hostLabel(event: EventEnvelope): string {
+function eventHostLabel(event: EventEnvelope): string {
   const extra = (event.extra as Record<string, unknown> | undefined) ?? {};
   const tags = extra.tags as Record<string, string> | undefined;
   return tags?.role ?? event.target?.name ?? event.target?.id ?? "—";
 }
 
-function ChangesTable({ changes }: { changes: EventEnvelope[] }) {
+function HostActivityTable({
+  auth,
+  changes,
+}: {
+  auth: EventEnvelope[];
+  changes: EventEnvelope[];
+}) {
+  const rows = [
+    ...auth.map((event) => ({ event, kind: "Access" })),
+    ...changes.map((event) => ({ event, kind: "Host change" })),
+  ].sort((a, b) => Date.parse(b.event.event_time) - Date.parse(a.event.event_time));
+
   return (
-    <Table>
+    <Table tableId="host-fleet-activity" ariaLabel="Recent host access and configuration activity">
       <thead>
         <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-          <th className="w-40 px-4 py-2 text-left font-normal">Time</th>
-          <th className="w-24 px-4 py-2 text-left font-normal">Severity</th>
-          <th className="w-56 px-4 py-2 text-left font-normal">Action</th>
-          <th className="w-40 px-4 py-2 text-left font-normal">Host</th>
-          <th className="px-4 py-2 text-left font-normal">Detail</th>
+          <th className="w-36 px-3 py-2 text-left font-normal">When</th>
+          <th className="w-28 px-3 py-2 text-left font-normal">Type</th>
+          <th className="w-24 px-3 py-2 text-left font-normal">Result</th>
+          <th className="w-40 px-3 py-2 text-left font-normal">Host</th>
+          <th className="min-w-56 px-3 py-2 text-left font-normal">Activity</th>
+          <th className="min-w-44 px-3 py-2 text-left font-normal">Details</th>
         </tr>
       </thead>
       <tbody>
-        {changes.map((c) => (
-          <tr
-            key={c.event_id}
-            className="group relative border-b border-line-soft last:border-0 hover:bg-surface-2"
-          >
-            <td className="relative px-4 py-2.5">
-              <span
-                aria-hidden
-                className={clsx(
-                  "pointer-events-none absolute left-0 top-0 h-full w-0.5",
-                  severityBorderBg(c.severity as string | null | undefined),
-                )}
-              />
-              <TimestampCell value={c.event_time} />
-            </td>
-            <td className="px-4 py-2.5">
-              <SeverityBadge severity={(c.severity as string) ?? null} />
-            </td>
-            <td className="truncate px-4 py-2.5">
-              <Link
-                href={`/events/${c.event_id}`}
-                className="font-mono text-xs text-fg transition-colors hover:text-signal"
-              >
-                {c.action}
-              </Link>
-            </td>
-            <td className="truncate px-4 py-2.5 text-xs text-fg-muted">
-              {hostLabel(c)}
-            </td>
-            <td className="truncate px-4 py-2.5 font-mono text-xs text-fg-muted">
-              <ChangeDetail event={c} />
-            </td>
-          </tr>
-        ))}
+        {rows.map(({ event, kind }) => {
+          const actor = event.actor as { principal?: string; source_ip?: string } | undefined;
+          const targetId = event.target?.id;
+          return (
+            <tr key={event.event_id} className="border-b border-line-soft last:border-0 hover:bg-surface-2">
+              <td className="whitespace-nowrap px-3 py-2.5"><TimestampCell value={event.event_time} /></td>
+              <td className="px-3 py-2.5 text-xs text-fg-muted">{kind}</td>
+              <td className="relative px-3 py-2.5">
+                {kind === "Access" ? <OutcomePill outcome={event.outcome} /> : <SeverityBadge severity={event.severity} />}
+                {kind !== "Access" && <span aria-hidden className={clsx("pointer-events-none absolute left-0 top-0 h-full w-0.5", severityBorderBg(event.severity))} />}
+              </td>
+              <td className="truncate px-3 py-2.5 text-xs text-fg-muted">
+                {targetId?.startsWith("i-") ? <Link href={`/hosts/${targetId}`} className="hover:text-signal">{eventHostLabel(event)}</Link> : eventHostLabel(event)}
+              </td>
+              <td className="max-w-[28rem] break-words px-3 py-2.5">
+                <Link href={`/events/${event.event_id}`} className="font-mono text-xs text-fg hover:text-signal">{event.action}</Link>
+              </td>
+              <td className="max-w-64 break-words px-3 py-2.5 text-xs text-fg-muted">
+                {kind === "Access" ? (
+                  <span>{actor?.principal ?? "unknown user"}{actor?.source_ip ? <> · <IpCell value={actor.source_ip} className="text-xs text-fg-muted" /></> : ""}</span>
+                ) : <ChangeDetail event={event} />}
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </Table>
-  );
-}
-
-function AccessTable({ rows }: { rows: EventEnvelope[] }) {
-  return (
-    <Table>
-      <thead>
-        <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-          <th className="w-40 px-4 py-2 text-left font-normal">Time</th>
-          <th className="w-24 px-4 py-2 text-left font-normal">Result</th>
-          <th className="w-48 px-4 py-2 text-left font-normal">Action</th>
-          <th className="w-32 px-4 py-2 text-left font-normal">User</th>
-          <th className="w-36 px-4 py-2 text-left font-normal">Source IP</th>
-          <th className="px-4 py-2 text-left font-normal">Host</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((a) => (
-          <tr
-            key={a.event_id}
-            className="border-b border-line-soft last:border-0 hover:bg-surface-2"
-          >
-            <td className="px-4 py-2.5">
-              <TimestampCell value={a.event_time} />
-            </td>
-            <td className="px-4 py-2.5">
-              <OutcomePill outcome={a.outcome} />
-            </td>
-            <td className="truncate px-4 py-2.5">
-              <Link
-                href={`/events/${a.event_id}`}
-                className="font-mono text-xs text-fg transition-colors hover:text-signal"
-              >
-                {a.action}
-              </Link>
-            </td>
-            <td className="truncate px-4 py-2.5 text-xs text-fg">
-              {a.actor?.principal ?? "—"}
-            </td>
-            <td className="truncate px-4 py-2.5 text-xs">
-              <IpCell
-                value={(a.actor as { source_ip?: string } | undefined)?.source_ip}
-                className="text-xs text-fg-muted"
-              />
-            </td>
-            <td className="truncate px-4 py-2.5 text-xs text-fg-muted">
-              {hostLabel(a)}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </Table>
-  );
-}
-
-// --- pills ----------------------------------------------------------------
-
-function AgentPill({ state, reason }: { state: string; reason: string }) {
-  const ok = state === "healthy";
-  const warning = state === "delivery_delayed" || state === "processing_delayed" || state === "collector_degraded";
-  const label = state.replaceAll("_", " ");
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs" title={reason}>
-      <span
-        className={clsx(
-          "h-1.5 w-1.5 rounded-full",
-          ok ? "bg-sev-resolved" : warning ? "bg-sev-medium" : "bg-sev-critical",
-        )}
-        aria-hidden
-      />
-      <span className={clsx(ok ? "text-fg-muted" : warning ? "text-sev-medium" : "text-sev-critical")}>
-        {label}
-      </span>
-    </span>
   );
 }
 
 function OutcomePill({ outcome }: { outcome: string | undefined }) {
-  const ok = outcome === "success";
+  const success = outcome === "success";
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs">
-      <span
-        className={clsx(
-          "h-1.5 w-1.5 rounded-full",
-          ok ? "bg-sev-resolved" : "bg-sev-critical",
-        )}
-        aria-hidden
-      />
-      <span className={clsx(ok ? "text-fg-muted" : "text-fg")}>
-        {ok ? "success" : "FAILED"}
-      </span>
+    <span className={clsx("inline-flex items-center gap-1.5 text-xs", success ? "text-fg-muted" : "text-sev-critical")}>
+      <span aria-hidden className={clsx("h-1.5 w-1.5 rounded-full", success ? "bg-sev-resolved" : "bg-sev-critical")} />
+      {success ? "success" : outcome?.replaceAll("_", " ") ?? "unknown"}
     </span>
   );
 }
 
-function LastSeenCell({
-  ageSeconds,
-  stale,
-  state,
-  delivery,
-}: {
-  ageSeconds: number | null;
-  stale: boolean;
-  state: string;
-  delivery?: HostSummary["delivery"];
-}) {
-  if (ageSeconds === null) {
-    return <span className="font-mono text-xs text-fg-disabled">—</span>;
-  }
-  return (
-    <span className="font-mono text-xs">
-      <span className="text-fg-muted">{ageSeconds}s ago</span>
-      {state !== "healthy" && (
-        <span className="ml-1.5 text-[10px] uppercase tracking-wider text-sev-medium">
-          {state.replaceAll("_", " ")}
-        </span>
-      )}
-      {delivery?.queue_delay_seconds !== null && delivery?.queue_delay_seconds !== undefined && delivery.queue_delay_seconds > 0 && (
-        <span className="ml-1.5 text-[10px] text-fg-subtle" title="Time from agent send to server acceptance">
-          q {Math.round(delivery.queue_delay_seconds)}s
-        </span>
-      )}
-    </span>
-  );
-}
-
-// Best-effort renderer of the assorted ".extra" payloads the change events
-// carry. Matches the rendering in /ui/hosts so the port is faithful.
 function ChangeDetail({ event }: { event: EventEnvelope }) {
   const extra = (event.extra as Record<string, unknown> | undefined) ?? {};
-  const parts: React.ReactNode[] = [];
-
-  if (extra.port) {
-    parts.push(
-      <span key="port">
-        port {String(extra.proto ?? "")}/{String(extra.port)} on{" "}
-        {String(extra.address ?? "—")}
-      </span>,
-    );
-  } else if (extra.fingerprint) {
-    const fp = String(extra.fingerprint).slice(0, 12);
-    parts.push(
-      <span key="fp">
-        {String(extra.user ?? "")} · fp <code>{fp}</code>
-      </span>,
-    );
-  } else if (extra.user) {
-    parts.push(<span key="user">user <b>{String(extra.user)}</b></span>);
-  }
-  if (extra.path) {
-    parts.push(
-      <span key="path">
-        <code>{String(extra.path)}</code>
-        {extra.change ? ` · ${String(extra.change)}` : ""}
-      </span>,
-    );
-  }
-  if (extra.unit) parts.push(<code key="unit">{String(extra.unit)}</code>);
-  if (extra.added_count !== undefined) {
-    parts.push(
-      <span key="pkg">
-        +{String(extra.added_count)} / −{String(extra.removed_count)} packages
-      </span>,
-    );
-  }
-  if (parts.length === 0) return <>—</>;
-  return <>{parts.map((p, i) => (i === 0 ? p : <span key={i}> · {p}</span>))}</>;
+  const parts: string[] = [];
+  if (extra.port) parts.push(`port ${String(extra.proto ?? "")}/${String(extra.port)} on ${String(extra.address ?? "—")}`);
+  else if (extra.fingerprint) parts.push(`${String(extra.user ?? "")} · fp ${String(extra.fingerprint).slice(0, 12)}`);
+  else if (extra.user) parts.push(`user ${String(extra.user)}`);
+  if (extra.path) parts.push(`${String(extra.path)}${extra.change ? ` · ${String(extra.change)}` : ""}`);
+  if (extra.unit) parts.push(String(extra.unit));
+  if (extra.added_count !== undefined) parts.push(`+${String(extra.added_count)} / −${String(extra.removed_count)} packages`);
+  return parts.length > 0 ? parts.join(" · ") : "—";
 }

@@ -53,7 +53,18 @@ export default async function HostDetailPage({
         title={host ? hostLabel({ ...host, instance_id: id }) : id}
         subtitle={
           host
-            ? [host.hostname, id].filter(Boolean).join(" · ")
+            ? (
+              <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+                <code className="font-mono text-xs text-fg-subtle">{id}</code>
+                {host.hostname && host.hostname !== hostLabel({ ...host, instance_id: id }) && (
+                  <span className="text-fg-muted">{host.hostname}</span>
+                )}
+                {host.extra?.tags?.env && <span className="border border-line-soft px-2 py-0.5 text-[10px] uppercase tracking-wider text-fg-muted">{host.extra.tags.env}</span>}
+                {host.extra?.tags?.role && <span className="text-xs text-fg-muted">{host.extra.tags.role}</span>}
+                {host.region && <span className="text-xs text-fg-subtle">{host.region}</span>}
+                {host.account && <span className="font-mono text-[11px] text-fg-subtle">Account {host.account}</span>}
+              </span>
+            )
             : "no hostname reported"
         }
         breadcrumbs={[{ label: "Hosts", href: "/hosts" }, { label: host ? hostLabel({ ...host, instance_id: id }) : id }]}
@@ -69,8 +80,8 @@ export default async function HostDetailPage({
 
       {host && (
         <div className="mt-5 space-y-8">
-          <nav aria-label="Host detail sections" className="sticky top-12 z-30 -mx-4 border-y border-line bg-canvas/95 px-4 backdrop-blur-sm sm:-mx-6 sm:px-6">
-            <div className="flex min-w-0 gap-1 overflow-x-auto py-2">
+          <nav aria-label="Host detail sections" className="sticky top-0 z-20 -mx-4 border-y border-line bg-canvas px-4 sm:-mx-6 sm:px-6">
+            <div className="flex min-w-0 gap-1 overflow-x-auto py-1.5">
               {[
                 ["overview", "Overview"],
                 ["access", "Access"],
@@ -79,13 +90,14 @@ export default async function HostDetailPage({
                 ["capacity", "Capacity"],
                 ["agent-delivery", "Agent & delivery"],
               ].map(([sectionId, label]) => (
-                <a key={sectionId} href={`#${sectionId}`} className="inline-flex min-h-9 shrink-0 items-center border border-transparent px-3 text-xs text-fg-muted transition-colors hover:border-line-soft hover:bg-surface-1 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal">
+                <a key={sectionId} href={`#${sectionId}`} className="inline-flex min-h-11 shrink-0 items-center border border-transparent px-3 text-xs text-fg-muted transition-colors hover:border-line-soft hover:bg-surface-1 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal sm:min-h-9">
                   {label}
                 </a>
               ))}
             </div>
           </nav>
-          <section id="overview" aria-labelledby="host-overview-title" className="scroll-mt-20">
+          <section id="overview" aria-labelledby="host-overview-title" className="scroll-mt-16">
+            <h2 id="host-overview-title" className="sr-only">Overview</h2>
             <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.6fr)]">
               <StatusSection
                 host={host}
@@ -107,34 +119,55 @@ export default async function HostDetailPage({
           </section>
 
           <HostEvidenceSection id="access" title="Access and identity" description="Authentication, privilege use, interactive accounts, and authorized access." >
-            {(host.extra?.active_sessions?.length ?? 0) > 0 && <SessionsSection sessions={host.extra!.active_sessions!} />}
-            {auth_events.length > 0 && <EventsSection title="SSH and sudo activity" events={auth_events} />}
-            {(snapshots.users?.length ?? 0) > 0 && <UsersSection rows={snapshots.users!} />}
-            {(snapshots.authorized_keys?.length ?? 0) > 0 && <AuthorizedKeysSection rows={snapshots.authorized_keys!} />}
+            {((host.extra?.active_sessions?.length ?? 0) > 0 || auth_events.length > 0 || (snapshots.users?.length ?? 0) > 0 || (snapshots.authorized_keys?.length ?? 0) > 0) && <nav className="flex flex-wrap gap-x-4 gap-y-2 text-xs" aria-label="Jump to access inventory">
+              {(host.extra?.active_sessions?.length ?? 0) > 0 && <a href="#host-sessions" className="text-signal hover:underline">Current sessions</a>}
+              {auth_events.length > 0 && <a href="#host-auth-events" className="text-signal hover:underline">SSH and sudo activity</a>}
+              {(snapshots.users?.length ?? 0) > 0 && <a href="#host-users" className="text-signal hover:underline">Users</a>}
+              {(snapshots.authorized_keys?.length ?? 0) > 0 && <a href="#host-authorized-keys" className="text-signal hover:underline">Authorized keys</a>}
+            </nav>}
+            {(host.extra?.active_sessions?.length ?? 0) > 0 && <div id="host-sessions" className="scroll-mt-16"><SessionsSection sessions={host.extra!.active_sessions!} /></div>}
+            {auth_events.length > 0 && <div id="host-auth-events" className="scroll-mt-16"><EventsSection title="SSH and sudo activity" events={auth_events} /></div>}
+            {(snapshots.users?.length ?? 0) > 0 && <div id="host-users" className="scroll-mt-16"><UsersSection rows={snapshots.users!} /></div>}
+            {(snapshots.authorized_keys?.length ?? 0) > 0 && <div id="host-authorized-keys" className="scroll-mt-16"><AuthorizedKeysSection rows={snapshots.authorized_keys!} /></div>}
             {snapshots.sudoers && Object.keys(snapshots.sudoers).length > 0 && <FileHashSection title="Sudo policy files · SHA-256" data={snapshots.sudoers} />}
           </HostEvidenceSection>
 
           <HostEvidenceSection id="integrity" title="Integrity and persistence" description="File changes, monitored scope, system configuration, and persistence surfaces." >
+            {(Boolean(snapshots.cron && Object.keys(snapshots.cron).length) || enabledSystemdUnits.length > 0 || activeSystemdUnits.length > 0 || runningSystemdUnits.length > 0 || (snapshots.kernel_modules?.length ?? 0) > 0) && <nav className="flex flex-wrap gap-x-4 gap-y-2 text-xs" aria-label="Jump to integrity inventory">
+              {snapshots.cron && Object.keys(snapshots.cron).length > 0 && <a href="#host-cron" className="text-signal hover:underline">Cron files</a>}
+              {enabledSystemdUnits.length > 0 && <a href="#host-enabled-units" className="text-signal hover:underline">Enabled units</a>}
+              {activeSystemdUnits.length > 0 && <a href="#host-active-units" className="text-signal hover:underline">Active services and timers</a>}
+              {runningSystemdUnits.length > 0 && <a href="#host-running-units" className="text-signal hover:underline">Running services</a>}
+              {(snapshots.kernel_modules?.length ?? 0) > 0 && <a href="#host-modules" className="text-signal hover:underline">Kernel modules</a>}
+            </nav>}
             {(fim_coverage || fim_recent_changes.length > 0) && <FimSection coverage={fim_coverage} changes={fim_recent_changes} />}
             {state_changes.length > 0 && <EventsSection title="Host configuration and inventory changes" events={state_changes} />}
             {snapshots.critical_files && Object.keys(snapshots.critical_files).length > 0 && <FileHashSection title="Critical file hashes · FIM" data={snapshots.critical_files} />}
-            {snapshots.cron && Object.keys(snapshots.cron).length > 0 && <FileHashSection title="Cron file hashes" data={snapshots.cron} />}
-            {enabledSystemdUnits.length > 0 && <ScrollableList title="Enabled systemd units" items={enabledSystemdUnits} />}
-            {activeSystemdUnits.length > 0 && <ScrollableList title="Active services and timers" items={activeSystemdUnits} />}
-            {runningSystemdUnits.length > 0 && <ScrollableList title="Running services" items={runningSystemdUnits} />}
+            {snapshots.cron && Object.keys(snapshots.cron).length > 0 && <div id="host-cron" className="scroll-mt-16"><FileHashSection title="Cron file hashes" data={snapshots.cron} /></div>}
+            {enabledSystemdUnits.length > 0 && <div id="host-enabled-units" className="scroll-mt-16"><ScrollableList title="Enabled systemd units" items={enabledSystemdUnits} /></div>}
+            {activeSystemdUnits.length > 0 && <div id="host-active-units" className="scroll-mt-16"><ScrollableList title="Active services and timers" items={activeSystemdUnits} /></div>}
+            {runningSystemdUnits.length > 0 && <div id="host-running-units" className="scroll-mt-16"><ScrollableList title="Running services" items={runningSystemdUnits} /></div>}
             {(snapshots.suid?.length ?? 0) > 0 && <ScrollableList title="SUID binaries" items={snapshots.suid!} />}
-            {(snapshots.kernel_modules?.length ?? 0) > 0 && <ScrollableList title="Kernel modules · inventory, not a rootkit verdict" items={snapshots.kernel_modules!} />}
+            {(snapshots.kernel_modules?.length ?? 0) > 0 && <div id="host-modules" className="scroll-mt-16"><ScrollableList title="Kernel modules · inventory, not a rootkit verdict" items={snapshots.kernel_modules!} /></div>}
           </HostEvidenceSection>
 
           <HostEvidenceSection id="runtime" title="Runtime and network" description="Current listening endpoints and process inventory." >
-            <PortsSection rows={snapshots.ports ?? []} />
-            {(snapshots.processes?.length ?? 0) > 0 && <ProcessesSection rows={snapshots.processes!} />}
+            <nav className="flex flex-wrap gap-x-4 gap-y-2 text-xs" aria-label="Jump to runtime inventory">
+              <a href="#host-ports" className="text-signal hover:underline">Listening ports</a>
+              {(snapshots.processes?.length ?? 0) > 0 && <a href="#host-processes" className="text-signal hover:underline">Running processes</a>}
+            </nav>
+            <div id="host-ports" className="scroll-mt-16"><PortsSection rows={snapshots.ports ?? []} /></div>
+            {(snapshots.processes?.length ?? 0) > 0 && <div id="host-processes" className="scroll-mt-16"><ProcessesSection rows={snapshots.processes!} /></div>}
           </HostEvidenceSection>
 
           <HostEvidenceSection id="capacity" title="Capacity and software" description="Storage pressure and the supporting package inventory." >
-            {(snapshots.disk?.length ?? 0) > 0 && <DiskSection rows={snapshots.disk!} />}
+            {((snapshots.disk?.length ?? 0) > 0 || (snapshots.packages?.length ?? 0) > 0) && <nav className="flex flex-wrap gap-x-4 gap-y-2 text-xs" aria-label="Jump to capacity inventory">
+              {(snapshots.disk?.length ?? 0) > 0 && <a href="#host-disk" className="text-signal hover:underline">Disk usage</a>}
+              {(snapshots.packages?.length ?? 0) > 0 && <a href="#host-packages" className="text-signal hover:underline">Package inventory</a>}
+            </nav>}
+            {(snapshots.disk?.length ?? 0) > 0 && <div id="host-disk" className="scroll-mt-16"><DiskSection rows={snapshots.disk!} /></div>}
             {(snapshots.packages?.length ?? 0) > 0 && (
-              <ScrollableList
+              <div id="host-packages" className="scroll-mt-16"><ScrollableList
                 title={`Supporting package inventory · ${snapshots.packages!.length} packages; context only, not vulnerability or signature verification`}
                 items={snapshots.packages!.map((name) => {
                   const detail = packageDetails.get(name);
@@ -142,7 +175,7 @@ export default async function HostDetailPage({
                     ? `${name} · ${detail.version}${detail.installed_at ? ` · installed ${new Date(detail.installed_at).toLocaleDateString()}` : ""}`
                     : name;
                 })}
-              />
+              /></div>
             )}
           </HostEvidenceSection>
 
@@ -174,7 +207,7 @@ function HostEvidenceSection({
 }) {
   const sections = Children.toArray(children).filter(Boolean);
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-24 border-t border-line pt-6">
+    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-16 border-t border-line pt-6">
       <div className="mb-5 max-w-3xl">
         <h2 id={`${id}-title`} className="font-display text-lg font-semibold text-fg">{title}</h2>
         <p className="mt-1 text-sm text-fg-muted">{description}</p>
@@ -201,7 +234,7 @@ function HostAgentDetailsSection({
   const stalled = extra.stalled_collectors ?? [];
 
   return (
-    <section id="agent-delivery" aria-labelledby="agent-delivery-title" className="scroll-mt-24 border-t border-line pt-6">
+    <section id="agent-delivery" aria-labelledby="agent-delivery-title" className="scroll-mt-16 border-t border-line pt-6">
       <div className="mb-5 max-w-3xl">
         <h2 id="agent-delivery-title" className="font-display text-lg font-semibold text-fg">Agent and delivery</h2>
         <p className="mt-1 text-sm text-fg-muted">Agent identity, collection health, and report delivery diagnostics.</p>
@@ -219,7 +252,7 @@ function HostAgentDetailsSection({
               {extra.agent_version && <KeyValueRow label="Agent version"><span className="font-mono text-xs text-fg-muted">{extra.agent_version}</span></KeyValueRow>}
               {extra.tick_duration_ms != null && <KeyValueRow label="Last collection tick"><span className="font-mono text-xs text-fg-muted">{extra.tick_duration_ms}ms</span></KeyValueRow>}
               {extra.tags && Object.keys(extra.tags).length > 0 && <KeyValueRow label="Tags"><div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs">{Object.entries(extra.tags).map(([key, value]) => <code key={key} className="text-fg-muted">{key}={value}</code>)}</div></KeyValueRow>}
-              {extra.rpm_db_corrupted && <KeyValueRow label="Package DB"><div className="space-y-1 text-xs text-sev-critical">RPM database reports {extra.rpm_db_corrupted.lock_count} stale lock file(s). <code className="break-words">sudo rm -f /var/lib/rpm/__db.* &amp;&amp; sudo rpm --rebuilddb</code></div></KeyValueRow>}
+              {extra.rpm_db_corrupted && <KeyValueRow label="Package DB"><div className="text-xs text-sev-critical">RPM database reports {extra.rpm_db_corrupted.lock_count} lock file(s). Investigate package database health on the host.</div></KeyValueRow>}
             </dl>
           </DataPanel>
         </div>
@@ -294,11 +327,16 @@ function StatusSection({
               <span className="text-fg-disabled">—</span>
             ) : (
               <span className="font-mono text-xs">
-                <span className="text-fg-muted">{ageSeconds}s ago</span>
+                <span className="text-fg-muted">{formatAge(ageSeconds)} ago</span>
                 {stale && <span className="ml-2 text-[10px] uppercase tracking-wider text-sev-medium">stale</span>}
               </span>
             )}
           </KeyValueRow>
+          {!reporting && healthReason && (
+            <KeyValueRow label="Health detail">
+              <span className="break-words text-xs text-fg-muted">{healthReason}</span>
+            </KeyValueRow>
+          )}
           {memory && memory.used_pct != null && (
             <KeyValueRow label="Memory · latest report">
               <span className="inline-flex items-baseline gap-2">
@@ -332,6 +370,14 @@ function StatusSection({
       </DataPanel>
     </section>
   );
+}
+
+function formatAge(seconds: number): string {
+  const age = Math.max(0, Math.floor(seconds));
+  if (age < 60) return `${age}s`;
+  if (age < 3600) return `${Math.floor(age / 60)}m`;
+  if (age < 86400) return `${Math.floor(age / 3600)}h`;
+  return `${Math.floor(age / 86400)}d`;
 }
 type HostActivityItem = {
   key: string;
@@ -425,7 +471,7 @@ function HostActivitySection({
         ) : (
           <ul className="divide-y divide-line-soft">
             {priorityAlerts.map((alert) => (
-              <li key={alert.event_id} className="flex min-w-[28rem] flex-wrap items-start gap-x-3 gap-y-1 px-4 py-3">
+              <li key={alert.event_id} className="flex min-w-0 flex-wrap items-start gap-x-3 gap-y-1 px-4 py-3">
                 <SeverityBadge severity={alert.severity as string} />
                 <div className="min-w-0 flex-1">
                   <Link href={`/events/${alert.event_id}`} className="break-words font-mono text-xs text-fg hover:text-signal">{alert.action ?? alert.category ?? "Security alert"}</Link>

@@ -89,6 +89,9 @@ export function Table({
   }, []);
 
   const visibleRows = useMemo(() => {
+    if (rows.every(isDataRow)) {
+      return sortedRows.slice(page * pageSize, (page + 1) * pageSize);
+    }
     const visible = new Set(
       sortedRows.slice(page * pageSize, (page + 1) * pageSize),
     );
