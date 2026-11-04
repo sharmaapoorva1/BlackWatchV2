@@ -622,3 +622,8 @@ Long pages use `components/layout/DetailLayout`:
 - No sticky bars, and no loose text links standing in for buttons: if it acts,
   it is a `Button`; if it navigates the page, it belongs in the sidebar.
 - `lib/layout-hierarchy.test.ts` guards these rules.
+
+`DetailLayout` also takes an optional `aside`: a summary rail on the right that
+sticks beside the sticky contents from `xl` up (the host page uses it for name,
+health, instance ID, addresses, tags, region and agent). Below `xl` it is
+hidden and the page header carries the basics.

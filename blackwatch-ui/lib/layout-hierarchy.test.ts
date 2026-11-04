@@ -48,7 +48,7 @@ test("heading scale: h1 24px, h2 18px, h3 14px", () => {
 
 test("the host page uses the layout and no longer has a floating bar or underline jump links", () => {
   const page = read("app/hosts/[id]/page.tsx");
-  assert.match(page, /<DetailLayout nav=\{nav\}>/);
+  assert.match(page, /<DetailLayout[\s\S]{0,40}nav=\{nav\}/);
   assert.match(page, /<Subsection/);
   assert.doesNotMatch(page, /sticky top-0 z-20/);
   assert.doesNotMatch(page, /Jump to /);
@@ -56,4 +56,19 @@ test("the host page uses the layout and no longer has a floating bar or underlin
   // Long inventories start collapsed.
   assert.match(page, /id: "host-processes"[^}]*defaultOpen: false/);
   assert.match(page, /id: "host-packages"[\s\S]{0,200}defaultOpen: false/);
+});
+
+test("the host page keeps its identity in a sticky right rail beside the sticky contents", () => {
+  const layout = read("components/layout/DetailLayout.tsx");
+  assert.match(layout, /xl:grid-cols-\[13rem_minmax\(0,1fr\)_17rem\]/);
+  assert.match(layout, /xl:sticky xl:top-4/);
+  assert.match(layout, /lg:sticky lg:top-4/);
+  // Below xl there is no room: the rail is hidden and the page header carries the basics.
+  assert.match(layout, /hidden min-w-0 xl:sticky[^"]*xl:block/);
+  const page = read("app/hosts/[id]/page.tsx");
+  assert.match(page, /aside=\{/);
+  assert.match(page, /<HostIdentityRail/);
+  for (const field of ["Instance ID", "Hostname", "Addresses", "Region / account"]) {
+    assert.match(page, new RegExp(`label="${field}"`));
+  }
 });

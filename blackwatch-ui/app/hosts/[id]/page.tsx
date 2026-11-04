@@ -31,6 +31,7 @@ import { SectionLabel } from "@/components/layout/SectionLabel";
 import { KeyValueRow } from "@/components/layout/KeyValueRow";
 import { TimestampCell } from "@/components/domain/TimestampCell";
 import { IpCell } from "@/components/domain/IpCell";
+import { CopyButton } from "@/components/ui/CopyButton";
 import {
   SeverityBadge,
   severityBorderBg,
@@ -87,6 +88,129 @@ export default async function HostDetailPage({
 
       {host && <HostBody data={data} />}
     </>
+  );
+}
+
+// =========================================================================
+// right rail: who this page is about, kept in view while the sections scroll
+// =========================================================================
+
+/** Addresses the host is bound to, from its listening sockets. The agent does
+ *  not report a primary IP, so wildcard, loopback and link-local binds are
+ *  dropped and what is left is the best available evidence of its address. */
+function boundAddresses(ports: NonNullable<HostSnapshots["ports"]>): string[] {
+  const skip = (address: string) =>
+    ["0.0.0.0", "::", "*", "[::]", "::1", "[::1]"].includes(address) ||
+    address.startsWith("127.") ||
+    address.startsWith("169.254.") ||
+    address.toLowerCase().startsWith("fe80");
+  return [...new Set(ports.map((port) => port.address.replace(/%.*$/, "")).filter((address) => address && !skip(address)))];
+}
+
+function HostIdentityRail({
+  id,
+  host,
+  ageSeconds,
+  stale,
+  healthState,
+  addresses,
+}: {
+  id: string;
+  host: HostRecord;
+  ageSeconds: number | null;
+  stale: boolean;
+  healthState?: string;
+  addresses: string[];
+}) {
+  const extra = host.extra ?? {};
+  const state = healthState ?? (host.active && !stale ? "healthy" : "silent");
+  const tone =
+    state === "healthy"
+      ? { dot: "bg-sev-resolved", text: "text-sev-resolved" }
+      : ["delivery_delayed", "processing_delayed", "collector_degraded"].includes(state)
+        ? { dot: "bg-sev-medium", text: "text-sev-medium" }
+        : { dot: "bg-sev-critical", text: "text-sev-critical" };
+  const name = hostLabel({ ...host, instance_id: id });
+  const tags = Object.entries(extra.tags ?? {});
+
+  return (
+    <div className="rounded-md border border-line bg-surface-1 p-4">
+      <p className="break-words text-base font-semibold text-fg">{name}</p>
+      <p className={clsx("mt-1 inline-flex items-center gap-1.5 text-xs", tone.text)}>
+        <span aria-hidden className={clsx("h-1.5 w-1.5 rounded-full", tone.dot)} />
+        {state.replaceAll("_", " ")}
+        <span className="text-fg-subtle">
+          · {ageSeconds == null ? "no report yet" : `reported ${formatAge(ageSeconds)} ago`}
+        </span>
+      </p>
+
+      <dl className="mt-4 space-y-3">
+        <RailRow label="Instance ID">
+          <span className="flex items-center gap-1">
+            <code className="min-w-0 break-all font-mono text-xs text-fg">{id}</code>
+            <CopyButton value={id} label="Copy instance ID" />
+          </span>
+        </RailRow>
+        {host.hostname && host.hostname !== name && (
+          <RailRow label="Hostname">
+            <code className="break-all font-mono text-xs text-fg">{host.hostname}</code>
+          </RailRow>
+        )}
+        <RailRow label="Addresses" hint="from listening sockets">
+          {addresses.length > 0 ? (
+            <ul className="space-y-0.5">
+              {addresses.slice(0, 4).map((address) => (
+                <li key={address} className="flex items-center gap-1">
+                  <IpCell value={address} className="text-xs text-fg" />
+                </li>
+              ))}
+              {addresses.length > 4 && <li className="text-xs text-fg-subtle">+{addresses.length - 4} more</li>}
+            </ul>
+          ) : (
+            <span className="text-xs text-fg-subtle">not reported</span>
+          )}
+        </RailRow>
+        {tags.length > 0 && (
+          <RailRow label="Tags">
+            <span className="flex flex-wrap gap-1">
+              {tags.map(([key, value]) => (
+                <code key={key} className="rounded border border-line-soft bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg-muted">
+                  {key}={value}
+                </code>
+              ))}
+            </span>
+          </RailRow>
+        )}
+        {(host.region || host.account) && (
+          <RailRow label="Region / account">
+            <span className="break-all font-mono text-xs text-fg-muted">
+              {[host.region, host.account].filter(Boolean).join(" · ")}
+            </span>
+          </RailRow>
+        )}
+        {(extra.agent_version || extra.uptime_seconds != null) && (
+          <RailRow label="Agent / uptime">
+            <span className="font-mono text-xs text-fg-muted">
+              {[extra.agent_version ? `v${extra.agent_version}` : null, extra.uptime_seconds != null ? `up ${humanAge(extra.uptime_seconds)}` : null]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          </RailRow>
+        )}
+      </dl>
+    </div>
+  );
+}
+
+function RailRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <div>
+      <dt className="text-xs text-fg-subtle">
+        {label}
+        {hint && <span className="ml-1 text-fg-disabled">· {hint}</span>}
+      </dt>
+      <dd className="mt-0.5">{children}</dd>
+    </div>
   );
 }
 
@@ -232,7 +356,19 @@ function HostBody({ data }: { data: HostDetailResponse }) {
   ];
 
   return (
-    <DetailLayout nav={nav}>
+    <DetailLayout
+      nav={nav}
+      aside={
+        <HostIdentityRail
+          id={host.instance_id}
+          host={host}
+          ageSeconds={age_seconds}
+          stale={stale}
+          healthState={health_state}
+          addresses={boundAddresses(ports)}
+        />
+      }
+    >
       <Section id="overview" title="Overview" description="Health, what needs attention, and resource trends.">
         <AutoGrid min="26rem" gap="lg">
           <StatusSection
