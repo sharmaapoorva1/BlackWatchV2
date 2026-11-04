@@ -9,7 +9,7 @@ import type {
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { Table } from "@/components/ui/Table";
-import { SectionLabel } from "@/components/layout/SectionLabel";
+import { PageSection } from "@/components/layout/PageSection";
 import { TimestampCell } from "@/components/domain/TimestampCell";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -22,12 +22,12 @@ export default async function BucketsPage() {
       <PageHeader
         title="S3 buckets"
         subtitle={`${count} bucket${count === 1 ? "" : "s"} tracked · inventory snapshot`}
+        breadcrumbs={[{ label: "Storage", href: "/storage" }, { label: "S3 buckets" }]}
       />
 
       <CountersGrid counts={counts} />
 
-      <section className="mt-6 space-y-2">
-        <SectionLabel>all buckets</SectionLabel>
+      <PageSection title="All buckets">
         <DataPanel className="overflow-hidden">
           {buckets.length === 0 ? (
             <EmptyState>
@@ -46,7 +46,7 @@ export default async function BucketsPage() {
             <BucketsTable buckets={buckets} />
           )}
         </DataPanel>
-      </section>
+      </PageSection>
     </>
   );
 }

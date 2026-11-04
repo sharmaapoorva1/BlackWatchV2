@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { TopNav } from "./TopNav";
 import { SideNav } from "./SideNav";
+import { CommandPalette } from "./CommandPalette";
+import { RefreshStatus } from "./RefreshStatus";
+import { EventPeekHost } from "@/components/domain/EventPeek";
 
 // Root layout. Desktop = fixed sidebar + scrollable main; mobile = drawer
 // nav opened via the TopNav hamburger. The auth pages (/login and any
@@ -16,6 +19,7 @@ const CHROMELESS_PREFIXES = ["/login"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [navOpen, setNavOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const pathname = usePathname();
   const chromeless = CHROMELESS_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(p + "/"),
@@ -35,21 +39,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-dvh min-w-0 max-w-full flex-col overflow-hidden">
-      <TopNav onMenuClick={() => setNavOpen((v) => !v)} menuOpen={navOpen} />
+      <TopNav
+        onMenuClick={() => setNavOpen((v) => !v)}
+        menuOpen={navOpen}
+        onSearchClick={() => setPaletteOpen(true)}
+      />
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <SideNav mobileOpen={navOpen} onCloseMobile={() => setNavOpen(false)} />
         <main id="main-content" tabIndex={-1} aria-label="Main content" className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-4 md:px-6 md:py-5">
-          <div data-impeccable-variants="e6f6884f" data-impeccable-variant-count="3" style={{ display: "contents" }}>
-            {/* impeccable-variants-start e6f6884f */}
-            {/* Original */}
-            <div data-impeccable-variant="original">
-              <div className="mx-auto min-w-0 w-full max-w-[1280px]">{children}</div>
-            </div>
-            {/* Variants: insert below this line */}
-            {/* impeccable-variants-end e6f6884f */}
+          {/* Wide cap: data tables use the screen on large monitors instead of
+              leaving empty gutters; forms and prose pages size themselves. */}
+          <div className="mx-auto min-w-0 w-full max-w-[1760px]">
+            <RefreshStatus />
+            {children}
           </div>
         </main>
       </div>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <EventPeekHost />
     </div>
   );
 }

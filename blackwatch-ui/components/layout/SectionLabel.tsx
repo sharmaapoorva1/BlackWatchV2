@@ -1,5 +1,5 @@
-// Small uppercase label above tables / panels.
-// Spec: 11px, uppercase, letter-spacing 0.08em, tertiary text color.
+// Small heading above tables / panels. Sentence case (first letter is
+// capitalised even when the call site passes lowercase), 12px, muted.
 export function SectionLabel({
   children,
   className,
@@ -7,5 +7,9 @@ export function SectionLabel({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <h2 className={`text-[11px] uppercase tracking-[0.08em] text-muted ${className ?? ""}`}>{children}</h2>;
+  return (
+    <h2 className={`text-xs font-medium text-fg-muted first-letter:uppercase ${className ?? ""}`}>
+      {children}
+    </h2>
+  );
 }

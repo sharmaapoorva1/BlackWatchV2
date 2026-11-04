@@ -1,22 +1,157 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ComponentType } from "react";
-import { Activity, Archive, Bell, ChevronsLeft, ChevronsRight, ClipboardList, Database, FileLock2, Globe, HardDrive, Key, LayoutDashboard, Lock, Plug, Radar, SearchCheck, Server, Settings as SettingsIcon, Shield, ScrollText, UserSearch, Wrench } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronDown, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { NAV_GROUPS, findGroupIdForPath, isNavActive, type NavEntry } from "./nav-config";
 
-type NavEntry = { href: string; label: string; icon: ComponentType<{ size?: number; strokeWidth?: number }> };
-const primaryNav: NavEntry[] = [
-  { href: "/", label: "Overview", icon: LayoutDashboard }, { href: "/services", label: "Services", icon: Server }, { href: "/hosts", label: "Hosts", icon: HardDrive }, { href: "/fim", label: "File integrity", icon: FileLock2 }, { href: "/vpn", label: "VPN", icon: Lock }, { href: "/events", label: "Events", icon: Activity }, { href: "/iam", label: "IAM", icon: Key }, { href: "/rds", label: "RDS", icon: Database }, { href: "/api-gw", label: "API Gateway", icon: Globe }, { href: "/rules", label: "Rules", icon: ScrollText }, { href: "/aws-posture", label: "AWS posture", icon: Shield }, { href: "/ueba", label: "UEBA", icon: UserSearch }, { href: "/buckets", label: "Buckets", icon: Database }, { href: "/storage", label: "Storage", icon: Archive }, { href: "/investigations", label: "Investigations", icon: SearchCheck }, { href: "/notifications", label: "Notifications", icon: Bell },
-];
-const secondaryNav: NavEntry[] = [{ href: "/tools", label: "Tools", icon: Wrench }, { href: "/coverage", label: "Coverage", icon: Radar }, { href: "/connectors", label: "Connectors", icon: Plug }, { href: "/audit", label: "Audit log", icon: ClipboardList }, { href: "/settings", label: "Settings", icon: SettingsIcon }];
+const COLLAPSED_KEY = "bw-sidenav-collapsed";
+const CLOSED_GROUPS_KEY = "bw-sidenav-closed-groups";
+
+function readClosedGroups(): string[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(CLOSED_GROUPS_KEY) ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 export function SideNav({ mobileOpen = false, onCloseMobile }: { mobileOpen?: boolean; onCloseMobile?: () => void }) {
-  const pathname = usePathname(); const [collapsed, setCollapsed] = useState(false); const [desktop, setDesktop] = useState(false);
-  useEffect(() => { const query = window.matchMedia("(min-width: 768px)"); const update = () => setDesktop(query.matches); update(); query.addEventListener("change", update); setCollapsed(localStorage.getItem("bw-sidenav-collapsed") === "true"); return () => query.removeEventListener("change", update); }, []);
-  useEffect(() => { if (mobileOpen) onCloseMobile?.(); }, [pathname]);
-  const toggle = () => setCollapsed((value) => { const next = !value; localStorage.setItem("bw-sidenav-collapsed", String(next)); return next; });
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+  const [desktop, setDesktop] = useState(false);
+  const [closedGroups, setClosedGroups] = useState<string[]>([]);
+
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 768px)");
+    const update = () => setDesktop(query.matches);
+    update();
+    query.addEventListener("change", update);
+    try {
+      setCollapsed(localStorage.getItem(COLLAPSED_KEY) === "true");
+      setClosedGroups(readClosedGroups());
+    } catch {
+      /* storage unavailable: keep defaults */
+    }
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (mobileOpen) onCloseMobile?.();
+    // Close the mobile drawer only when the route changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  const toggle = () =>
+    setCollapsed((value) => {
+      const next = !value;
+      try {
+        localStorage.setItem(COLLAPSED_KEY, String(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+
+  const toggleGroup = (id: string) =>
+    setClosedGroups((current) => {
+      const next = current.includes(id) ? current.filter((value) => value !== id) : [...current, id];
+      try {
+        localStorage.setItem(CLOSED_GROUPS_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+
   if (!desktop && !mobileOpen) return null;
   const compact = collapsed && desktop;
-  return <>{!desktop && mobileOpen && <button type="button" aria-label="Close navigation" onClick={onCloseMobile} className="fixed inset-0 z-40 cursor-pointer bg-black/60 md:hidden" />}<aside className={`${desktop ? "relative shrink-0" : "fixed inset-y-0 left-0 z-50 w-64 shadow-2xl"} ${compact ? "w-14" : "w-56"} border-r border-line bg-canvas text-fg`}><nav id="mobile-navigation" aria-label="Primary" className="flex h-full min-h-0 flex-col overflow-y-auto bg-canvas"><div className="py-2">{primaryNav.map((item) => <NavItem key={item.href} item={item} pathname={pathname} collapsed={compact} />)}<div className="mx-4 my-2 h-px bg-line-soft" />{secondaryNav.map((item) => <NavItem key={item.href} item={item} pathname={pathname} collapsed={compact} />)}</div>{desktop && <button type="button" onClick={toggle} aria-label={compact ? "Expand sidebar" : "Collapse sidebar"} className="mt-auto flex h-11 shrink-0 cursor-pointer items-center justify-center border-t border-line-soft text-fg-muted transition-colors hover:bg-surface-1 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal/70 md:h-10">{compact ? <ChevronsRight size={14} /> : <ChevronsLeft size={14} />}</button>}</nav></aside></>;
+  const activeGroup = findGroupIdForPath(pathname);
+
+  return (
+    <>
+      {!desktop && mobileOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={onCloseMobile}
+          className="fixed inset-0 z-40 cursor-pointer bg-black/60 md:hidden"
+        />
+      )}
+      <aside
+        className={`${desktop ? "relative shrink-0" : "fixed inset-y-0 left-0 z-50 w-64 shadow-2xl"} ${compact ? "w-14" : "w-60"} border-r border-line bg-canvas text-fg`}
+      >
+        <nav
+          id="mobile-navigation"
+          aria-label="Primary"
+          className="flex h-full min-h-0 flex-col overflow-y-auto bg-canvas"
+        >
+          <div className="py-2">
+            {NAV_GROUPS.map((group, index) => {
+              // The group holding the current page is always shown open so the
+              // active item can never be hidden by a collapsed heading.
+              const open = compact || group.id === activeGroup || !closedGroups.includes(group.id);
+              return (
+                <div key={group.id} className={index > 0 ? "mt-1" : undefined}>
+                  {compact ? (
+                    index > 0 && <div className="mx-3 my-2 h-px bg-line-soft" />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.id)}
+                      aria-expanded={open}
+                      aria-controls={`nav-group-${group.id}`}
+                      className="mx-2 mt-2 flex min-h-8 w-[calc(100%-1rem)] cursor-pointer items-center justify-between rounded px-3 text-xs font-medium text-fg-subtle transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70"
+                    >
+                      <span>{group.label}</span>
+                      <ChevronDown
+                        size={12}
+                        aria-hidden="true"
+                        className={`transition-transform ${open ? "" : "-rotate-90"}`}
+                      />
+                    </button>
+                  )}
+                  {open && (
+                    <div id={`nav-group-${group.id}`}>
+                      {group.items.map((item) => (
+                        <NavItem key={item.href} item={item} pathname={pathname} collapsed={compact} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {desktop && (
+            <button
+              type="button"
+              onClick={toggle}
+              aria-label={compact ? "Expand sidebar" : "Collapse sidebar"}
+              className="mt-auto flex h-11 shrink-0 cursor-pointer items-center justify-center border-t border-line-soft text-fg-muted transition-colors hover:bg-surface-1 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal/70 md:h-10"
+            >
+              {compact ? <ChevronsRight size={14} /> : <ChevronsLeft size={14} />}
+            </button>
+          )}
+        </nav>
+      </aside>
+    </>
+  );
 }
-function NavItem({ item, pathname, collapsed }: { item: NavEntry; pathname: string; collapsed: boolean }) { const Icon = item.icon; const active = item.href === "/" ? pathname === "/" : pathname === item.href || pathname.startsWith(item.href + "/"); return <Link href={item.href} title={collapsed ? item.label : undefined} className={`mx-2 flex min-h-11 cursor-pointer items-center gap-3 rounded px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70 md:min-h-10 ${collapsed ? "justify-center px-0" : ""} ${active ? "bg-signal/10 text-fg" : "text-fg-muted hover:bg-surface-1 hover:text-fg"}`}><Icon size={15} strokeWidth={1.5} /><span className={collapsed ? "sr-only" : "truncate"}>{item.label}</span></Link>; }
+
+function NavItem({ item, pathname, collapsed }: { item: NavEntry; pathname: string; collapsed: boolean }) {
+  const Icon = item.icon;
+  const active = isNavActive(item, pathname);
+  return (
+    <Link
+      href={item.href}
+      title={collapsed ? item.label : undefined}
+      aria-current={active ? "page" : undefined}
+      className={`relative mx-2 flex min-h-11 cursor-pointer items-center gap-3 rounded px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70 md:min-h-9 ${collapsed ? "justify-center px-0" : ""} ${active ? "bg-signal/10 text-fg" : "text-fg-muted hover:bg-surface-1 hover:text-fg"}`}
+    >
+      {active && <span aria-hidden="true" className="absolute inset-y-1.5 left-0 w-0.5 rounded bg-signal" />}
+      <Icon size={15} strokeWidth={1.5} />
+      <span className={collapsed ? "sr-only" : "truncate"}>{item.label}</span>
+    </Link>
+  );
+}

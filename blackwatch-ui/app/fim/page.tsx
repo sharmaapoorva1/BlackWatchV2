@@ -9,7 +9,7 @@ import type {
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { Table } from "@/components/ui/Table";
-import { SectionLabel } from "@/components/layout/SectionLabel";
+import { PageSection } from "@/components/layout/PageSection";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { TimestampCell } from "@/components/domain/TimestampCell";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -28,8 +28,7 @@ export default async function FimPage() {
         }
       />
 
-      <section className="space-y-2">
-        <SectionLabel>monitored hosts</SectionLabel>
+      <PageSection title="Monitored hosts" flush>
         <DataPanel className="overflow-hidden">
           {hosts.length === 0 ? (
             <EmptyState>
@@ -40,16 +39,12 @@ export default async function FimPage() {
             <HostsTable hosts={hosts} />
           )}
         </DataPanel>
-      </section>
+      </PageSection>
 
-      <section className="mt-6 space-y-2">
-        <div className="flex items-baseline justify-between">
-          <SectionLabel>recent fim activity · all hosts</SectionLabel>
-          <span className="text-[11px] text-fg-subtle">
-            last {recent_changes.length} change
-            {recent_changes.length === 1 ? "" : "s"}
-          </span>
-        </div>
+      <PageSection
+        title="Recent file integrity activity"
+        description={`Last ${recent_changes.length} change${recent_changes.length === 1 ? "" : "s"} across all hosts.`}
+      >
         <DataPanel className="overflow-hidden">
           {recent_changes.length === 0 ? (
             <EmptyState>
@@ -60,7 +55,7 @@ export default async function FimPage() {
             <ChangesTable changes={recent_changes} />
           )}
         </DataPanel>
-      </section>
+      </PageSection>
     </>
   );
 }

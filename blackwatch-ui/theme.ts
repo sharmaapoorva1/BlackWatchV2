@@ -3,7 +3,7 @@ const surface = "#101218";
 const elevated = "#181B22";
 const foreground = "#E4E4E7";
 const muted = "#9CA3AF";
-const subtle = "#6B7280";
+const subtle = "#8A93A3";
 const signal = "#48D4E8";
 
 /** Shared design tokens. Rendering is owned by the Aceternity/Tailwind layer. */

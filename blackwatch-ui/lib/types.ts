@@ -1093,6 +1093,8 @@ export interface HostExtra {
     load_1min?: number | null;
     load_5min?: number | null;
     load_norm_1min?: number | null;
+    /** True CPU busy percentage from the agent (0-100). Absent on old agents. */
+    utilization_pct?: number | null;
     cpu_count?: number | null;
   } | null;
   _state?: { cpu_anomaly_active?: boolean | null } | null;

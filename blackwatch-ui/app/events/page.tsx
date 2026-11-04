@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 
@@ -12,6 +13,9 @@ import { Button } from "@/components/ui/Button";
 import { NativeSelect } from "@/components/ui/NativeSelect";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TimestampCell } from "@/components/domain/TimestampCell";
+import { SavedFilters } from "@/components/domain/SavedFilters";
+import { EventActionCell } from "@/components/domain/EventActionCell";
+import { eventTargetLabel } from "@/lib/event-summary";
 import {
   SeverityBadge,
   severityBorderBg,
@@ -50,6 +54,9 @@ export default async function EventsPage({
         subtitle={`Showing ${count} event${count === 1 ? "" : "s"}.`}
       />
 
+      <Suspense fallback={null}>
+        <SavedFilters storageKey="bw.events.savedFilters" />
+      </Suspense>
       <FilterBar params={params} options={options} />
 
       <DataPanel className="mt-4 overflow-hidden">
@@ -86,7 +93,7 @@ function FilterBar({
         aria-label="Search events"
         autoComplete="off"
         defaultValue={params.q ?? ""}
-        placeholder="search…"
+        placeholder="Search actor, IP, target, action…"
         className="w-full"
       />
       <NativeSelect name="severity" aria-label="Severity" defaultValue={params.severity ?? ""} className="w-full">
@@ -123,11 +130,11 @@ function EventsTable({ events }: { events: EventEnvelope[] }) {
   return (
     <Table>
       <thead>
-        <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+        <tr className="border-b border-line-soft text-xs text-fg-muted">
           <th className="w-44 px-4 py-2 text-left font-normal">Time</th>
           <th className="w-28 px-4 py-2 text-left font-normal">Severity</th>
           <th className="w-32 px-4 py-2 text-left font-normal">Module</th>
-          <th className="px-4 py-2 text-left font-normal">Action</th>
+          <th className="px-4 py-2 text-left font-normal">Event</th>
           <th className="w-48 px-4 py-2 text-left font-normal">Actor</th>
           <th className="w-64 px-4 py-2 text-left font-normal">Target</th>
           <th className="w-52 px-4 py-2 text-left font-normal">Tags</th>
@@ -145,14 +152,12 @@ function EventsTable({ events }: { events: EventEnvelope[] }) {
 function EventRow({ event }: { event: EventEnvelope }) {
   const severity = (event.severity as string | null | undefined) ?? null;
   const actor = event.actor?.principal ?? "—";
-  // Prefer the role tag (set per-agent via BLACKWATCH_TAGS) so the column shows
-  // "Dev-NAT" instead of "i-08ba075...". Falls back to hostname, then instance id.
+  // Role tag (per-agent BLACKWATCH_TAGS) first, then name, then id.
   const extra = (event.extra as Record<string, unknown> | undefined) ?? {};
   const tags =
     (event.tags as Record<string, string> | undefined) ??
     (extra.tags as Record<string, string> | undefined);
-  const target =
-    tags?.role ?? event.target?.name ?? event.target?.id ?? "—";
+  const target = eventTargetLabel(event);
   const moduleName = event.source?.module ?? "—";
   const tagEntries = Object.entries(tags ?? {});
 
@@ -175,13 +180,8 @@ function EventRow({ event }: { event: EventEnvelope }) {
       <td data-label="Module" className="truncate px-4 py-2.5 font-mono text-xs text-fg-muted">
         {moduleName}
       </td>
-      <td data-label="Action" className="truncate px-4 py-2.5">
-        <Link
-          href={`/events/${event.event_id}`}
-          className="font-mono text-xs text-fg transition-colors hover:text-signal"
-        >
-          {event.action}
-        </Link>
+      <td data-label="Event" className="px-4 py-2.5">
+        <EventActionCell eventId={event.event_id} action={event.action} />
       </td>
       <td data-label="Actor" className="truncate px-4 py-2.5 text-xs text-fg-muted">{actor}</td>
       <td data-label="Target" className="truncate px-4 py-2.5 font-mono text-xs text-fg-muted">

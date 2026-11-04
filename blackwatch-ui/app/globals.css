@@ -20,12 +20,12 @@
   /* text */
   --color-fg:            #E4E4E7;
   --color-fg-muted:      #9CA3AF;
-  --color-fg-subtle:     #6B7280;
-  --color-fg-disabled:   #4B5563;
+  --color-fg-subtle:     #8A93A3;   /* 6.0:1 on surface-1 (was #6B7280, 3.6:1) */
+  --color-fg-disabled:   #6B7280;
 
   /* Semantic aliases for shared/page components still using the older names. */
   --color-muted:         #9CA3AF;
-  --color-subtle:        #6B7280;
+  --color-subtle:        #8A93A3;
   --color-danger:        #F43F5E;
   --color-surface:       #101218;
 
@@ -491,4 +491,37 @@
     }
   }
 
+}
+
+/* =========================================================================
+   Readability floor (see docs/ui-design.md). Unlayered so it overrides the
+   generated utilities without editing ~300 call sites.
+   ========================================================================= */
+.text-\[9px\],
+.text-\[9\.5px\],
+.text-\[10px\],
+.text-\[10\.5px\],
+.text-\[11px\] {
+  font-size: 0.75rem; /* 12px minimum for any label or value */
+  line-height: 1rem;
+}
+.uppercase {
+  text-transform: none;
+}
+.tracking-wider,
+.tracking-widest,
+.tracking-\[0\.04em\],
+.tracking-\[0\.08em\],
+.tracking-\[0\.1em\],
+.tracking-\[0\.12em\] {
+  letter-spacing: 0.01em;
+}
+
+/* Compact table density (account menu -> "Compact tables"). Only applies on
+   wide screens; below the card breakpoint rows are stacked cards already. */
+@media (min-width: 1101px) {
+  html[data-density="compact"] .bw-table tbody td {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
 }

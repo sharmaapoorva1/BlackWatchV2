@@ -346,17 +346,27 @@ function StatusSection({
             </KeyValueRow>
           )}
           {cpu && (
-            <KeyValueRow label="CPU load · latest report">
+            <KeyValueRow label="CPU % · latest report">
               <div className="space-y-1">
                 <div className="font-mono text-xs">
-                  <span className="text-fg">{cpu.load_1min}</span>
-                  <span className="text-fg-subtle"> (1m) · </span>
-                  <span className="text-fg">{cpu.load_5min}</span>
-                  <span className="text-fg-subtle"> (5m) · {cpu.cpu_count} CPUs · normalized {cpu.load_norm_1min}</span>
+                  {cpu.utilization_pct != null ? (
+                    <>
+                      <span className={clsx("text-sm", memoryColor(cpu.utilization_pct))}>{cpu.utilization_pct}%</span>
+                      <span className="text-fg-subtle"> · {cpu.cpu_count} CPUs · load {cpu.load_1min} (1m) / {cpu.load_5min} (5m)</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-fg-subtle">Not reported by this agent · </span>
+                      <span className="text-fg">{cpu.load_1min}</span>
+                      <span className="text-fg-subtle"> (1m) · </span>
+                      <span className="text-fg">{cpu.load_5min}</span>
+                      <span className="text-fg-subtle"> (5m) · {cpu.cpu_count} CPUs</span>
+                    </>
+                  )}
                 </div>
                 {cpuAnomaly && <div className="inline-flex items-center gap-1.5 text-xs text-sev-critical"><span aria-hidden className="h-1.5 w-1.5 rounded-full bg-sev-critical" />anomaly active</div>}
                 {!cpuAnomaly && baselineN >= 60 && extra._baseline_cpu && (
-                  <div className="text-[11px] text-fg-subtle">baseline mean {extra._baseline_cpu.mean.toFixed(3)} ({baselineN} samples)</div>
+                  <div className="text-[11px] text-fg-subtle">load baseline mean {extra._baseline_cpu.mean.toFixed(3)} ({baselineN} samples)</div>
                 )}
               </div>
             </KeyValueRow>

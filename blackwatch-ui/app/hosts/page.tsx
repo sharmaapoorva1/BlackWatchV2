@@ -6,11 +6,13 @@ import type { EventEnvelope } from "@/lib/types";
 import { HostFleetTable } from "@/components/domain/HostFleetTable";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
+import { PageSection } from "@/components/layout/PageSection";
 import { Table } from "@/components/ui/Table";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { TimestampCell } from "@/components/domain/TimestampCell";
 import { IpCell } from "@/components/domain/IpCell";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { EventActionCell } from "@/components/domain/EventActionCell";
 import { SeverityBadge, severityBorderBg } from "@/components/domain/SeverityBadge";
 
 export default async function HostsPage() {
@@ -30,14 +32,12 @@ export default async function HostsPage() {
       <div className="space-y-8">
         <HostFleetTable servers={servers} />
 
-        <section className="space-y-3" aria-labelledby="host-activity-title">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <h2 id="host-activity-title" className="font-display text-base font-semibold text-fg">Recent host activity</h2>
-              <p className="mt-1 text-sm text-fg-muted">SSH/sudo access and host configuration changes, newest first.</p>
-            </div>
-            <Link href="/events" className="text-xs text-signal hover:underline">All events</Link>
-          </div>
+        <PageSection
+          title="Recent host activity"
+          description="SSH/sudo access and host configuration changes, newest first."
+          action={{ href: "/events", label: "All events" }}
+          flush
+        >
           <DataPanel scrollX>
             {auth.length + changes.length === 0 ? (
               <EmptyState>No host access or configuration activity recorded yet.</EmptyState>
@@ -45,14 +45,14 @@ export default async function HostsPage() {
               <HostActivityTable auth={auth} changes={changes} />
             )}
           </DataPanel>
-        </section>
+        </PageSection>
 
         {ingress && (
-          <section className="space-y-3" aria-labelledby="host-ingestion-title">
-            <div>
-              <h2 id="host-ingestion-title" className="font-display text-base font-semibold text-fg">Agent ingestion</h2>
-              <p className="mt-1 text-sm text-fg-muted">Transport and processing health for direct host reports.</p>
-            </div>
+          <PageSection
+            title="Agent ingestion"
+            description="Transport and processing health for direct host reports."
+            flush
+          >
             <DataPanel className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3">
               <span className="font-mono text-xs uppercase tracking-wider text-signal">{ingress.transport}</span>
               <IngestionMetric label="accept p95" value={ingress.metrics?.acceptance_p95_seconds == null ? "—" : `${ingress.metrics.acceptance_p95_seconds.toFixed(2)}s`} />
@@ -61,7 +61,7 @@ export default async function HostsPage() {
               <IngestionMetric label="quarantined" value={String(ingress.metrics?.quarantined ?? "—")} tone={(ingress.metrics?.quarantined ?? 0) > 0 ? "critical" : undefined} />
               <IngestionMetric label="oldest active" value={ingress.spool.oldest_active_age_seconds == null ? "clear" : `${Math.round(ingress.spool.oldest_active_age_seconds)}s`} />
             </DataPanel>
-          </section>
+          </PageSection>
         )}
       </div>
     </>
@@ -109,7 +109,7 @@ function HostActivityTable({
   return (
     <Table tableId="host-fleet-activity" ariaLabel="Recent host access and configuration activity">
       <thead>
-        <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+        <tr className="border-b border-line-soft text-xs text-fg-muted">
           <th className="w-36 px-3 py-2 text-left font-normal">When</th>
           <th className="w-28 px-3 py-2 text-left font-normal">Type</th>
           <th className="w-24 px-3 py-2 text-left font-normal">Result</th>
@@ -134,7 +134,7 @@ function HostActivityTable({
                 {targetId?.startsWith("i-") ? <Link href={`/hosts/${targetId}`} className="hover:text-signal">{eventHostLabel(event)}</Link> : eventHostLabel(event)}
               </td>
               <td className="max-w-[28rem] break-words px-3 py-2.5">
-                <Link href={`/events/${event.event_id}`} className="font-mono text-xs text-fg hover:text-signal">{event.action}</Link>
+                <EventActionCell eventId={event.event_id} action={event.action} />
               </td>
               <td className="max-w-64 break-words px-3 py-2.5 text-xs text-fg-muted">
                 {kind === "Access" ? (

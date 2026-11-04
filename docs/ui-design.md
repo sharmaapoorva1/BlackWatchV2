@@ -50,7 +50,7 @@ The *opposite* of: rounded-2xl cards, purple gradients, hero animations, illustr
 |---|---|
 | UI + body | **IBM Plex Sans** |
 | Monospace (IPs, timestamps, IDs, JSON) | **JetBrains Mono** |
-| Section labels (small caps style) | IBM Plex Sans, `font-size: 11px`, `text-transform: uppercase`, `letter-spacing: 0.08em`, tertiary text color |
+| Section labels | IBM Plex Sans, `font-size: 12px` (nothing in the app renders below 12px), sentence case, `font-weight: 500`, muted text color. The earlier 11px uppercase style was retired for legibility; `globals.css` enforces the 12px floor and sentence case for legacy call sites. |
 
 Global rule: `font-variant-numeric: tabular-nums` on everything so counts/latency/byte-totals align vertically across rows.
 

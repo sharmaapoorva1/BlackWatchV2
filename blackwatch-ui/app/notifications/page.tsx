@@ -22,6 +22,7 @@ import type {
 } from "@/lib/types";
 
 import { PageHeader } from "@/components/layout/PageHeader";
+import { NotificationModel } from "@/components/domain/notifications/NotificationModel";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { Button } from "@/components/ui/Button";
@@ -92,13 +93,10 @@ export default async function NotificationsPage({
         } · ${sent24h} sent (24h) · ${failed24h} failed`}
       />
 
-      <div className="mb-5 flex items-center justify-between border border-signal/20 bg-signal/5 px-3 py-2.5">
-        <div>
-          <p className="text-sm text-fg">Notification Studio</p>
-          <p className="mt-0.5 text-xs text-fg-muted">Customize every alert type in plain language, module by module.</p>
-        </div>
-        <Button asChild variant="secondary" size="sm"><Link href="/notifications/profiles">Open Studio</Link></Button>
-      </div>
+      <NotificationModel
+        routeCount={routesData.routes.length}
+        channelCount={channelsData.channels.length}
+      />
 
       {msg && <FlashToast message={msg} />}
 
@@ -109,13 +107,14 @@ export default async function NotificationsPage({
 
       {/* CHANNELS */}
       <SectionHeader
+        id="channels"
         label="Channels"
         action={{ href: "/notifications/channels/new", label: "add channel" }}
       />
       <ChannelsTable channels={channelsData.channels} />
 
       {/* ALERT ROUTES */}
-      <div className="mt-8 mb-2 flex items-baseline justify-between">
+      <div id="routes" className="mt-8 mb-2 flex scroll-mt-4 items-baseline justify-between">
         <SectionHeaderLabel>Alert routes</SectionHeaderLabel>
         <Button asChild variant="primary" size="sm">
           <Link href="/notifications/create">
@@ -152,14 +151,16 @@ export default async function NotificationsPage({
 // =========================================================================
 
 function SectionHeader({
+  id,
   label,
   action,
 }: {
+  id?: string;
   label: string;
   action?: { href: string; label: string };
 }) {
   return (
-    <div className="mt-8 mb-2 flex items-end justify-between gap-3">
+    <div id={id} className="mt-8 mb-2 flex scroll-mt-4 items-end justify-between gap-3">
       <SectionHeaderLabel>{label}</SectionHeaderLabel>
       {action && (
         <Button asChild variant="ghost" size="sm">

@@ -1,12 +1,16 @@
 import Link from "next/link";
 import clsx from "clsx";
 
-import { fetchOverview } from "@/lib/api";
+import { fetchAgentIngressDiagnostics, fetchConnectors, fetchOverview } from "@/lib/api";
+import { buildAttentionItems } from "@/lib/attention";
+import { eventTargetLabel } from "@/lib/event-summary";
 import type { EventEnvelope } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { Table } from "@/components/ui/Table";
-import { SectionLabel } from "@/components/layout/SectionLabel";
+import { PageSection } from "@/components/layout/PageSection";
+import { AttentionStrip } from "@/components/domain/AttentionStrip";
+import { EventActionCell } from "@/components/domain/EventActionCell";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { TimestampCell } from "@/components/domain/TimestampCell";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -16,7 +20,14 @@ import {
 } from "@/components/domain/SeverityBadge";
 
 export default async function Home() {
-  const data = await fetchOverview();
+  // Overview is the one required call. Connector and ingest health only enrich
+  // the attention list, so a failure there must not take the page down.
+  const [data, connectors, ingress] = await Promise.all([
+    fetchOverview(),
+    fetchConnectors().catch(() => null),
+    fetchAgentIngressDiagnostics(1).catch(() => null),
+  ]);
+  const attention = buildAttentionItems({ overview: data, connectors, ingress });
 
   return (
     <>
@@ -26,16 +37,18 @@ export default async function Home() {
         subtitle="Live state across detection, posture, and host telemetry."
       />
 
+      <AttentionStrip items={attention} />
+
       {/* Top-level KPI strip */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Kpi
-          label="Events · 24h"
+          label="Events, last 24h"
           value={fmtCount(data.volume_24h)}
-          accent={data.volume_24h > 0 ? "neutral" : "neutral"}
+          accent="neutral"
           href="/events"
         />
         <Kpi
-          label="Posture findings"
+          label="Open posture findings"
           value={String(data.posture.total_open)}
           accent={
             data.posture.by_severity.critical > 0
@@ -61,32 +74,41 @@ export default async function Home() {
           href="/hosts"
         />
         <Kpi
-          label="High / critical · last 200"
+          label="High / critical events"
+          hint="in the latest 200 events"
           value={String(data.notable.length)}
           accent={data.notable.length > 0 ? "high" : "ok"}
           href="/events?severity=high"
         />
       </div>
 
+      {/* Notable events first: this is the triage queue. */}
+      <PageSection
+        title="Needs triage"
+        description="High and critical events from the latest 200."
+        action={{ href: "/events?severity=high", label: "All high and critical events" }}
+      >
+        <DataPanel className="overflow-hidden">
+          {data.notable.length === 0 ? (
+            <EmptyState tone="ok">No high or critical events in the recent window.</EmptyState>
+          ) : (
+            <CompactEventsTable events={data.notable} />
+          )}
+        </DataPanel>
+      </PageSection>
+
       {/* Posture severity breakdown */}
-      <section className="mt-6 space-y-2">
-        <div className="flex items-baseline justify-between">
-          <SectionLabel>posture · open findings by severity</SectionLabel>
-          <Link href="/aws-posture" className="text-[11px] text-fg-subtle hover:text-fg">
-            see all →
-          </Link>
-        </div>
+      <PageSection
+        title="Posture"
+        description="Open AWS configuration findings by severity."
+        action={{ href: "/aws-posture", label: "All findings" }}
+      >
         <DataPanel className="grid gap-4 p-4 md:grid-cols-[minmax(170px,0.7fr)_minmax(0,2fr)] md:items-center">
           <div className="border-b border-line-soft pb-4 md:border-b-0 md:border-r md:pb-0 md:pr-5">
-            <div className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-              Total open findings
-            </div>
+            <div className="text-xs text-fg-muted">Total open findings</div>
             <div className="mt-1 font-mono text-4xl tabular-nums text-fg">
               {data.posture.total_open}
             </div>
-            <p className="mt-1 text-xs text-fg-muted">
-              Prioritized by severity for the next response step.
-            </p>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             <PostureCell label="Critical" count={data.posture.by_severity.critical} accent="critical" total={data.posture.total_open} />
@@ -96,46 +118,22 @@ export default async function Home() {
             <PostureCell label="Info" count={data.posture.by_severity.informational} accent="low" total={data.posture.total_open} />
           </div>
         </DataPanel>
-      </section>
-
-      {/* Notable events */}
-      <section className="mt-6 space-y-2">
-        <div className="flex items-baseline justify-between">
-          <SectionLabel>notable · high / critical</SectionLabel>
-          <Link
-            href="/events?severity=high"
-            className="text-[11px] text-fg-subtle hover:text-fg"
-          >
-            see all →
-          </Link>
-        </div>
-        <DataPanel className="overflow-hidden">
-          {data.notable.length === 0 ? (
-            <EmptyState>No high or critical events in the recent window. Quiet.</EmptyState>
-          ) : (
-            <CompactEventsTable events={data.notable} />
-          )}
-        </DataPanel>
-      </section>
+      </PageSection>
 
       {/* Recent events tail */}
-      <section className="mt-6 space-y-2">
-        <div className="flex items-baseline justify-between">
-          <SectionLabel>recent · last 10</SectionLabel>
-          <Link href="/events" className="text-[11px] text-fg-subtle hover:text-fg">
-            see all →
-          </Link>
-        </div>
+      <PageSection
+        title="Latest events"
+        description="The 10 most recent events across all sources."
+        action={{ href: "/events", label: "All events" }}
+      >
         <DataPanel className="overflow-hidden">
           {data.recent.length === 0 ? (
-            <EmptyState>
-              No events yet — has an agent or connector reported?
-            </EmptyState>
+            <EmptyState>No events yet. Has an agent or connector reported?</EmptyState>
           ) : (
             <CompactEventsTable events={data.recent} />
           )}
         </DataPanel>
-      </section>
+      </PageSection>
     </>
   );
 }
@@ -151,11 +149,13 @@ function Kpi({
   value,
   accent,
   href,
+  hint,
 }: {
   label: string;
   value: string;
   accent: KpiAccent;
   href: string;
+  hint?: string;
 }) {
   const dot =
     accent === "critical"
@@ -172,9 +172,7 @@ function Kpi({
       href={href}
       className="group block border border-line-soft bg-surface-1 px-4 py-3 transition-colors hover:bg-surface-2"
     >
-      <div className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-        {label}
-      </div>
+      <div className="text-xs text-fg-muted">{label}</div>
       <div className="mt-2 flex items-baseline gap-2">
         <span
           aria-hidden
@@ -182,6 +180,7 @@ function Kpi({
         />
         <span className="font-mono text-3xl tabular-nums text-fg">{value}</span>
       </div>
+      {hint && <div className="mt-1 text-xs text-fg-subtle">{hint}</div>}
     </Link>
   );
 }
@@ -210,9 +209,9 @@ function PostureCell({
   const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
   return (
     <div className="border border-line-soft bg-canvas/30 px-3 py-2.5">
-      <div className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+      <div className="flex items-center justify-between gap-2 text-xs text-fg-muted">
         {label}
-        <span className="font-mono text-[10px] text-fg-disabled">{percentage}%</span>
+        <span className="font-mono text-xs text-fg-subtle">{percentage}%</span>
       </div>
       <div className="mt-1.5 flex items-baseline gap-2">
         <span
@@ -239,11 +238,12 @@ function CompactEventsTable({ events }: { events: EventEnvelope[] }) {
   return (
     <Table>
       <thead>
-        <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-          <th className="w-36 px-4 py-2 text-left font-normal">Time</th>
-          <th className="w-24 px-4 py-2 text-left font-normal">Severity</th>
-          <th className="px-4 py-2 text-left font-normal">Action</th>
-          <th className="w-48 px-4 py-2 text-left font-normal">Actor</th>
+        <tr className="border-b border-line-soft text-xs text-fg-muted">
+          <th className="w-36 px-4 py-2 text-left font-medium">Time</th>
+          <th className="w-24 px-4 py-2 text-left font-medium">Severity</th>
+          <th className="px-4 py-2 text-left font-medium">Event</th>
+          <th className="w-44 px-4 py-2 text-left font-medium">Target</th>
+          <th className="w-48 px-4 py-2 text-left font-medium">Actor</th>
         </tr>
       </thead>
       <tbody>
@@ -252,7 +252,7 @@ function CompactEventsTable({ events }: { events: EventEnvelope[] }) {
             key={ev.event_id}
             className="group relative border-b border-line-soft last:border-0 hover:bg-surface-2"
           >
-            <td className="relative px-4 py-2">
+            <td data-label="Time" className="relative px-4 py-2">
               <span
                 aria-hidden
                 className={clsx(
@@ -262,18 +262,16 @@ function CompactEventsTable({ events }: { events: EventEnvelope[] }) {
               />
               <TimestampCell value={ev.event_time} />
             </td>
-            <td className="px-4 py-2">
+            <td data-label="Severity" className="px-4 py-2">
               <SeverityBadge severity={(ev.severity as string) ?? null} />
             </td>
-            <td className="truncate px-4 py-2">
-              <Link
-                href={`/events/${ev.event_id}`}
-                className="font-mono text-xs text-fg transition-colors hover:text-signal"
-              >
-                {ev.action}
-              </Link>
+            <td data-label="Event" className="px-4 py-2">
+              <EventActionCell eventId={ev.event_id} action={ev.action} />
             </td>
-            <td className="truncate px-4 py-2 text-xs text-fg-muted">
+            <td data-label="Target" className="truncate px-4 py-2 text-xs text-fg-muted">
+              {eventTargetLabel(ev)}
+            </td>
+            <td data-label="Actor" className="truncate px-4 py-2 text-xs text-fg-muted">
               {ev.actor?.principal ?? "—"}
             </td>
           </tr>
