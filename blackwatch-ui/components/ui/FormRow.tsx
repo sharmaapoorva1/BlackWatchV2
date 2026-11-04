@@ -1,11 +1,10 @@
-import {
-  Children,
-  cloneElement,
-  isValidElement,
-  useId,
-  type ReactElement,
-} from "react";
+import { Field } from "./Field";
 
+/**
+ * A labelled form row (label column on the left from `sm` up). Thin wrapper
+ * over `Field`, kept so the existing forms get the accessible label, hint and
+ * error wiring without changes at their call sites.
+ */
 export function FormRow({
   label,
   hint,
@@ -13,39 +12,13 @@ export function FormRow({
   children,
 }: {
   label: string;
-  hint?: string;
+  hint?: React.ReactNode;
   error?: string;
   children: React.ReactNode;
 }) {
-  const generatedId = useId();
-  const child =
-    Children.count(children) === 1 && isValidElement(children)
-      ? (children as ReactElement<{
-          id?: string;
-          "aria-invalid"?: boolean;
-          "aria-describedby"?: string;
-        }>)
-      : undefined;
-  const controlId = child?.props.id ?? generatedId;
-  const control =
-    child
-      ? cloneElement(child, {
-          id: controlId,
-          "aria-invalid": error ? true : undefined,
-          "aria-describedby": error ? `${controlId}-error` : undefined,
-        })
-      : children;
-
   return (
-    <div className="grid min-w-0 grid-cols-1 items-start gap-2 border-b border-line px-4 py-3 last:border-b-0 sm:grid-cols-[minmax(140px,200px)_minmax(0,1fr)]">
-      <label htmlFor={Children.count(children) === 1 ? controlId : undefined} className="pt-0.5 text-xs uppercase tracking-[0.08em] text-muted">
-        {label}
-        {hint && <span className="ml-2 normal-case tracking-normal text-[11px] text-subtle">{hint}</span>}
-      </label>
-      <div className="min-w-0">
-        {control}
-        {error && <p id={`${controlId}-error`} role="alert" className="mt-1 text-xs text-danger">{error}</p>}
-      </div>
-    </div>
+    <Field label={label} hint={hint} error={error} layout="row">
+      {children}
+    </Field>
   );
 }

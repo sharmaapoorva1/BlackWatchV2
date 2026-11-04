@@ -1,4 +1,8 @@
-import { Table, TableEmpty } from "@/components/ui/Table";
+"use client";
+
+import { useMemo } from "react";
+import { DataTable, type ColumnDef } from "@/components/ui/DataTable";
+import { formatEpoch } from "@/lib/ueba-rows";
 
 export interface BaselineRow {
   principal_type: string;
@@ -10,48 +14,73 @@ export interface BaselineRow {
   count: number;
 }
 
-function fmtEpoch(ts: number): string {
-  if (!ts) return "";
-  try {
-    return new Date(ts * 1000).toISOString().replace("T", " ").slice(0, 19) + "Z";
-  } catch {
-    return String(ts);
-  }
-}
-
 export function BaselineTable({ rows }: { rows: BaselineRow[] }) {
+  const columns = useMemo<ColumnDef<BaselineRow, unknown>[]>(
+    () => [
+      {
+        id: "type",
+        header: "Type",
+        accessorFn: (row) => row.principal_type,
+        meta: { label: "Type", className: "font-mono text-xs" },
+        cell: ({ row }) => row.original.principal_type,
+      },
+      {
+        id: "principal",
+        header: "Principal",
+        accessorFn: (row) => row.principal_id,
+        meta: { label: "Principal" },
+        cell: ({ row }) => row.original.principal_id,
+      },
+      {
+        id: "dimension",
+        header: "Dimension",
+        accessorFn: (row) => row.dimension,
+        meta: { label: "Dimension", className: "font-mono text-xs" },
+        cell: ({ row }) => row.original.dimension,
+      },
+      {
+        id: "value",
+        header: "Value",
+        accessorFn: (row) => row.value,
+        meta: { label: "Value", className: "break-all font-mono text-xs" },
+        cell: ({ row }) => row.original.value,
+      },
+      {
+        id: "count",
+        header: "Count",
+        accessorFn: (row) => row.count,
+        sortDescFirst: true,
+        meta: { label: "Count", className: "text-right tabular-nums", headerClassName: "text-right" },
+        cell: ({ row }) => row.original.count,
+      },
+      {
+        id: "first_seen",
+        header: "First seen",
+        accessorFn: (row) => row.first_seen,
+        sortDescFirst: true,
+        meta: { label: "First seen", className: "whitespace-nowrap font-mono text-xs" },
+        cell: ({ row }) => formatEpoch(row.original.first_seen),
+      },
+      {
+        id: "last_seen",
+        header: "Last seen",
+        accessorFn: (row) => row.last_seen,
+        sortDescFirst: true,
+        meta: { label: "Last seen", className: "whitespace-nowrap font-mono text-xs" },
+        cell: ({ row }) => formatEpoch(row.original.last_seen),
+      },
+    ],
+    [],
+  );
+
   return (
-    <Table tableId="ueba-baselines">
-      <thead>
-        <tr>
-          <th style={{ width: 130 }}>Type</th>
-          <th style={{ width: 220 }}>Principal</th>
-          <th style={{ width: 150 }}>Dimension</th>
-          <th style={{ width: 220 }}>Value</th>
-          <th data-align="right" style={{ width: 90 }}>Count</th>
-          <th style={{ width: 180 }}>First seen</th>
-          <th style={{ width: 180 }}>Last seen</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.length === 0 ? (
-          <TableEmpty columns={7}>No baseline rows.</TableEmpty>
-        ) : (
-          rows.map((r) => (
-            <tr
-              key={`${r.principal_type}|${r.principal_id}|${r.dimension}|${r.value}`}
-            >
-              <td className="font-mono text-xs">{r.principal_type}</td>
-              <td>{r.principal_id}</td>
-              <td className="font-mono text-xs">{r.dimension}</td>
-              <td className="font-mono text-xs">{r.value}</td>
-              <td data-align="right">{r.count}</td>
-              <td className="font-mono text-xs">{fmtEpoch(r.first_seen)}</td>
-              <td className="font-mono text-xs">{fmtEpoch(r.last_seen)}</td>
-            </tr>
-          ))
-        )}
-      </tbody>
-    </Table>
+    <DataTable
+      tableId="ueba-baselines-v2"
+      ariaLabel="UEBA baselines"
+      columns={columns}
+      data={rows}
+      getRowId={(row) => `${row.principal_type}|${row.principal_id}|${row.dimension}|${row.value}`}
+      emptyMessage="No baseline rows."
+    />
   );
 }

@@ -1,6 +1,7 @@
 import { Lock, ShieldAlert } from "lucide-react";
 
 import { Input } from "@/components/ui/Input";
+import { Field } from "@/components/ui/Field";
 import { PendingButton } from "@/components/ui/PendingButton";
 
 import { loginAction } from "./actions";
@@ -54,15 +55,8 @@ export default async function LoginPage({
         <form action={loginAction} className="mt-6 space-y-4">
           <input type="hidden" name="next" value={next} />
 
-          <div className="space-y-1.5">
-            <label
-              htmlFor="username"
-              className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle"
-            >
-              Username
-            </label>
+          <Field label="Username">
             <Input
-              id="username"
               name="username"
               type="text"
               autoComplete="username"
@@ -71,17 +65,10 @@ export default async function LoginPage({
               defaultValue=""
               className="w-full"
             />
-          </div>
+          </Field>
 
-          <div className="space-y-1.5">
-            <label
-              htmlFor="password"
-              className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle"
-            >
-              Password
-            </label>
+          <Field label="Password">
             <Input
-              id="password"
               name="password"
               type="password"
               autoComplete="current-password"
@@ -89,7 +76,7 @@ export default async function LoginPage({
               defaultValue=""
               className="w-full"
             />
-          </div>
+          </Field>
 
           <PendingButton
             size="md"

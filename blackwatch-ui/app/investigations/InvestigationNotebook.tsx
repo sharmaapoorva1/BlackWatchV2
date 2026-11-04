@@ -26,7 +26,7 @@ import { TimestampCell } from "@/components/domain/TimestampCell";
 import { IpCell } from "@/components/domain/IpCell";
 import { SeverityBadge } from "@/components/domain/SeverityBadge";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
-import { Table } from "@/components/ui/Table";
+import { DataTable, type ColumnDef } from "@/components/ui/DataTable";
 import { formatStatus } from "./InvestigationList";
 import { InvestigationIpIntelligence } from "./InvestigationIpIntelligence";
 
@@ -604,35 +604,63 @@ function EvidenceTable({
   results: InvestigationResult[];
   tableId: string;
 }) {
+  const columns = useMemo<ColumnDef<InvestigationResult, unknown>[]>(
+    () => [
+      {
+        id: "time",
+        header: "Time",
+        accessorFn: (result) => Date.parse(result.event.event_time ?? result.observed_at ?? "") || 0,
+        sortDescFirst: true,
+        enableHiding: false,
+        meta: { label: "Time", className: "whitespace-nowrap" },
+        cell: ({ row }) => <TimestampCell value={row.original.event.event_time ?? row.original.observed_at ?? ""} />,
+      },
+      {
+        id: "event",
+        header: "Event",
+        accessorFn: (result) => result.event.action ?? "Related activity",
+        meta: { label: "Event" },
+        cell: ({ row }) => (
+          <>
+            <div className="max-w-[22rem] break-words text-fg">{row.original.event.action ?? "Related activity"}</div>
+            <div className="mt-1 font-mono text-xs text-fg-subtle">{moduleLabel(row.original)}</div>
+          </>
+        ),
+      },
+      {
+        id: "target",
+        header: "Target / observable",
+        accessorFn: (result) => result.event.target?.id ?? result.event.target?.name ?? "",
+        meta: { label: "Target / observable", className: "max-w-[20rem] break-words font-mono text-xs" },
+        cell: ({ row }) => row.original.event.target?.id ?? row.original.event.target?.name ?? "—",
+      },
+      {
+        id: "why",
+        header: "Why it matters",
+        accessorFn: (result) => result.match_reason,
+        meta: { label: "Why it matters", className: "max-w-[26rem] break-words text-xs text-fg-muted" },
+        cell: ({ row }) => row.original.match_reason,
+      },
+      {
+        id: "details",
+        header: "Details",
+        enableSorting: false,
+        meta: { label: "Details" },
+        cell: ({ row }) => <EvidenceLink result={row.original} />,
+      },
+    ],
+    [],
+  );
+
   return (
-    <Table tableId={tableId} ariaLabel="Related evidence" responsive={false}>
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>Event</th>
-          <th>Target / observable</th>
-          <th>Why it matters</th>
-          <th>Details</th>
-        </tr>
-      </thead>
-      <tbody>
-        {results.map((result, index) => {
-          const event = result.event;
-          return (
-            <tr key={`${result.event_id ?? result.source_label}-${index}`}>
-              <td><TimestampCell value={event.event_time ?? result.observed_at ?? ""} /></td>
-              <td>
-                <div className="max-w-[22rem] break-words text-fg">{event.action ?? "Related activity"}</div>
-                <div className="mt-1 font-mono text-[10px] text-fg-subtle">{moduleLabel(result)}</div>
-              </td>
-              <td className="max-w-[20rem] break-words font-mono text-xs">{event.target?.id ?? event.target?.name ?? "—"}</td>
-              <td className="max-w-[26rem] break-words text-xs text-fg-muted">{result.match_reason}</td>
-              <td><EvidenceLink result={result} /></td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </Table>
+    <DataTable
+      tableId={`${tableId}-v2`}
+      ariaLabel="Related evidence"
+      columns={columns}
+      data={results}
+      getRowId={(result, index) => `${result.event_id ?? result.source_label}-${index}`}
+      responsive={false}
+    />
   );
 }
 

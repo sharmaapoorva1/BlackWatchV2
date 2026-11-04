@@ -1,18 +1,13 @@
 import Link from "next/link";
 
 import { fetchNotificationLog } from "@/lib/api";
-import type { NotificationLogEntry } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
-import { Table } from "@/components/ui/Table";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { NativeSelect } from "@/components/ui/NativeSelect";
 import { BackLink } from "@/components/ui/BackLink";
-import { StatusPill as SharedStatusPill } from "@/components/ui/StatusPill";
-import type { Severity } from "@/components/ui/StatusDot";
-import { TimestampCell } from "@/components/domain/TimestampCell";
-import { SeverityBadge } from "@/components/domain/SeverityBadge";
+import { NotificationLogTable } from "@/components/domain/NotificationLogTable";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 
 const STATUSES = ["sent", "failed", "rate_limited", "throttled", "digested", "acked"];
@@ -86,85 +81,9 @@ export default async function NotificationLogPage({
             No log entries match the filter.
           </div>
         ) : (
-          <LogTable entries={entries} />
+          <NotificationLogTable entries={entries} tableId="notifications-log" ariaLabel="Notification log" />
         )}
       </DataPanel>
     </>
   );
-}
-
-function LogTable({ entries }: { entries: NotificationLogEntry[] }) {
-  return (
-    <Table>
-      <thead>
-        <tr>
-          <th style={{ width: 144 }}>Time</th>
-          <th style={{ width: 112 }}>Status</th>
-          <th style={{ width: 128 }}>Channel</th>
-          <th style={{ width: 160 }}>Rule</th>
-          <th style={{ width: 224 }}>Event</th>
-          <th data-align="right" style={{ width: 64 }}>Retries</th>
-          <th>Preview / error</th>
-        </tr>
-      </thead>
-      <tbody>
-        {entries.map((e) => (
-          <tr
-            key={String(e.id)}
-            className="border-b border-line-soft last:border-0 hover:bg-surface-2"
-          >
-            <td className="px-4 py-2">
-              <TimestampCell value={e.ts} />
-            </td>
-            <td className="px-4 py-2">
-              <StatusPill status={e.status} />
-            </td>
-            <td className="truncate px-4 py-2 text-xs text-fg-muted">
-              {e.channel_name ?? "—"}
-            </td>
-            <td className="truncate px-4 py-2 text-xs text-fg-muted">
-              {e.rule_name ?? "—"}
-            </td>
-            <td className="truncate px-4 py-2">
-              <div className="flex items-center gap-2">
-                {e.event_id ? (
-                  <Link
-                    href={`/events/${e.event_id}`}
-                    className="font-mono text-xs text-fg transition-colors hover:text-signal"
-                  >
-                    {e.event_action ?? "—"}
-                  </Link>
-                ) : (
-                  <code className="font-mono text-xs text-fg-muted">
-                    {e.event_action ?? "—"}
-                  </code>
-                )}
-                {e.event_severity && (
-                  <SeverityBadge severity={e.event_severity} />
-                )}
-              </div>
-            </td>
-            <td className="px-4 py-2 text-right font-mono text-xs text-fg-muted">
-              {e.retries_used}
-            </td>
-            <td className="truncate px-4 py-2 font-mono text-[11px] text-fg-subtle">
-              {e.error_message ?? e.body_preview ?? ""}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </Table>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const sevMap: Record<string, Severity> = {
-    sent: "resolved",
-    failed: "critical",
-    rate_limited: "medium",
-    throttled: "medium",
-    digested: "low",
-    acked: "neutral",
-  };
-  return <SharedStatusPill label={status} severity={sevMap[status] ?? "neutral"} />;
 }

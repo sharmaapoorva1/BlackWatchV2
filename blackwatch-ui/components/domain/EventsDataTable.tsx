@@ -23,8 +23,21 @@ function severityOf(event: EventTableRow): string | null {
 /** The Events page table: TanStack-backed, sortable, resizable, with a
  *  Columns menu. Columns live here (not in the server page) because cell
  *  renderers are functions and cannot cross the server/client boundary. */
-export function EventsDataTable({ events }: { events: EventTableRow[] }) {
-  const columns = useMemo<ColumnDef<EventTableRow, unknown>[]>(
+export function EventsDataTable({
+  events,
+  variant = "full",
+  tableId = "events-feed",
+  ariaLabel = "Events",
+  emptyMessage = "No events match the current filters.",
+}: {
+  events: EventTableRow[];
+  /** `compact` drops Module and Tags for dashboard panels. */
+  variant?: "full" | "compact";
+  tableId?: string;
+  ariaLabel?: string;
+  emptyMessage?: string;
+}) {
+  const allColumns = useMemo<ColumnDef<EventTableRow, unknown>[]>(
     () => [
       {
         id: "time",
@@ -109,16 +122,20 @@ export function EventsDataTable({ events }: { events: EventTableRow[] }) {
     ],
     [],
   );
+  const columns = useMemo(
+    () => (variant === "compact" ? allColumns.filter((column) => column.id !== "module" && column.id !== "tags") : allColumns),
+    [allColumns, variant],
+  );
 
   return (
     <DataTable
-      tableId="events-feed"
-      ariaLabel="Events"
+      tableId={tableId}
+      ariaLabel={ariaLabel}
       columns={columns}
       data={events}
       getRowId={(event) => event.event_id}
       initialSorting={[{ id: "time", desc: true }]}
-      emptyMessage="No events match the current filters."
+      emptyMessage={emptyMessage}
     />
   );
 }

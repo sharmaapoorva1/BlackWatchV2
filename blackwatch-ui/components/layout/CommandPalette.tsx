@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import * as Dialog from "@radix-ui/react-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/Dialog";
 import { CornerDownLeft, Globe, Search, ServerCog, Activity } from "lucide-react";
 import { ALL_NAV_ITEMS, type NavIcon } from "./nav-config";
 
@@ -158,17 +158,12 @@ export function CommandPalette({
   };
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/60" />
-        <Dialog.Content
-          className="fixed left-1/2 top-[12vh] z-[61] w-[min(36rem,calc(100vw-1.5rem))] -translate-x-1/2 rounded-md border border-line bg-surface-1 shadow-2xl focus:outline-none"
-          aria-describedby="command-palette-desc"
-        >
-          <Dialog.Title className="sr-only">Search and jump</Dialog.Title>
-          <Dialog.Description id="command-palette-desc" className="sr-only">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent placement="top" aria-describedby="command-palette-desc">
+          <DialogTitle className="sr-only">Search and jump</DialogTitle>
+          <DialogDescription id="command-palette-desc" className="sr-only">
             Type to search events or an IP, host or event id, or choose a page. Use arrow keys and Enter.
-          </Dialog.Description>
+          </DialogDescription>
           <div className="flex items-center gap-2 border-b border-line px-3">
             <Search size={15} aria-hidden="true" className="shrink-0 text-fg-subtle" />
             <input
@@ -226,8 +221,7 @@ export function CommandPalette({
             <span>esc close</span>
             <span className="ml-auto hidden sm:inline">Press / anywhere to search</span>
           </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+        </DialogContent>
+    </Dialog>
   );
 }

@@ -44,6 +44,8 @@ declare module "@tanstack/react-table" {
     className?: string;
     /** Extra classes for this column's header cell. */
     headerClassName?: string;
+    /** Marks a row-actions column: right-aligned, labelled "Actions" in card mode, never hidden. */
+    isActions?: boolean;
   }
 }
 
@@ -92,6 +94,8 @@ export interface DataTableProps<TData> {
   emptyMessage?: ReactNode;
   /** Extra classes for a body row (e.g. a state tint). */
   rowClassName?: (row: Row<TData>) => string | undefined;
+  /** Stack rows as cards on narrow screens (default). Pass false to scroll horizontally instead. */
+  responsive?: boolean;
 }
 
 /**
@@ -111,6 +115,7 @@ export function DataTable<TData>({
   initialSorting = [],
   emptyMessage = "Nothing to show.",
   rowClassName,
+  responsive = true,
 }: DataTableProps<TData>) {
   const visibilityKey = `bw-datatable-visibility-v1-${tableId}`;
   const widthKey = `bw-datatable-widths-v1-${tableId}`;
@@ -253,8 +258,8 @@ export function DataTable<TData>({
         </div>
       )}
 
-      <div className="bw-table-shell bw-table-shell-cards max-w-full rounded-md border border-line bg-surface">
-        <table className="bw-table w-full border-collapse text-sm" data-responsive="cards" aria-label={ariaLabel}>
+      <div className={cn("bw-table-shell max-w-full rounded-md border border-line bg-surface", responsive && "bw-table-shell-cards")}>
+        <table className="bw-table w-full border-collapse text-sm" data-responsive={responsive ? "cards" : "scroll"} aria-label={ariaLabel}>
           <thead className="border-b border-line bg-surface-2 text-left text-xs text-muted">
             {table.getHeaderGroups().map((group) => (
               <tr key={group.id} className="h-10">
@@ -269,6 +274,7 @@ export function DataTable<TData>({
                     <th
                       key={header.id}
                       scope="col"
+                      data-actions={column.columnDef.meta?.isActions ? true : undefined}
                       aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : canSort ? "none" : undefined}
                       style={width !== undefined ? { width, minWidth: width } : undefined}
                       className={cn("relative whitespace-nowrap px-3 py-2 font-semibold", column.columnDef.meta?.headerClassName)}
@@ -313,7 +319,12 @@ export function DataTable<TData>({
                     <td
                       key={cell.id}
                       data-label={cell.column.columnDef.meta?.label ?? cell.column.id}
-                      className={cn("px-3 py-2 align-top", cell.column.columnDef.meta?.className)}
+                      data-actions={cell.column.columnDef.meta?.isActions ? true : undefined}
+                      className={cn(
+                        "px-3 py-2 align-top",
+                        cell.column.columnDef.meta?.isActions && "whitespace-nowrap text-right",
+                        cell.column.columnDef.meta?.className,
+                      )}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>

@@ -10,7 +10,7 @@ import type {
 } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
-import { Table } from "@/components/ui/Table";
+import { FimChangesTable, FimPathsTable, FimStrayTable } from "@/components/domain/FimTables";
 import { SectionLabel } from "@/components/layout/SectionLabel";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { TimestampCell } from "@/components/domain/TimestampCell";
@@ -181,41 +181,7 @@ function PathsSection({
             No path summary available — coverage hasn&apos;t been reported yet.
           </div>
         ) : (
-          <Table>
-            <thead>
-              <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-                <th className="w-44 px-4 py-2 text-left font-normal">Category</th>
-                <th className="px-4 py-2 text-left font-normal">Path</th>
-                <th className="w-28 px-4 py-2 text-right font-normal">Files</th>
-                <th className="w-32 px-4 py-2 text-right font-normal">Total size</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summary.map((p, i) => {
-                const isFirstInCategory =
-                  i === 0 || summary[i - 1].category !== p.category;
-                return (
-                  <tr
-                    key={`${p.category}-${p.path}`}
-                    className="border-b border-line-soft last:border-0 hover:bg-surface-2"
-                  >
-                    <td className="px-4 py-2.5 text-xs text-fg-muted">
-                      {isFirstInCategory ? p.category_label : ""}
-                    </td>
-                    <td className="truncate px-4 py-2.5 font-mono text-xs text-fg">
-                      {p.path}
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs text-fg">
-                      {p.file_count}
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs text-fg-muted">
-                      {formatBytes(p.total_size_bytes)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </Table>
+          <FimPathsTable paths={summary} />
         )}
       </DataPanel>
     </section>
@@ -250,33 +216,7 @@ function StraySection({
           next periodic scan will detect deletions for files outside the
           current scan scope.
         </p>
-        <Table>
-          <thead>
-            <tr className="border-y border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-              <th className="px-4 py-2 text-left font-normal">Path</th>
-              <th className="w-24 px-4 py-2 text-right font-normal">Size</th>
-              <th className="w-20 px-4 py-2 text-right font-normal">Perm</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stray.map((s) => (
-              <tr
-                key={s.path}
-                className="border-b border-line-soft last:border-0 hover:bg-surface-2"
-              >
-                <td className="truncate px-4 py-2.5 font-mono text-xs text-fg">
-                  {s.path}
-                </td>
-                <td className="px-4 py-2.5 text-right font-mono text-xs text-fg-muted">
-                  {formatBytes(s.size)}
-                </td>
-                <td className="px-4 py-2.5 text-right font-mono text-xs text-fg-muted">
-                  {s.perm.toString(8).padStart(4, "0")}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+        <FimStrayTable stray={stray} />
       </DataPanel>
     </section>
   );
@@ -301,158 +241,11 @@ function RecentChangesSection({ changes }: { changes: FimChange[] }) {
             No file integrity events for this instance yet.
           </div>
         ) : (
-          <ChangesTable changes={changes} />
+          <FimChangesTable changes={changes} scope="host" />
         )}
       </DataPanel>
     </section>
   );
-}
-
-function ChangesTable({ changes }: { changes: FimChange[] }) {
-  return (
-    <Table>
-      <thead>
-        <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-          <th className="w-32 px-4 py-2 text-left font-normal">Time</th>
-          <th className="w-24 px-4 py-2 text-left font-normal">Detected</th>
-          <th className="w-24 px-4 py-2 text-left font-normal">Change</th>
-          <th className="px-4 py-2 text-left font-normal">Path</th>
-          <th className="w-44 px-4 py-2 text-left font-normal">Who</th>
-          <th className="w-44 px-4 py-2 text-left font-normal">Diff</th>
-        </tr>
-      </thead>
-      <tbody>
-        {changes.map((c, i) => (
-          <tr
-            key={c.event_id ?? `${c.path}-${i}`}
-            className="border-b border-line-soft last:border-0 hover:bg-surface-2"
-          >
-            <td className="px-4 py-2.5">
-              {c.changed_at ? (
-                <TimestampCell value={c.changed_at} />
-              ) : (
-                <span className="text-xs text-fg-disabled">—</span>
-              )}
-            </td>
-            <td className="px-4 py-2.5">
-              <DetectionPill detection={c.detection} />
-            </td>
-            <td className="px-4 py-2.5">
-              <ChangeTypePill type={c.change_type} />
-            </td>
-            <td className="truncate px-4 py-2.5">
-              {c.event_id ? (
-                <Link
-                  href={`/events/${c.event_id}`}
-                  className="font-mono text-xs text-fg transition-colors hover:text-signal"
-                >
-                  {c.path}
-                </Link>
-              ) : (
-                <span className="font-mono text-xs text-fg">{c.path}</span>
-              )}
-            </td>
-            <td className="truncate px-4 py-2.5">
-              <ActorCell change={c} />
-            </td>
-            <td className="truncate px-4 py-2.5 font-mono text-xs text-fg-muted">
-              <DiffCell change={c} />
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </Table>
-  );
-}
-
-function DetectionPill({
-  detection,
-}: {
-  detection: FimChange["detection"];
-}) {
-  if (detection === "inotify") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-xs">
-        <span className="h-1.5 w-1.5 rounded-full bg-signal" aria-hidden />
-        <span className="text-fg">real-time</span>
-      </span>
-    );
-  }
-  if (detection === "auditd") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
-        <span className="h-1.5 w-1.5 rounded-full bg-sev-medium" aria-hidden />
-        auditd
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
-      <span className="h-1.5 w-1.5 rounded-full bg-fg-disabled" aria-hidden />
-      baseline
-    </span>
-  );
-}
-
-function ChangeTypePill({ type }: { type: FimChange["change_type"] }) {
-  const COLOR: Record<typeof type, string> = {
-    created: "bg-sev-medium",
-    modified: "bg-sev-high",
-    deleted: "bg-sev-medium",
-    perm_changed: "bg-sev-medium",
-    owner_changed: "bg-sev-medium",
-  };
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs">
-      <span className={clsx("h-1.5 w-1.5 rounded-full", COLOR[type])} aria-hidden />
-      <span className="text-fg-muted">{type.replace("_", " ")}</span>
-    </span>
-  );
-}
-
-function ActorCell({ change }: { change: FimChange }) {
-  if (change.actor_comm == null && change.actor_uid == null) {
-    return <span className="text-xs text-fg-disabled" title="A change was detected, but auditd did not attribute it to a process.">unknown · no attribution</span>;
-  }
-  const comm = change.actor_comm ?? "?";
-  const uid = change.actor_uid != null ? `uid=${change.actor_uid}` : null;
-  return (
-    <span
-      className="text-xs text-fg"
-      title="Best-effort auditd attribution based on process metadata; not definitive identity proof."
-    >
-      <span className="font-mono">{comm}</span>
-      {uid && <span className="ml-1.5 text-fg-muted">{uid}</span>}
-      <span className="ml-1.5 text-fg-subtle">best-effort</span>
-    </span>
-  );
-}
-
-function DiffCell({ change }: { change: FimChange }) {
-  if (change.change_type === "perm_changed") {
-    return (
-      <span>
-        perm {toOctal(change.perm_before)} → {toOctal(change.perm_after)}
-      </span>
-    );
-  }
-  if (change.change_type === "owner_changed") {
-    return (
-      <span>
-        {change.owner_before ?? "—"} → {change.owner_after ?? "—"}
-      </span>
-    );
-  }
-  if (change.change_type === "deleted") {
-    return (
-      <span>
-        was {toOctal(change.perm_before)}, {change.size_before ?? 0} B
-      </span>
-    );
-  }
-  const before = change.sha256_before?.slice(0, 8) ?? "new";
-  const after = change.sha256_after?.slice(0, 8) ?? "—";
-  return <span>{before} → {after}</span>;
 }
 
 // =========================================================================
@@ -503,18 +296,6 @@ function ConfigurationHelpSection({ instanceId: _instanceId }: { instanceId: str
 // =========================================================================
 // helpers
 // =========================================================================
-
-function formatBytes(b: number): string {
-  if (b < 1024) return `${b} B`;
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
-  if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
-  return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
-}
-
-function toOctal(p: number | null): string {
-  if (p === null) return "—";
-  return p.toString(8).padStart(4, "0");
-}
 
 function humanAge(seconds: number): string {
   if (seconds < 60) return `${Math.floor(seconds)}s ago`;

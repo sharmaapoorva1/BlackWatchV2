@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import * as Dialog from "@radix-ui/react-dialog";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/Dialog";
 import { ArrowUpRight, X } from "lucide-react";
 import type { EventEnvelope } from "@/lib/types";
 import { SeverityBadge } from "./SeverityBadge";
@@ -97,28 +97,23 @@ export function EventPeekHost() {
   }, [eventId]);
 
   return (
-    <Dialog.Root open={eventId !== null} onOpenChange={(open) => !open && setEventId(null)}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[55] bg-black/50" />
-        <Dialog.Content
-          className="fixed inset-y-0 right-0 z-[56] flex w-[min(30rem,100vw)] flex-col border-l border-line bg-surface-1 shadow-2xl focus:outline-none"
-          aria-describedby="event-peek-desc"
-        >
+    <Dialog open={eventId !== null} onOpenChange={(open) => !open && setEventId(null)}>
+        <DialogContent placement="right" aria-describedby="event-peek-desc">
           <div className="flex items-start gap-3 border-b border-line px-4 py-3">
             <div className="min-w-0 flex-1">
-              <Dialog.Title className="break-all font-mono text-sm text-fg">
+              <DialogTitle className="break-all font-mono text-sm text-fg">
                 {state.status === "ready" ? state.event.action : "Event"}
-              </Dialog.Title>
-              <Dialog.Description id="event-peek-desc" className="mt-1 text-xs text-fg-muted">
+              </DialogTitle>
+              <DialogDescription id="event-peek-desc" className="mt-1 text-xs text-fg-muted">
                 Quick look. Open the full event for the raw payload.
-              </Dialog.Description>
+              </DialogDescription>
             </div>
-            <Dialog.Close
+            <DialogClose
               aria-label="Close event details"
               className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center text-fg-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70 sm:h-8 sm:w-8"
             >
               <X size={16} aria-hidden="true" />
-            </Dialog.Close>
+            </DialogClose>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
@@ -140,9 +135,8 @@ export function EventPeekHost() {
               </Link>
             </div>
           )}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+        </DialogContent>
+    </Dialog>
   );
 }
 

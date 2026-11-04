@@ -6,7 +6,8 @@ import { NativeSelect } from "@/components/ui/NativeSelect";
 import type { Rule } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Table } from "@/components/ui/Table";
+import { DataTable, type ColumnDef } from "@/components/ui/DataTable";
+import { ActionForm } from "@/components/ui/ActionForm";
 import { SeverityBadge, severityBorderBg } from "@/components/domain/SeverityBadge";
 import { toggleRuleAction, setSeverityAction } from "./actions";
 
@@ -317,134 +318,138 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
       </section>
 
       {/* ------- Table --------------------------------------------------- */}
-      <Table tableId="rules-list" ariaLabel="Rules">
-          <thead>
-            <tr className="border-b border-line-soft text-[10px] uppercase tracking-[0.08em] text-fg-subtle">
-              <th scope="col" className="w-1 p-0" aria-label="Severity indicator" />
-              <th scope="col" className="w-[32%] px-4 py-2 font-normal">Rule</th>
-              <th scope="col" className="w-[25%] px-4 py-2 font-normal">Event actions</th>
-              <th scope="col" className="w-[20%] px-4 py-2 font-normal">Tags &amp; notify</th>
-              <th scope="col" className="w-40 px-3 py-2 font-normal">Severity</th>
-              <th scope="col" className="w-28 px-3 py-2 text-right font-normal">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((r) => (
-              <RuleRow key={r.id} rule={r} />
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-14 text-center">
-                  <EmptyState onClear={clearAll} hasFilter={anyFilterActive} />
-                </td>
-              </tr>
-            )}
-          </tbody>
-      </Table>
+      <RuleListTable rules={filtered} hasFilter={anyFilterActive} onClear={clearAll} />
     </div>
   );
 }
 
 // =========================================================================
-// Row
+// Table
 // =========================================================================
 
-function RuleRow({ rule: r }: { rule: Rule }) {
-  const sev = typeof r.severity === "string" ? r.severity : null;
-  const src = sourceOf(r.id);
-  const tier = notifyTierOf(r.tags);
-  const otherTags = (r.tags ?? []).filter((t) => !t.startsWith("notify:"));
+const SEVERITY_RANK: Record<string, number> = { critical: 5, high: 4, medium: 3, low: 2, informational: 1 };
+
+function RuleListTable({
+  rules,
+  hasFilter,
+  onClear,
+}: {
+  rules: Rule[];
+  hasFilter: boolean;
+  onClear: () => void;
+}) {
+  const columns = useMemo<ColumnDef<Rule, unknown>[]>(
+    () => [
+      {
+        id: "rule",
+        header: "Rule",
+        accessorFn: (r) => r.title,
+        enableHiding: false,
+        meta: { label: "Rule", className: "relative" },
+        cell: ({ row }) => {
+          const r = row.original;
+          const sev = typeof r.severity === "string" ? r.severity : null;
+          return (
+            <>
+              {/* Left severity strip: scan severity down the whole column. */}
+              <span
+                aria-hidden
+                className={clsx("pointer-events-none absolute left-0 top-0 h-full w-[3px]", severityBorderBg(sev))}
+              />
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <SourceBadge src={sourceOf(r.id)} />
+                  {r.rule_action === "suppress" && (
+                    <span className="rounded border border-line-soft px-1 py-px text-xs text-fg-subtle">suppress</span>
+                  )}
+                </div>
+                <div className="pr-2 text-[13px] font-medium leading-snug text-fg">{r.title}</div>
+                <div className="font-mono text-xs text-fg-subtle">{r.id}</div>
+              </div>
+            </>
+          );
+        },
+      },
+      {
+        id: "event_actions",
+        header: "Event actions",
+        enableSorting: false,
+        meta: { label: "Event actions" },
+        cell: ({ row }) =>
+          row.original.matched_actions && row.original.matched_actions.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {row.original.matched_actions.map((a) => (
+                <code key={a} className="rounded-sm border border-line-soft bg-canvas px-1.5 py-0.5 font-mono text-xs text-fg">
+                  {a}
+                </code>
+              ))}
+            </div>
+          ) : (
+            <span className="text-xs italic text-fg-disabled">matches on non-action fields</span>
+          ),
+      },
+      {
+        id: "notify",
+        header: "Tags & notify",
+        accessorFn: (r) => NOTIFY_TIER_ORDER.indexOf(notifyTierOf(r.tags)),
+        meta: { label: "Tags & notify" },
+        cell: ({ row }) => {
+          const otherTags = (row.original.tags ?? []).filter((t) => !t.startsWith("notify:"));
+          return (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <NotifyPill tier={notifyTierOf(row.original.tags)} />
+              {otherTags.map((t) => (
+                <span key={t} className="rounded-sm bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg-subtle">
+                  {t}
+                </span>
+              ))}
+            </div>
+          );
+        },
+      },
+      {
+        id: "severity",
+        header: "Severity",
+        accessorFn: (r) => SEVERITY_RANK[typeof r.severity === "string" ? r.severity : ""] ?? 0,
+        sortDescFirst: true,
+        meta: { label: "Severity" },
+        cell: ({ row }) => (
+          <SeverityPicker
+            ruleId={row.original.id}
+            current={typeof row.original.severity === "string" ? row.original.severity : null}
+          />
+        ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        enableSorting: false,
+        enableHiding: false,
+        meta: { label: "Actions", isActions: true },
+        cell: ({ row }) => (
+          <ActionForm
+            action={toggleRuleAction}
+            fields={{ rule_id: row.original.id, enabled: row.original.enabled ? "off" : "on" }}
+            variant={row.original.enabled ? "ghost" : "secondary"}
+          >
+            {row.original.enabled ? "Disable" : "Enable"}
+          </ActionForm>
+        ),
+      },
+    ],
+    [],
+  );
 
   return (
-    <tr
-      className={clsx(
-        "group border-b border-line-soft last:border-0 align-top transition-colors hover:bg-surface-2",
-        !r.enabled && "opacity-50",
-      )}
-    >
-      {/* Left severity strip — always 3px wide, coloured by severity so the
-          operator can scan severity down the whole column instantly. */}
-      <td data-label="Severity" className="w-1 p-0">
-        <div className={clsx("h-full w-[3px]", severityBorderBg(sev))} />
-      </td>
-
-      {/* Rule ID + title stacked */}
-      <th scope="row" data-label="Rule" className="px-4 py-3 text-left font-normal">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <SourceBadge src={src} />
-            {r.rule_action === "suppress" && (
-              <span className="rounded border border-line-soft px-1 py-px text-[9px] uppercase tracking-wider text-fg-subtle">
-                suppress
-              </span>
-            )}
-          </div>
-          <div className="pr-2 text-[13px] font-medium leading-snug text-fg">
-            {r.title}
-          </div>
-          <div className="font-mono text-[10px] text-fg-subtle">{r.id}</div>
-        </div>
-      </th>
-
-      {/* Event actions as compact code chips, wrapped */}
-      <td data-label="Event actions" className="px-4 py-3">
-        {r.matched_actions && r.matched_actions.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {r.matched_actions.map((a) => (
-              <code
-                key={a}
-                className="rounded-sm border border-line-soft bg-canvas px-1.5 py-0.5 font-mono text-[11px] text-fg"
-              >
-                {a}
-              </code>
-            ))}
-          </div>
-        ) : (
-          <span className="text-[11px] italic text-fg-disabled">
-            matches on non-action fields
-          </span>
-        )}
-      </td>
-
-      {/* Notify tier as its own colored pill + remaining tags as subtle chips */}
-      <td data-label="Tags & notify" className="px-4 py-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <NotifyPill tier={tier} />
-          {otherTags.map((t) => (
-            <span
-              key={t}
-              className="rounded-sm bg-surface-2 px-1.5 py-0.5 font-mono text-[10.5px] text-fg-subtle"
-            >
-              {t}
-            </span>
-          ))}
-        </div>
-      </td>
-
-      {/* Severity picker */}
-      <td data-label="Severity" className="px-3 py-3">
-        <SeverityPicker ruleId={r.id} current={sev} />
-      </td>
-
-      {/* Toggle */}
-      <td data-label="Actions" data-actions className="px-3 py-3 text-right">
-        <form action={toggleRuleAction} className="inline">
-          <input type="hidden" name="rule_id" value={r.id} />
-          <input
-            type="hidden"
-            name="enabled"
-            value={r.enabled ? "off" : "on"}
-          />
-          <Button
-            type="submit"
-            size="sm"
-            variant={r.enabled ? "ghost" : "secondary"}
-          >
-            {r.enabled ? "Disable" : "Enable"}
-          </Button>
-        </form>
-      </td>
-    </tr>
+    <DataTable
+      tableId="rules-list-v2"
+      ariaLabel="Rules"
+      columns={columns}
+      data={rules}
+      getRowId={(r) => r.id}
+      rowClassName={(row) => (row.original.enabled ? undefined : "opacity-50")}
+      emptyMessage={<EmptyState onClear={onClear} hasFilter={hasFilter} />}
+    />
   );
 }
 

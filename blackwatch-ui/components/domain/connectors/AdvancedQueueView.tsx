@@ -7,7 +7,7 @@ import type { ConnectorOperation, ConnectorProgress } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { Table } from "@/components/ui/Table";
+import { DataTable, type ColumnDef } from "@/components/ui/DataTable";
 
 function progressOf(operation: ConnectorOperation): ConnectorProgress {
   const value = operation.outcome?.progress;
@@ -23,6 +23,201 @@ function progressOf(operation: ConnectorOperation): ConnectorProgress {
 function time(value: string | null) {
   return value ? new Date(value).toLocaleString() : "—";
 }
+
+function eventLines(operation: ConnectorOperation): Record<string, unknown>[] {
+  const events = operation.outcome?.recent_events;
+  return Array.isArray(events) ? (events as Record<string, unknown>[]) : [];
+}
+
+function EventLog({ events, summary, maxHeight }: { events: Record<string, unknown>[]; summary: string; maxHeight: string }) {
+  if (events.length === 0) return null;
+  return (
+    <details className="mt-1 font-sans text-xs text-fg-muted">
+      <summary className="cursor-pointer">{summary}</summary>
+      <ol className={`mt-1 ${maxHeight} space-y-0.5 overflow-auto pl-4`}>
+        {events.map((event, index) => (
+          <li key={index}>
+            {String(event.stage ?? "event")} · {String(event.message_id ?? event.action ?? "—")}
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
+}
+
+const ACTIVE_COLUMNS: ColumnDef<ConnectorOperation, unknown>[] = [
+  {
+    id: "connector",
+    header: "Connector",
+    accessorFn: (op) => op.connector_name ?? "",
+    enableHiding: false,
+    meta: { label: "Connector", className: "font-medium" },
+    cell: ({ row }) => row.original.connector_name ?? "—",
+  },
+  {
+    id: "operation",
+    header: "Operation",
+    accessorFn: (op) => op.operation_id,
+    meta: { label: "Operation", className: "font-mono text-xs" },
+    cell: ({ row }) => row.original.operation_id.slice(0, 8),
+  },
+  {
+    id: "stage",
+    header: "Stage",
+    accessorFn: (op) => progressOf(op).stage ?? "starting",
+    meta: { label: "Stage" },
+    cell: ({ row }) => progressOf(row.original).stage ?? "starting",
+  },
+  {
+    id: "message",
+    header: "Message",
+    enableSorting: false,
+    meta: { label: "Message", className: "max-w-64 font-mono text-xs" },
+    cell: ({ row }) => {
+      const progress = progressOf(row.original);
+      const events = eventLines(row.original);
+      return (
+        <>
+          <div className="truncate" title={progress.message_id ?? undefined}>
+            {progress.action ?? progress.message_id ?? "—"}
+          </div>
+          <EventLog events={events} summary={`${events.length} log events`} maxHeight="max-h-32" />
+        </>
+      );
+    },
+  },
+  {
+    id: "fetched",
+    header: "Fetched",
+    accessorFn: (op) => progressOf(op).fetched ?? 0,
+    sortDescFirst: true,
+    meta: { label: "Fetched", className: "tabular-nums" },
+    cell: ({ row }) => progressOf(row.original).fetched ?? 0,
+  },
+  {
+    id: "ingested",
+    header: "Ingested",
+    accessorFn: (op) => progressOf(op).ingested ?? 0,
+    sortDescFirst: true,
+    meta: { label: "Ingested", className: "tabular-nums" },
+    cell: ({ row }) => progressOf(row.original).ingested ?? 0,
+  },
+  {
+    id: "failed",
+    header: "Failed",
+    accessorFn: (op) => progressOf(op).failed ?? 0,
+    sortDescFirst: true,
+    meta: { label: "Failed", className: "tabular-nums" },
+    cell: ({ row }) => progressOf(row.original).failed ?? 0,
+  },
+  {
+    id: "deleted",
+    header: "Deleted",
+    accessorFn: (op) => progressOf(op).deleted ?? 0,
+    sortDescFirst: true,
+    meta: { label: "Deleted", className: "tabular-nums" },
+    cell: ({ row }) => progressOf(row.original).deleted ?? 0,
+  },
+  {
+    id: "started",
+    header: "Started",
+    accessorFn: (op) => (op.started_at ? Date.parse(op.started_at) || 0 : 0),
+    sortDescFirst: true,
+    meta: { label: "Started", className: "whitespace-nowrap text-xs" },
+    cell: ({ row }) => time(row.original.started_at),
+  },
+  {
+    id: "status",
+    header: "Status",
+    accessorFn: (op) => op.status,
+    meta: { label: "Status" },
+    cell: ({ row }) => <StatusPill severity="neutral" label={row.original.status} />,
+  },
+  {
+    id: "control",
+    header: "Control",
+    enableSorting: false,
+    enableHiding: false,
+    meta: { label: "Control", isActions: true },
+    cell: ({ row }) =>
+      row.original.status === "queued" ? (
+        <Button
+          size="sm"
+          variant="danger"
+          onClick={() => void cancelConnectorOperationAction(row.original.operation_id)}
+        >
+          Stop
+        </Button>
+      ) : null,
+  },
+];
+
+const HISTORY_COLUMNS: ColumnDef<ConnectorOperation, unknown>[] = [
+  {
+    id: "connector",
+    header: "Connector",
+    accessorFn: (op) => op.connector_name ?? "",
+    enableHiding: false,
+    meta: { label: "Connector", className: "font-medium" },
+    cell: ({ row }) => row.original.connector_name ?? "—",
+  },
+  {
+    id: "operation",
+    header: "Operation",
+    accessorFn: (op) => op.operation_id,
+    meta: { label: "Operation", className: "font-mono text-xs" },
+    cell: ({ row }) => row.original.operation_id.slice(0, 8),
+  },
+  {
+    id: "requested",
+    header: "Requested",
+    accessorFn: (op) => (op.requested_at ? Date.parse(op.requested_at) || 0 : 0),
+    sortDescFirst: true,
+    meta: { label: "Requested", className: "whitespace-nowrap text-xs" },
+    cell: ({ row }) => time(row.original.requested_at),
+  },
+  {
+    id: "finished",
+    header: "Finished",
+    accessorFn: (op) => (op.finished_at ? Date.parse(op.finished_at) || 0 : 0),
+    sortDescFirst: true,
+    meta: { label: "Finished", className: "whitespace-nowrap text-xs" },
+    cell: ({ row }) => time(row.original.finished_at),
+  },
+  {
+    id: "status",
+    header: "Status",
+    accessorFn: (op) => op.status,
+    meta: { label: "Status" },
+    cell: ({ row }) => {
+      const status = row.original.status;
+      return (
+        <StatusPill
+          severity={status === "succeeded" ? "resolved" : status === "failed" || status === "timed_out" ? "critical" : "neutral"}
+          label={status}
+        />
+      );
+    },
+  },
+  {
+    id: "progress",
+    header: "Progress / error",
+    enableSorting: false,
+    meta: { label: "Progress / error", className: "max-w-[34rem] text-xs text-fg-muted" },
+    cell: ({ row }) => {
+      const operation = row.original;
+      const progress = progressOf(operation);
+      const events = eventLines(operation);
+      return (
+        <>
+          {operation.error_message ??
+            `${progress.stage ?? "completed"} · ${progress.fetched ?? 0} fetched · ${progress.ingested ?? 0} ingested · ${events.length} events`}
+          <EventLog events={events} summary="Show ordered log" maxHeight="max-h-24" />
+        </>
+      );
+    },
+  },
+];
 
 export function AdvancedQueueView({ initial }: { initial: ConnectorOperation[] }) {
   const [operations, setOperations] = useState(initial);
@@ -58,54 +253,28 @@ export function AdvancedQueueView({ initial }: { initial: ConnectorOperation[] }
         <span>{lastRefresh ? `updated ${time(lastRefresh)}` : "connecting…"}</span>
       </div>
       <DataPanel className="overflow-hidden">
-        <Table tableId="advanced-queue-active" ariaLabel="Active connector operations">
-          <thead><tr>
-            <th>Connector</th><th>Operation</th><th>Stage</th><th>Message</th><th>Fetched</th><th>Ingested</th><th>Failed</th><th>Deleted</th><th>Started</th><th>Status</th><th>Control</th>
-          </tr></thead>
-          <tbody>{active.length ? active.map((operation) => {
-            const progress = progressOf(operation);
-            return <tr key={operation.operation_id}>
-              <td className="font-medium">{operation.connector_name ?? "—"}</td><td className="font-mono text-xs">{operation.operation_id.slice(0, 8)}</td>
-              <td>{progress.stage ?? "starting"}</td>
-              <td className="max-w-64 font-mono text-xs">
-                <div className="truncate" title={progress.message_id ?? undefined}>{progress.action ?? progress.message_id ?? "—"}</div>
-                {Array.isArray(operation.outcome?.recent_events) && operation.outcome.recent_events.length > 0 && <details className="mt-1 font-sans text-[11px] text-fg-muted">
-                  <summary className="cursor-pointer">{operation.outcome.recent_events.length} log events</summary>
-                  <ol className="mt-1 max-h-32 space-y-0.5 overflow-auto pl-4">
-                    {operation.outcome.recent_events.map((event, index) => <li key={index}>{String((event as Record<string, unknown>).stage ?? "event")} · {String((event as Record<string, unknown>).message_id ?? (event as Record<string, unknown>).action ?? "—")}</li>)}
-                  </ol>
-                </details>}
-              </td>
-              <td>{progress.fetched ?? 0}</td><td>{progress.ingested ?? 0}</td><td>{progress.failed ?? 0}</td><td>{progress.deleted ?? 0}</td>
-              <td className="whitespace-nowrap text-xs">{time(operation.started_at)}</td>
-              <td><StatusPill severity="neutral" label={operation.status} /></td>
-              <td>{operation.status === "queued" && <Button size="sm" variant="danger" onClick={() => void cancelConnectorOperationAction(operation.operation_id)}>Stop</Button>}</td>
-            </tr>;
-          }) : <tr><td colSpan={11} className="px-4 py-8 text-center text-sm text-fg-muted">No queued or running operations.</td></tr>}</tbody>
-        </Table>
+        <DataTable
+          tableId="advanced-queue-active-v2"
+          ariaLabel="Active connector operations"
+          columns={ACTIVE_COLUMNS}
+          data={active}
+          getRowId={(operation) => operation.operation_id}
+          emptyMessage="No queued or running operations."
+        />
       </DataPanel>
       <DataPanel className="overflow-hidden">
         <div className="flex items-center justify-between border-b border-line-soft px-4 py-3">
           <h2 className="text-sm font-semibold text-fg">Recent operation log</h2>
           <Button size="sm" variant="ghost" onClick={() => window.location.reload()}><RefreshCw size={14} /> Refresh</Button>
         </div>
-        <Table tableId="advanced-queue-history" ariaLabel="Recent connector operation log">
-          <thead><tr><th>Connector</th><th>Operation</th><th>Requested</th><th>Finished</th><th>Status</th><th>Progress / error</th></tr></thead>
-          <tbody>{recent.map((operation) => {
-            const progress = progressOf(operation);
-            const recentEvents = Array.isArray(operation.outcome?.recent_events) ? operation.outcome.recent_events : [];
-            return <tr key={operation.operation_id}>
-              <td className="font-medium">{operation.connector_name ?? "—"}</td><td className="font-mono text-xs">{operation.operation_id.slice(0, 8)}</td>
-              <td className="whitespace-nowrap text-xs">{time(operation.requested_at)}</td>
-              <td className="whitespace-nowrap text-xs">{time(operation.finished_at)}</td>
-              <td><StatusPill severity={operation.status === "succeeded" ? "resolved" : operation.status === "failed" || operation.status === "timed_out" ? "critical" : "neutral"} label={operation.status} /></td>
-              <td className="max-w-[34rem] text-xs text-fg-muted">
-                {operation.error_message ?? `${progress.stage ?? "completed"} · ${progress.fetched ?? 0} fetched · ${progress.ingested ?? 0} ingested · ${recentEvents.length} events`}
-                {recentEvents.length > 0 && <details className="mt-1"><summary className="cursor-pointer">Show ordered log</summary><ol className="mt-1 max-h-24 space-y-0.5 overflow-auto pl-4">{recentEvents.map((event, index) => <li key={index}>{String((event as Record<string, unknown>).stage ?? "event")} · {String((event as Record<string, unknown>).message_id ?? (event as Record<string, unknown>).action ?? "—")}</li>)}</ol></details>}
-              </td>
-            </tr>;
-          })}</tbody>
-        </Table>
+        <DataTable
+          tableId="advanced-queue-history-v2"
+          ariaLabel="Recent connector operation log"
+          columns={HISTORY_COLUMNS}
+          data={recent}
+          getRowId={(operation) => operation.operation_id}
+          emptyMessage="No finished operations yet."
+        />
       </DataPanel>
     </div>
   );

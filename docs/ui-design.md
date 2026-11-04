@@ -506,9 +506,8 @@ tokens, so the palette, fonts and teal accent are unchanged.
 
 ### Tables
 
-- `components/ui/Table.tsx` (JSX children API: `<Table><thead>…<tbody>…`) stays
-  for the existing ~28 tables. It scrapes cell text to sort, so it is a
-  compatibility layer, not the model for new work.
+- Every table is a `DataTable`. The old JSX-children `Table` (which scraped cell
+  text to sort) was retired and deleted; a test fails if it comes back.
 - `components/ui/DataTable.tsx` is the data-driven table on TanStack Table v8
   (pinned: v9 has a different API). It has sortable headers with `aria-sort`,
   a Columns menu, drag-to-resize, per-browser page size, mobile card layout and
@@ -516,5 +515,49 @@ tokens, so the palette, fonts and teal accent are unchanged.
 - Define columns in a client file (cell renderers are functions) and pass only
   the fields the table shows, not whole envelopes: see `EventsDataTable.tsx`
   and `toEventTableRow` in `lib/event-summary.ts`.
-- Migrate an old table by writing its columns, swapping the page to the new
-  client component, and deleting its inline `<Table>` markup.
+
+### Migration status (DataTable and Dialog)
+
+- Migration is complete: all tables are `DataTable`, including the host detail
+  page, host fleet and inventory, storage, the connector advanced queue and the
+  investigation evidence table.
+- `components/ui/Dialog.tsx` is the one modal layer (`placement`: `center`,
+  `top`, `right`). IP lookup, the command palette and the event drawer use it,
+  so they share a z-index pair and a dialog opened from inside the drawer
+  stacks above it.
+
+### Tables with row actions (server actions)
+
+A DataTable's cells are functions, so a table with buttons lives in a **client
+file**. That file imports the server actions directly from their
+`"use server"` module and renders them through `components/ui/ActionForm.tsx`
+(hidden fields + a PendingButton, or a ConfirmSubmitButton for destructive
+actions). Rules:
+
+- Import actions where they are used. Never pass an action as a prop from a
+  server page through a client wrapper (the old `<RequireAdmin>` problem).
+- Send the table only the ids and values the actions need, as slim row types
+  (see `lib/notification-rows.ts`). Channel `config` can hold webhook URLs and
+  must not be shipped to the browser.
+- Mark the buttons column `meta: { isActions: true }` and `enableHiding: false`.
+- Examples: `NotificationChannelsTable`, `NotificationRoutesTable`,
+  `MetricRoutesTable`. `lib/table-actions-pattern.test.ts` guards the pattern.
+
+### Forms
+
+- Wrap every control in `components/ui/Field.tsx` (or its wrappers `FormRow`,
+  row layout, and `FieldStack`, stacked layout). It links the label, the hint
+  and the error to the control with `htmlFor` and `aria-describedby`, sets
+  `aria-invalid` when `error` is given, and shows a required marker for any
+  control that is `required`. A wrapper child (an Input plus extra help text) is
+  labelled as a `role="group"` rather than pointing a label at a div.
+- Labels are sentence case, 14px, medium weight. Hints go below the control, not
+  inside the label.
+- `Input`, `Textarea` and `NativeSelect` turn red from `aria-invalid`; do not add
+  per-form error styling.
+- Put `components/ui/FormActions.tsx` at the bottom of a `<form>`: a primary
+  button with a pending state (and a read-only lock) plus an optional cancel
+  link. Do not hand-roll `<Button type="submit">` in a form.
+- Server actions still report errors by redirecting with `?msg=`; pass a
+  field-specific message to `Field error` when an action returns one.
+- `lib/forms.test.ts` guards these rules.

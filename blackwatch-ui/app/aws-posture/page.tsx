@@ -5,7 +5,7 @@ import { fetchPostureFindings } from "@/lib/api";
 import type { PostureFinding } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
-import { Table } from "@/components/ui/Table";
+import { PostureFindingsTable } from "@/components/domain/PostureFindingsTable";
 import { SectionLabel } from "@/components/layout/SectionLabel";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { TimestampCell } from "@/components/domain/TimestampCell";
@@ -67,58 +67,13 @@ function ResourceTypePanel({
         </span>
       </div>
       <DataPanel className="overflow-hidden">
-        <Table>
-          <thead>
-            <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-              <th className="w-24 px-4 py-2 text-left font-normal">Severity</th>
-              <th className="w-72 px-4 py-2 text-left font-normal">Resource</th>
-              <th className="px-4 py-2 text-left font-normal">Finding</th>
-              <th className="w-24 px-4 py-2 text-left font-normal">Region</th>
-              <th className="w-40 px-4 py-2 text-left font-normal">Last seen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {findings.map((f) => (
-              <FindingRow key={f.finding_id} finding={f} />
-            ))}
-          </tbody>
-        </Table>
+        <PostureFindingsTable
+          findings={findings}
+          tableId={`aws-posture-${resourceType}`}
+          ariaLabel={`${resourceType.replaceAll("_", " ")} findings`}
+        />
       </DataPanel>
     </section>
-  );
-}
-
-function FindingRow({ finding }: { finding: PostureFinding }) {
-  return (
-    <tr className="group relative border-b border-line-soft last:border-0 hover:bg-surface-2">
-      <td className="relative px-4 py-2.5">
-        <span
-          aria-hidden
-          className={clsx(
-            "pointer-events-none absolute left-0 top-0 h-full w-0.5",
-            severityBorderBg(finding.severity),
-          )}
-        />
-        <SeverityBadge severity={finding.severity} />
-      </td>
-      <td className="truncate px-4 py-2.5 font-mono text-xs text-fg-muted">
-        {finding.resource_id}
-      </td>
-      <td className="truncate px-4 py-2.5">
-        <Link
-          href={`/aws-posture/${finding.finding_id}`}
-          className="font-mono text-xs text-fg transition-colors hover:text-signal"
-        >
-          {finding.finding_type}
-        </Link>
-      </td>
-      <td className="px-4 py-2.5 font-mono text-xs text-fg-muted">
-        {finding.region ?? "—"}
-      </td>
-      <td className="px-4 py-2.5">
-        <TimestampCell value={finding.last_seen} />
-      </td>
-    </tr>
   );
 }
 

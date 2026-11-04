@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/server-fetch";
-import { AuditRow, type AuditEntry } from "@/components/domain/AuditRow";
-import { Table } from "@/components/ui/Table";
+import { AuditDataTable, type AuditEntry } from "@/components/domain/AuditDataTable";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 
@@ -34,12 +34,10 @@ export default async function AuditPage({
 
   return (
     <div className="space-y-4">
-      <header>
-        <h1 className="text-lg font-medium">Audit log</h1>
-        <p className="text-sm text-fg-subtle">
-          Append-only record of every mutation this BlackWatch instance received.
-        </p>
-      </header>
+      <PageHeader
+        title="Audit log"
+        subtitle="Append-only record of every mutation this BlackWatch instance received."
+      />
 
       <form className="flex flex-wrap gap-2 text-sm" action="/audit" method="get">
         <Input
@@ -77,33 +75,7 @@ export default async function AuditPage({
         </Button>
       </form>
 
-      <div className="overflow-hidden rounded border border-line-soft">
-        <Table tableId="audit-log" ariaLabel="Audit log">
-          <thead className="bg-canvas-elev text-left text-xs text-fg-subtle">
-            <tr>
-              <th>Time</th>
-              <th>Actor</th>
-              <th>Role</th>
-              <th>IP</th>
-              <th>Method</th>
-              <th>Path</th>
-              <th>Status</th>
-              <th>Body</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-fg-subtle">
-                  No audit rows (or not authorized).
-                </td>
-              </tr>
-            ) : (
-              rows.map((r) => <AuditRow key={r.id} row={r} />)
-            )}
-          </tbody>
-        </Table>
-      </div>
+      <AuditDataTable rows={rows} />
     </div>
   );
 }

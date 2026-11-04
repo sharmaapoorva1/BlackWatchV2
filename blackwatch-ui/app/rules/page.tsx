@@ -1,11 +1,10 @@
 import { fetchRules } from "@/lib/api";
-import type { MutedEvent } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
-import { Table } from "@/components/ui/Table";
+import { MutedEventsTable } from "@/components/domain/MutedEventsTable";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { muteAction, unmuteAction } from "./actions";
+import { muteAction } from "./actions";
 import { RulesTable } from "./RulesTable";
 
 type SearchParams = { msg?: string };
@@ -59,7 +58,9 @@ export default async function RulesPage({
           </p>
 
           {muted.length > 0 ? (
-            <MutedTable muted={muted} />
+            <div className="mt-4">
+              <MutedEventsTable muted={muted} />
+            </div>
           ) : (
             <p className="mt-2 text-sm text-muted">Nothing muted.</p>
           )}
@@ -106,66 +107,6 @@ export default async function RulesPage({
         </div>
       </section>
     </>
-  );
-}
-
-// --- table renderers ------------------------------------------------------
-
-function MutedTable({ muted }: { muted: MutedEvent[] }) {
-  return (
-    <div className="mt-4 border border-line-soft">
-      <Table>
-        <thead>
-          <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-            <th className="px-4 py-2 text-left font-normal">Action</th>
-            <th className="px-4 py-2 text-left font-normal">Source type</th>
-            <th className="px-4 py-2 text-left font-normal">Username</th>
-            <th className="px-4 py-2 text-left font-normal">Reason</th>
-            <th className="px-4 py-2 text-left font-normal">Note</th>
-            <th className="w-32 px-4 py-2 text-right font-normal" />
-          </tr>
-        </thead>
-        <tbody>
-          {muted.map((m) => (
-            <tr
-              key={m.id}
-              className="border-b border-line-soft last:border-0 hover:bg-surface-2"
-            >
-              <td className="px-4 py-2 font-mono text-xs text-fg">{m.action}</td>
-              <MutedFilterCell value={m.source_type} />
-              <MutedFilterCell value={m.username} />
-              <MutedFilterCell value={m.reason} />
-              <td className="px-4 py-2 text-xs text-fg-muted">
-                {m.note ? m.note : <span className="text-fg-disabled">—</span>}
-              </td>
-              <td className="px-4 py-2 text-right">
-                <form action={unmuteAction} className="inline">
-                  <input type="hidden" name="id" value={m.id} />
-                  <Button type="submit" size="sm" variant="ghost">
-                    Unmute
-                  </Button>
-                </form>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </Table>
-    </div>
-  );
-}
-
-/** Renders a single filter column value — italic "(any)" when null so
- *  the operator can distinguish "matches everything" from a specific
- *  literal empty string (which the API rejects anyway). */
-function MutedFilterCell({ value }: { value: string | null }) {
-  return (
-    <td className="px-4 py-2 font-mono text-xs text-fg-muted">
-      {value === null ? (
-        <span className="italic text-fg-disabled">any</span>
-      ) : (
-        value
-      )}
-    </td>
   );
 }
 

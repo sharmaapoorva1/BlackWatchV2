@@ -36,7 +36,7 @@ test("shared controls provide mobile touch targets and consistent focus feedback
 });
 
 test("mobile card tables do not keep a desktop width or horizontal scrollbar", () => {
-  const tableSource = read("components/ui/Table.tsx");
+  const tableSource = read("components/ui/DataTable.tsx");
   const connectors = read("app/connectors/page.tsx");
   const css = read("app/globals.css");
   assert.match(css, /\.bw-table-shell[\s\S]*overflow-x: auto/);
@@ -54,17 +54,34 @@ test("connector actions do not pass server actions through a client auth boundar
   assert.doesNotMatch(source, /import \{ RequireAdmin \}/);
 });
 
-test("shared tables promote semantic rows and cells to native styled primitives", () => {
-  const source = read("components/ui/Table.tsx");
+test("the shared DataTable renders native semantic table elements", () => {
+  const source = read("components/ui/DataTable.tsx");
   assert.match(source, /<thead/);
   assert.match(source, /<tbody/);
   assert.match(source, /<tr/);
   assert.match(source, /<th/);
   assert.match(source, /<td/);
+  assert.match(source, /scope="col"/);
+  assert.match(source, /aria-sort/);
+  assert.match(source, /flexRender/);
   assert.doesNotMatch(source, /@mui/);
-  assert.match(source, /withoutLegacyClassName/);
-  assert.match(source, /Fragment/);
-  assert.match(source, /firstTableRow/);
+});
+
+test("no page still uses the retired JSX-children Table", () => {
+  const stack = [path.join(root, "app"), path.join(root, "components")];
+  const offenders: string[] = [];
+  while (stack.length > 0) {
+    const dir = stack.pop() as string;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) stack.push(full);
+      else if (/\.tsx?$/.test(entry.name) && /from "@\/components\/ui\/Table"/.test(fs.readFileSync(full, "utf8"))) {
+        offenders.push(path.relative(root, full));
+      }
+    }
+  }
+  assert.deepEqual(offenders, []);
+  assert.equal(fs.existsSync(path.join(root, "components/ui/Table.tsx")), false);
 });
 
 test("tables switch to cards before the sidebar leaves too little content width", () => {
@@ -80,7 +97,7 @@ test("narrow table pagination can wrap its controls", () => {
 });
 
 test("shared form rows and notification summary rows collapse on narrow screens", () => {
-  const formRow = read("components/ui/FormRow.tsx");
+  const formRow = read("components/ui/Field.tsx");
   const keyValue = read("components/layout/KeyValueRow.tsx");
   const channelForm = read("components/domain/notifications/ChannelForm.tsx");
   const notifications = read("app/notifications/page.tsx");

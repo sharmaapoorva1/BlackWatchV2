@@ -1,6 +1,6 @@
 import Link from "next/link";
 import clsx from "clsx";
-import { Plus, Pencil, Trash2, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 import {
   fetchNotificationChannels,
@@ -17,43 +17,27 @@ import type {
   PerfAlertInstance,
   PerfAlertRule,
   Route,
-  SeverityKey,
   NotificationCoverageModule,
 } from "@/lib/types";
 
 import { PageHeader } from "@/components/layout/PageHeader";
+import { NotificationLogTable } from "@/components/domain/NotificationLogTable";
+import { NotificationChannelsTable } from "@/components/domain/notifications/NotificationChannelsTable";
+import { NotificationRoutesTable } from "@/components/domain/notifications/NotificationRoutesTable";
+import { MetricRoutesTable } from "@/components/domain/notifications/MetricRoutesTable";
+import { toChannelRow, toMetricRouteRow, toRouteRow } from "@/lib/notification-rows";
 import { NotificationModel } from "@/components/domain/notifications/NotificationModel";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { Button } from "@/components/ui/Button";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
-import { PendingButton } from "@/components/ui/PendingButton";
-import { NativeSelect } from "@/components/ui/NativeSelect";
 import { FlashToast } from "@/components/ui/FlashToast";
-import { Table } from "@/components/ui/Table";
-import { ConfirmSubmitButton } from "@/components/ui/ConfirmSubmitButton";
-import { SeverityChip } from "@/components/ui/SeverityChip";
 import { StatusDot, type Severity } from "@/components/ui/StatusDot";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { TimestampCell } from "@/components/domain/TimestampCell";
 import { SeverityBadge } from "@/components/domain/SeverityBadge";
 
-import {
-  testChannelAction,
-  toggleChannelAction,
-  deleteChannelAction,
-  clearAckAction,
-} from "./actions";
-import {
-  toggleRouteAction,
-  silenceRouteAction,
-  deleteRouteAction,
-  testRouteAction,
-} from "./route-actions";
-import {
-  togglePerfAlertAction,
-  deletePerfAlertAction,
-} from "./perf-alerts/actions";
+import { clearAckAction } from "./actions";
 
 type SearchParams = { msg?: string };
 
@@ -129,7 +113,7 @@ export default async function NotificationsPage({
         label="Metric routes"
         action={{ href: "/notifications/perf-alerts/new", label: "add metric" }}
       />
-      <MetricRoutesTable rules={perfData.rules} instances={perfData.instances} />
+      <MetricRoutesPanel rules={perfData.rules} instances={perfData.instances} />
 
       {/* ACTIVITY */}
       <div className="mt-8 mb-2 flex items-baseline justify-between">
@@ -200,86 +184,9 @@ function ChannelsTable({ channels }: { channels: NotificationChannel[] }) {
           </Link>
         </div>
       ) : (
-        <Table tableId="notifications-channels" ariaLabel="Channels">
-          <thead>
-            <tr>
-              <th scope="col" style={{ width: 240 }}>Name</th>
-              <th scope="col" style={{ width: 120 }}>Type</th>
-              <th scope="col" style={{ width: 120 }}>State</th>
-              <th scope="col" style={{ width: 140 }}>Last status</th>
-              <th scope="col" style={{ width: 180 }}>Last sent</th>
-              <th scope="col" data-actions style={{ width: 300 }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {channels.map((c) => (
-              <ChannelRow key={c.id} channel={c} />
-            ))}
-          </tbody>
-        </Table>
+        <NotificationChannelsTable channels={channels.map(toChannelRow)} />
       )}
     </DataPanel>
-  );
-}
-
-function ChannelRow({ channel: c }: { channel: NotificationChannel }) {
-  return (
-    <tr className="border-b border-line-soft last:border-0 hover:bg-surface-2">
-      <td className="truncate px-4 py-2 align-middle">
-        <Link
-          href={`/notifications/channels/${c.id}`}
-          className="text-sm text-fg transition-colors hover:text-signal"
-        >
-          {c.name}
-        </Link>
-      </td>
-      <td className="px-4 py-2 align-middle font-mono text-xs text-fg-muted">{c.type}</td>
-      <td className="px-4 py-2 align-middle">
-        <EnabledPill enabled={c.enabled} />
-      </td>
-      <td className="px-4 py-2 align-middle">
-        <ChannelStatusPill status={c.last_status} error={c.last_error} />
-      </td>
-      <td className="px-4 py-2 align-middle">
-        {c.last_sent_at ? (
-          <TimestampCell value={c.last_sent_at} />
-        ) : (
-          <span className="font-mono text-xs text-fg-disabled">—</span>
-        )}
-      </td>
-      <td className="whitespace-nowrap px-4 py-2 align-middle text-right">
-        <div className="inline-flex items-center gap-1.5">
-          <form action={testChannelAction} className="inline">
-            <input type="hidden" name="id" value={c.id} />
-            <PendingButton size="sm" variant="secondary" pendingLabel="Sending…">
-              Test
-            </PendingButton>
-          </form>
-          <form action={toggleChannelAction} className="inline">
-            <input type="hidden" name="id" value={c.id} />
-            <input type="hidden" name="enabled" value={c.enabled ? "off" : "on"} />
-            <PendingButton size="sm" variant="secondary" pendingLabel="…">
-              {c.enabled ? "Disable" : "Enable"}
-            </PendingButton>
-          </form>
-          <Button asChild size="sm" variant="ghost">
-            <Link href={`/notifications/channels/${c.id}`}>
-              <Pencil size={12} />
-            </Link>
-          </Button>
-          <form action={deleteChannelAction} className="inline">
-            <input type="hidden" name="id" value={c.id} />
-            <ConfirmSubmitButton
-              size="sm"
-              variant="danger"
-              confirmMessage={`Delete channel “${c.name}”? This cannot be undone.`}
-            >
-              Delete
-            </ConfirmSubmitButton>
-          </form>
-        </div>
-      </td>
-    </tr>
   );
 }
 
@@ -352,130 +259,17 @@ function RoutesTable({
           title={g.label}
           count={g.routes.length}
         >
-          <Table tableId={`notifications-alert-routes-${g.key}`} ariaLabel={`Alert routes for ${g.label}`}>
-            <thead>
-              <tr>
-                <th scope="col" style={{ width: 200 }}>Source</th>
-                <th scope="col" style={{ width: 220 }}>Trigger</th>
-                <th scope="col" style={{ width: 200 }}>Channel</th>
-                <th scope="col" style={{ width: 90 }}>State</th>
-                <th data-actions style={{ width: 360 }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {g.routes.map((r) => (
-                <RouteRow key={r.id} route={r} />
-              ))}
-            </tbody>
-          </Table>
+          <NotificationRoutesTable
+            routes={g.routes.map(toRouteRow)}
+            tableId={`notifications-alert-routes-v2-${g.key}`}
+            ariaLabel={`Alert routes for ${g.label}`}
+          />
         </CollapsibleSection>
       ))}
     </>
   );
 }
 
-
-function RouteRow({ route: r }: { route: Route }) {
-  const state = computeRouteState(r);
-  return (
-    <tr className="border-b border-line-soft last:border-0 hover:bg-surface-2">
-      <td data-label="Source" className="truncate px-4 py-2 align-middle">
-        <div className="text-sm text-fg">
-          {r.kind === "custom" && r.name ? r.name : r.module_label}
-        </div>
-        {r.kind === "custom" && (
-          <div className="font-mono text-[10px] text-fg-subtle">
-            {r.module_label}
-          </div>
-        )}
-      </td>
-      <td data-label="Trigger" className="px-4 py-2 align-middle">
-        {r.severities.length === 0 ? (
-          <span className="text-xs text-fg-muted">custom condition</span>
-        ) : (
-          <div className="flex flex-wrap gap-1">
-            {r.severities.map((s) => (
-              <SeverityChip key={s} severity={s} />
-            ))}
-          </div>
-        )}
-      </td>
-      <td data-label="Channel" className="truncate px-4 py-2 align-middle font-mono text-xs text-fg-muted">
-        {r.channels && r.channels.length > 0 ? (
-          <>
-            <span className="text-fg-subtle">→ </span>
-            {r.channels.join(", ")}
-          </>
-        ) : r.channel ? (
-          <>
-            <span className="text-fg-subtle">→ </span>
-            {r.channel}
-          </>
-        ) : (
-          "—"
-        )}
-      </td>
-      <td data-label="State" className="px-4 py-2 align-middle">
-        <span className={clsx("text-xs", state.className)}>{state.label}</span>
-      </td>
-      <td data-label="Actions" data-actions className="whitespace-nowrap px-4 py-2 align-middle text-right">
-        <div className="inline-flex items-center gap-1.5">
-          <form action={testRouteAction} className="inline">
-            <input type="hidden" name="channel" value={r.channel ?? ""} />
-            <PendingButton
-              size="sm"
-              variant="secondary"
-              disabled={!r.channel}
-              pendingLabel="Sending…"
-            >
-              Test
-            </PendingButton>
-          </form>
-          <form action={silenceRouteAction} className="inline-flex items-center gap-1">
-            <input type="hidden" name="id" value={r.id} />
-            <NativeSelect
-              name="hours"
-              defaultValue={r.silenced ? "0" : "1"}
-              className="h-7 text-xs"
-              aria-label="Silence duration"
-            >
-              <option value="1">1h</option>
-              <option value="4">4h</option>
-              <option value="24">24h</option>
-              <option value="0">clear</option>
-            </NativeSelect>
-            <PendingButton size="sm" variant="secondary" pendingLabel="…">
-              {r.silenced ? "Un-silence" : "Silence"}
-            </PendingButton>
-          </form>
-          <form action={toggleRouteAction} className="inline">
-            <input type="hidden" name="id" value={r.id} />
-            <input type="hidden" name="target" value={r.enabled ? "off" : "on"} />
-            <PendingButton size="sm" variant="secondary" pendingLabel="…">
-              {r.enabled ? "Turn off" : "Turn on"}
-            </PendingButton>
-          </form>
-          <Button asChild size="sm" variant="ghost" aria-label="Edit route">
-            <Link href={`/notifications/rules/${encodeURIComponent(r.id)}/edit`}>
-              <Pencil size={12} />
-            </Link>
-          </Button>
-          <form action={deleteRouteAction} className="inline">
-            <input type="hidden" name="id" value={r.id} />
-            <ConfirmSubmitButton
-              size="sm"
-              variant="danger"
-              pendingLabel="Deleting…"
-              confirmMessage={`Delete route “${r.name}”? This cannot be undone.`}
-            >
-              <Trash2 size={11} /> Delete
-            </ConfirmSubmitButton>
-          </form>
-        </div>
-      </td>
-    </tr>
-  );
-}
 
 // =========================================================================
 // NOTIFICATION COVERAGE — read-only visibility into every supported event
@@ -609,32 +403,18 @@ function ContentRolloutPill({
   );
 }
 
-function computeRouteState(r: Route): { label: string; className: string } {
-  if (r.silenced) return { label: "silenced", className: "text-sev-medium" };
-  if (!r.enabled) return { label: "off", className: "text-fg-subtle" };
-  if (!r.channel) return { label: "no channel", className: "text-fg-subtle" };
-  return { label: "on", className: "text-signal" };
-}
-
 // =========================================================================
 // METRIC ROUTES
 // =========================================================================
 
-const METRIC_LABEL: Record<string, string> = {
-  memory_pct: "Memory %",
-  cpu_utilization_pct: "CPU utilization %",
-  disk_pct_max: "Disk %",
-};
-
-function MetricRoutesTable({
+function MetricRoutesPanel({
   rules,
   instances,
 }: {
   rules: PerfAlertRule[];
   instances: PerfAlertInstance[];
 }) {
-  // Build a lookup so each row can resolve display_name > hostname > id
-  // without re-scanning the instance list per rule.
+  // Resolve display_name > hostname > id once, on the server.
   const byId = new Map(instances.map((i) => [i.instance_id, i]));
 
   return (
@@ -650,110 +430,9 @@ function MetricRoutesTable({
           </Link>
         </div>
       ) : (
-        <Table tableId="notifications-metric-routes" ariaLabel="Metric routes">
-          <thead>
-            <tr>
-              <th scope="col" style={{ width: 180 }}>Metric</th>
-              <th scope="col" style={{ width: 240 }}>Trigger</th>
-              <th scope="col" style={{ width: 200 }}>Channel</th>
-              <th scope="col" style={{ width: 90 }}>State</th>
-              <th data-actions style={{ width: 300 }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rules.map((r) => (
-              <MetricRow key={r.id} rule={r} instancesById={byId} />
-            ))}
-          </tbody>
-        </Table>
+        <MetricRoutesTable rules={rules.map((rule) => toMetricRouteRow(rule, byId, hostLabel))} />
       )}
     </DataPanel>
-  );
-}
-
-// Resolve a rule's scope into a human-readable string, using instance names
-// (display_name > hostname > id) instead of raw IDs. Matches the same
-// fallback logic hostLabel uses everywhere else.
-function scopeLabel(
-  r: PerfAlertRule,
-  instancesById: Map<string, PerfAlertInstance>,
-): string {
-  const ids = r.instance_ids ?? [];
-  if (ids.length > 0) {
-    const names = ids.map((id) => {
-      const inst = instancesById.get(id);
-      return inst ? hostLabel(inst) : id;
-    });
-    // Compact past 3 to keep the trigger cell readable.
-    if (names.length <= 3) return names.join(", ");
-    return `${names.slice(0, 3).join(", ")} +${names.length - 3} more`;
-  }
-  if (r.instance_id) {
-    const inst = instancesById.get(r.instance_id);
-    return inst ? hostLabel(inst) : r.instance_id;
-  }
-  if (r.tag_key) return `tag ${r.tag_key}=${r.tag_value}`;
-  return "all hosts";
-}
-
-function MetricRow({
-  rule: r,
-  instancesById,
-}: {
-  rule: PerfAlertRule;
-  instancesById: Map<string, PerfAlertInstance>;
-}) {
-  const minutes = Math.max(1, Math.round(r.window_seconds / 60));
-  const scope = scopeLabel(r, instancesById);
-  const opText =
-    { gte: "≥", gt: ">", lte: "≤", lt: "<" }[r.comparison] ?? "≥";
-  return (
-    <tr className="border-b border-line-soft last:border-0 hover:bg-surface-2">
-      <td className="truncate px-4 py-2 align-middle text-sm text-fg">
-        {METRIC_LABEL[r.metric] ?? r.metric}
-      </td>
-      <td className="truncate px-4 py-2 align-middle font-mono text-xs text-fg-muted">
-        {opText} {r.threshold}% / {minutes}m · {scope}
-      </td>
-      <td className="truncate px-4 py-2 align-middle font-mono text-xs text-fg-muted">
-        {(r.channels || []).join(", ") || "—"}
-      </td>
-      <td className="px-4 py-2 align-middle">
-        <span
-          className={clsx("text-xs", r.enabled ? "text-signal" : "text-fg-subtle")}
-        >
-          {r.enabled ? "on" : "off"}
-        </span>
-      </td>
-      <td className="whitespace-nowrap px-4 py-2 align-middle text-right">
-        <div className="inline-flex items-center gap-1.5">
-          <form action={togglePerfAlertAction} className="inline">
-            <input type="hidden" name="id" value={r.id} />
-            <input type="hidden" name="target" value={r.enabled ? "off" : "on"} />
-            <PendingButton size="sm" variant="secondary" pendingLabel="…">
-              {r.enabled ? "Turn off" : "Turn on"}
-            </PendingButton>
-          </form>
-          <Button asChild size="sm" variant="ghost" aria-label="Edit metric">
-            <Link href={`/notifications/perf-alerts/${encodeURIComponent(r.id)}/edit`}>
-              <Pencil size={12} />
-            </Link>
-          </Button>
-          <form action={deletePerfAlertAction} className="inline">
-            <input type="hidden" name="id" value={r.id} />
-            <input type="hidden" name="name" value={r.name} />
-            <ConfirmSubmitButton
-              size="sm"
-              variant="danger"
-              pendingLabel="Deleting…"
-              confirmMessage={`Delete performance alert “${r.name}”? This cannot be undone.`}
-            >
-              <Trash2 size={11} /> Delete
-            </ConfirmSubmitButton>
-          </form>
-        </div>
-      </td>
-    </tr>
   );
 }
 
@@ -769,71 +448,15 @@ function ActivityTable({ entries }: { entries: NotificationLogEntry[] }) {
           Nothing has fired yet.
         </div>
       ) : (
-        <Table tableId="notifications-activity" ariaLabel="Recent notification activity">
-          <thead>
-            <tr>
-              <th scope="col" style={{ width: 160 }}>Time</th>
-              <th scope="col" style={{ width: 120 }}>Status</th>
-              <th scope="col" style={{ width: 180 }}>Channel</th>
-              <th scope="col" style={{ width: 220 }}>Rule</th>
-              <th scope="col" style={{ width: 480 }}>Event</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((e) => (
-              <ActivityRow key={String(e.id)} entry={e} />
-            ))}
-          </tbody>
-        </Table>
+        <NotificationLogTable
+          entries={entries}
+          variant="compact"
+          tableId="notifications-activity"
+          ariaLabel="Recent notification activity"
+        />
       )}
     </DataPanel>
   );
-}
-
-function ActivityRow({ entry: e }: { entry: NotificationLogEntry }) {
-  return (
-    <tr className="border-b border-line-soft last:border-0">
-      <td className="px-4 py-2 align-middle">
-        <TimestampCell value={e.ts} />
-      </td>
-      <td className="px-4 py-2 align-middle">
-        <ActivityStatusPill status={e.status} />
-      </td>
-      <td className="truncate px-4 py-2 align-middle text-xs text-fg-muted">
-        {e.channel_name ?? "—"}
-      </td>
-      <td className="truncate px-4 py-2 align-middle text-xs text-fg-muted">
-        {e.rule_name ?? "—"}
-      </td>
-      <td className="truncate px-4 py-2 align-middle">
-        <div className="flex items-center gap-2">
-          {e.event_id ? (
-            <Link
-              href={`/events/${e.event_id}`}
-              className="font-mono text-xs text-fg transition-colors hover:text-signal"
-            >
-              {e.event_action ?? "—"}
-            </Link>
-          ) : (
-            <code className="font-mono text-xs text-fg-muted">{e.event_action ?? "—"}</code>
-          )}
-          {e.event_severity && <SeverityBadge severity={e.event_severity} />}
-        </div>
-      </td>
-    </tr>
-  );
-}
-
-function ActivityStatusPill({ status }: { status: string }) {
-  const sevMap: Record<string, Severity> = {
-    sent: "resolved",
-    failed: "critical",
-    rate_limited: "medium",
-    throttled: "medium",
-    digested: "low",
-    acked: "neutral",
-  };
-  return <StatusPill label={status} severity={sevMap[status] ?? "neutral"} />;
 }
 
 // =========================================================================

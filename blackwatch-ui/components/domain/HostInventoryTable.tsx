@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { Input } from "@/components/ui/Input";
-import { Table, TableEmpty } from "@/components/ui/Table";
+import { DataTable, type ColumnDef } from "@/components/ui/DataTable";
 
 export interface HostInventoryRow {
   key: string;
@@ -26,6 +26,20 @@ export function HostInventoryTable({
     return rows.filter((row) => row.cells.join(" ").toLocaleLowerCase().includes(normalized));
   }, [query, rows]);
   const tableId = `host-${title.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  const tableColumns = useMemo<ColumnDef<HostInventoryRow, unknown>[]>(
+    () =>
+      columns.map((column, index) => ({
+        id: `col-${index}`,
+        header: column.label,
+        accessorFn: (row) => row.cells[index] ?? "",
+        meta: {
+          label: column.label,
+          className: `max-w-[32rem] break-words text-xs ${column.mono ? "font-mono text-fg-muted" : "text-fg"}`,
+        },
+        cell: ({ row }) => row.original.cells[index] || "—",
+      })),
+    [columns],
+  );
 
   return (
     <div className="min-w-0">
@@ -43,35 +57,14 @@ export function HostInventoryTable({
           {filteredRows.length} of {rows.length}
         </span>
       </div>
-      <Table tableId={tableId} ariaLabel={title}>
-        <thead>
-          <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-            {columns.map((column) => (
-              <th key={column.label} className="whitespace-nowrap px-3 py-2 text-left font-normal">
-                {column.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {filteredRows.length === 0 ? (
-            <TableEmpty columns={columns.length}>
-              {rows.length === 0 ? "No inventory reported." : "No rows match this search."}
-            </TableEmpty>
-          ) : filteredRows.map((row) => (
-            <tr key={row.key} className="border-b border-line-soft last:border-0 hover:bg-surface-2">
-              {row.cells.map((cell, index) => (
-                <td
-                  key={`${row.key}-${index}`}
-                  className={`max-w-[32rem] break-words px-3 py-2 text-xs ${columns[index]?.mono ? "font-mono text-fg-muted" : "text-fg"}`}
-                >
-                  {cell || "—"}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </Table>
+      <DataTable
+        tableId={`${tableId}-v2`}
+        ariaLabel={title}
+        columns={tableColumns}
+        data={filteredRows}
+        getRowId={(row) => row.key}
+        emptyMessage={rows.length === 0 ? "No inventory reported." : "No rows match this search."}
+      />
     </div>
   );
 }

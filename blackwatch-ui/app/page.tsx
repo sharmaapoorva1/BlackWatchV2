@@ -3,14 +3,13 @@ import clsx from "clsx";
 
 import { fetchAgentIngressDiagnostics, fetchConnectors, fetchOverview } from "@/lib/api";
 import { buildAttentionItems } from "@/lib/attention";
-import { eventTargetLabel } from "@/lib/event-summary";
+import { toEventTableRow } from "@/lib/event-summary";
 import type { EventEnvelope } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
-import { Table } from "@/components/ui/Table";
 import { PageSection } from "@/components/layout/PageSection";
 import { AttentionStrip } from "@/components/domain/AttentionStrip";
-import { EventActionCell } from "@/components/domain/EventActionCell";
+import { EventsDataTable } from "@/components/domain/EventsDataTable";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { TimestampCell } from "@/components/domain/TimestampCell";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -92,7 +91,7 @@ export default async function Home() {
           {data.notable.length === 0 ? (
             <EmptyState tone="ok">No high or critical events in the recent window.</EmptyState>
           ) : (
-            <CompactEventsTable events={data.notable} />
+            <CompactEventsTable events={data.notable} tableId="overview-notable" />
           )}
         </DataPanel>
       </PageSection>
@@ -130,7 +129,7 @@ export default async function Home() {
           {data.recent.length === 0 ? (
             <EmptyState>No events yet. Has an agent or connector reported?</EmptyState>
           ) : (
-            <CompactEventsTable events={data.recent} />
+            <CompactEventsTable events={data.recent} tableId="overview-recent" />
           )}
         </DataPanel>
       </PageSection>
@@ -234,50 +233,14 @@ function PostureCell({
   );
 }
 
-function CompactEventsTable({ events }: { events: EventEnvelope[] }) {
+function CompactEventsTable({ events, tableId }: { events: EventEnvelope[]; tableId: string }) {
   return (
-    <Table>
-      <thead>
-        <tr className="border-b border-line-soft text-xs text-fg-muted">
-          <th className="w-36 px-4 py-2 text-left font-medium">Time</th>
-          <th className="w-24 px-4 py-2 text-left font-medium">Severity</th>
-          <th className="px-4 py-2 text-left font-medium">Event</th>
-          <th className="w-44 px-4 py-2 text-left font-medium">Target</th>
-          <th className="w-48 px-4 py-2 text-left font-medium">Actor</th>
-        </tr>
-      </thead>
-      <tbody>
-        {events.map((ev) => (
-          <tr
-            key={ev.event_id}
-            className="group relative border-b border-line-soft last:border-0 hover:bg-surface-2"
-          >
-            <td data-label="Time" className="relative px-4 py-2">
-              <span
-                aria-hidden
-                className={clsx(
-                  "pointer-events-none absolute left-0 top-0 h-full w-0.5",
-                  severityBorderBg(ev.severity as string | null | undefined),
-                )}
-              />
-              <TimestampCell value={ev.event_time} />
-            </td>
-            <td data-label="Severity" className="px-4 py-2">
-              <SeverityBadge severity={(ev.severity as string) ?? null} />
-            </td>
-            <td data-label="Event" className="px-4 py-2">
-              <EventActionCell eventId={ev.event_id} action={ev.action} />
-            </td>
-            <td data-label="Target" className="truncate px-4 py-2 text-xs text-fg-muted">
-              {eventTargetLabel(ev)}
-            </td>
-            <td data-label="Actor" className="truncate px-4 py-2 text-xs text-fg-muted">
-              {ev.actor?.principal ?? "—"}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </Table>
+    <EventsDataTable
+      events={events.map(toEventTableRow)}
+      variant="compact"
+      tableId={tableId}
+      ariaLabel="Events"
+    />
   );
 }
 

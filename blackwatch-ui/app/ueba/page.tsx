@@ -4,10 +4,10 @@ import clsx from "clsx";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { SectionLabel } from "@/components/layout/SectionLabel";
-import { Table, TableEmpty } from "@/components/ui/Table";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { UebaAnomalyRow } from "@/components/domain/UebaAnomalyRow";
+import { UebaAnomalyTable } from "@/components/domain/UebaAnomalyTable";
+import { toUebaAnomalyRow } from "@/lib/ueba-rows";
 import { BaselineTable } from "@/components/domain/BaselineTable";
 import { fetchUebaAnomalies, fetchUebaBaselines } from "@/lib/api";
 
@@ -71,23 +71,7 @@ export default async function UebaPage({
               warm-up window (default 7 days) for anomalies to fire.
             </div>
           ) : (
-            <Table tableId="ueba-anomalies">
-              <thead>
-                <tr>
-                  <th style={{ width: 170 }}>Time</th>
-                  <th style={{ width: 260 }}>Action</th>
-                  <th style={{ width: 220 }}>Principal</th>
-                  <th style={{ width: 150 }}>Dimension</th>
-                  <th style={{ width: 220 }}>New value</th>
-                  <th style={{ width: 100 }}>Trigger</th>
-                </tr>
-              </thead>
-              <tbody>
-                {anomalies.anomalies.map((e) => (
-                  <UebaAnomalyRow key={e.event_id} event={e} />
-                ))}
-              </tbody>
-            </Table>
+            <UebaAnomalyTable rows={anomalies.anomalies.map(toUebaAnomalyRow)} />
           )}
         </DataPanel>
       ) : (

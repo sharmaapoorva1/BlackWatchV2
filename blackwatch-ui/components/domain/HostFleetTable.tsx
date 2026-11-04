@@ -8,7 +8,7 @@ import { DataPanel } from "@/components/layout/DataPanel";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { NativeSelect } from "@/components/ui/NativeSelect";
-import { Table } from "@/components/ui/Table";
+import { DataTable, type ColumnDef } from "@/components/ui/DataTable";
 import type { HostSummary } from "@/lib/types";
 
 type FleetGroup = "healthy" | "attention" | "silent";
@@ -118,6 +118,85 @@ export function HostFleetTable({ servers }: { servers: HostSummary[] }) {
 
   const hasFilters = Boolean(query || health || environment);
 
+  const columns = useMemo<ColumnDef<HostSummary, unknown>[]>(
+    () => [
+      {
+        id: "host",
+        header: "Host",
+        accessorFn: (host) => host.display_name || host.hostname || host.tags?.role || host.instance_id,
+        enableHiding: false,
+        meta: { label: "Host", className: "max-w-80" },
+        cell: ({ row }) => {
+          const host = row.original;
+          const name = host.display_name || host.hostname || host.tags?.role || host.instance_id;
+          const secondary = [host.display_name && host.hostname !== host.display_name ? host.hostname : null, host.instance_id]
+            .filter(Boolean)
+            .join(" · ");
+          return (
+            <Link href={`/hosts/${host.instance_id}`} className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal">
+              <span className="block truncate text-sm text-fg hover:text-signal">{name}</span>
+              <span className="mt-0.5 block truncate font-mono text-xs text-fg-subtle">{secondary}</span>
+            </Link>
+          );
+        },
+      },
+      {
+        id: "environment",
+        header: "Environment",
+        accessorFn: (host) => host.tags?.env ?? "",
+        meta: { label: "Environment", className: "text-xs text-fg-muted" },
+        cell: ({ row }) => row.original.tags?.env ?? "—",
+      },
+      {
+        id: "role",
+        header: "Role",
+        accessorFn: (host) => host.tags?.role ?? "",
+        meta: { label: "Role", className: "text-xs text-fg-muted" },
+        cell: ({ row }) => row.original.tags?.role ?? "—",
+      },
+      {
+        id: "agent",
+        header: "Agent / last report",
+        // Needs-attention first, then silent, then healthy; oldest report first.
+        accessorFn: (host) => ({ attention: 0, silent: 1, healthy: 2 })[hostGroup(host)] * 1e12 - Math.min(host.age_seconds ?? 1e11, 1e11),
+        meta: { label: "Agent / last report", className: "min-w-40" },
+        cell: ({ row }) => <AgentState host={row.original} />,
+      },
+      {
+        id: "region",
+        header: "Region",
+        accessorFn: (host) => host.region ?? "",
+        meta: { label: "Region", className: "font-mono text-xs text-fg-muted" },
+        cell: ({ row }) => row.original.region ?? "—",
+      },
+      {
+        id: "ports",
+        header: "Ports",
+        accessorFn: (host) => host.port_count,
+        sortDescFirst: true,
+        meta: { label: "Ports", className: "text-right", headerClassName: "text-right" },
+        cell: ({ row }) => <SurfaceCount value={row.original.port_count} label="ports" />,
+      },
+      {
+        id: "users",
+        header: "Users",
+        accessorFn: (host) => host.user_count,
+        sortDescFirst: true,
+        meta: { label: "Users", className: "text-right", headerClassName: "text-right" },
+        cell: ({ row }) => <SurfaceCount value={row.original.user_count} label="users" />,
+      },
+      {
+        id: "keys",
+        header: "SSH keys",
+        accessorFn: (host) => host.key_count,
+        sortDescFirst: true,
+        meta: { label: "SSH keys", className: "text-right", headerClassName: "text-right" },
+        cell: ({ row }) => <SurfaceCount value={row.original.key_count} label="keys" />,
+      },
+    ],
+    [],
+  );
+
   return (
     <section aria-labelledby="host-fleet-title" className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-2">
@@ -190,43 +269,13 @@ export function HostFleetTable({ servers }: { servers: HostSummary[] }) {
         {rows.length === 0 ? (
           <EmptyState>{servers.length === 0 ? "No hosts are reporting. Install and configure the BlackWatch host agent to begin." : "No hosts match these filters."}</EmptyState>
         ) : (
-          <Table tableId="host-fleet" ariaLabel="BlackWatch host fleet">
-            <thead>
-              <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-                <th className="min-w-56 px-3 py-2 text-left font-normal">Host</th>
-                <th className="w-28 px-3 py-2 text-left font-normal">Environment</th>
-                <th className="w-32 px-3 py-2 text-left font-normal">Role</th>
-                <th className="min-w-40 px-3 py-2 text-left font-normal">Agent / last report</th>
-                <th className="w-28 px-3 py-2 text-left font-normal">Region</th>
-                <th className="w-24 px-3 py-2 text-right font-normal">Ports</th>
-                <th className="w-24 px-3 py-2 text-right font-normal">Users</th>
-                <th className="w-24 px-3 py-2 text-right font-normal">SSH keys</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((host) => {
-                const name = host.display_name || host.hostname || host.tags?.role || host.instance_id;
-                const secondary = [host.display_name && host.hostname !== host.display_name ? host.hostname : null, host.instance_id].filter(Boolean).join(" · ");
-                return (
-                  <tr key={host.instance_id} className="border-b border-line-soft last:border-0 hover:bg-surface-2">
-                    <td className="max-w-80 px-3 py-2.5">
-                      <Link href={`/hosts/${host.instance_id}`} className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal">
-                        <span className="block truncate text-sm text-fg hover:text-signal">{name}</span>
-                        <span className="mt-0.5 block truncate font-mono text-[10px] text-fg-subtle">{secondary}</span>
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2.5 text-xs text-fg-muted">{host.tags?.env ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-xs text-fg-muted">{host.tags?.role ?? "—"}</td>
-                    <td className="px-3 py-2.5"><AgentState host={host} /></td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-fg-muted">{host.region ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-right"><SurfaceCount value={host.port_count} label="ports" /></td>
-                    <td className="px-3 py-2.5 text-right"><SurfaceCount value={host.user_count} label="users" /></td>
-                    <td className="px-3 py-2.5 text-right"><SurfaceCount value={host.key_count} label="keys" /></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </Table>
+          <DataTable
+            tableId="host-fleet-v2"
+            ariaLabel="BlackWatch host fleet"
+            columns={columns}
+            data={rows}
+            getRowId={(host) => host.instance_id}
+          />
         )}
       </DataPanel>
     </section>

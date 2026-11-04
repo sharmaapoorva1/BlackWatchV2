@@ -18,7 +18,10 @@ import type {
 } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
-import { Table } from "@/components/ui/Table";
+import { HostRecentActivityTable, HostSessionsTable, type HostActivityItem } from "@/components/domain/HostDetailTables";
+import { EventsDataTable } from "@/components/domain/EventsDataTable";
+import { FimChangesTable } from "@/components/domain/FimTables";
+import { toEventTableRow } from "@/lib/event-summary";
 import { SectionLabel } from "@/components/layout/SectionLabel";
 import { KeyValueRow } from "@/components/layout/KeyValueRow";
 import { TimestampCell } from "@/components/domain/TimestampCell";
@@ -389,16 +392,6 @@ function formatAge(seconds: number): string {
   if (age < 86400) return `${Math.floor(age / 3600)}h`;
   return `${Math.floor(age / 86400)}d`;
 }
-type HostActivityItem = {
-  key: string;
-  at: string;
-  kind: string;
-  severity: string | null;
-  action: string;
-  actorOrTarget: string;
-  href: string | null;
-};
-
 function HostActivitySection({
   alerts,
   authEvents,
@@ -507,34 +500,7 @@ function HostActivitySection({
         {activity.length === 0 ? (
           <div className="px-4 py-6 text-sm text-fg-muted">No recent host alerts or changes.</div>
         ) : (
-          <Table tableId="host-recent-activity" ariaLabel="Recent host security activity">
-            <thead>
-              <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-                <th className="w-36 px-3 py-2 text-left font-normal">When</th>
-                <th className="w-28 px-3 py-2 text-left font-normal">Type</th>
-                <th className="w-24 px-3 py-2 text-left font-normal">Severity</th>
-                <th className="min-w-56 px-3 py-2 text-left font-normal">Activity</th>
-                <th className="min-w-40 px-3 py-2 text-left font-normal">Actor / target</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activity.map((item) => (
-                <tr key={item.key} className="border-b border-line-soft last:border-0 hover:bg-surface-2">
-                  <td className="whitespace-nowrap px-3 py-2.5">{item.at ? <TimestampCell value={item.at} /> : <span className="text-fg-disabled">—</span>}</td>
-                  <td className="px-3 py-2.5 text-xs text-fg-muted">{item.kind}</td>
-                  <td className="px-3 py-2.5">
-                    {item.severity ? <SeverityBadge severity={item.severity} /> : <span className="text-xs text-fg-subtle">—</span>}
-                  </td>
-                  <td className="max-w-[30rem] break-words px-3 py-2.5">
-                    {item.href ? (
-                      <Link href={item.href} className="font-mono text-xs text-fg hover:text-signal">{item.action}</Link>
-                    ) : <span className="font-mono text-xs text-fg">{item.action}</span>}
-                  </td>
-                  <td className="max-w-56 break-words px-3 py-2.5 text-xs text-fg-muted">{item.actorOrTarget}</td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+          <HostRecentActivityTable items={activity} />
         )}
       </DataPanel>
     </section>
@@ -636,37 +602,7 @@ function SessionsSection({ sessions }: { sessions: HostSession[] }) {
         </span>
       </div>
       <DataPanel className="overflow-hidden">
-        <Table>
-          <thead>
-            <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-              <th className="w-32 px-4 py-2 text-left font-normal">User</th>
-              <th className="w-24 px-4 py-2 text-left font-normal">TTY</th>
-              <th className="w-44 px-4 py-2 text-left font-normal">Source IP</th>
-              <th className="px-4 py-2 text-left font-normal">Login</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sessions.map((s, i) => (
-              <tr
-                key={`${s.user}-${s.tty}-${i}`}
-                className="border-b border-line-soft last:border-0"
-              >
-                <td className="px-4 py-2 text-fg">{s.user}</td>
-                <td className="px-4 py-2 font-mono text-xs text-fg-muted">{s.tty}</td>
-                <td className="px-4 py-2 text-xs">
-                  {s.source ? (
-                    <IpCell value={s.source} className="text-xs text-fg" />
-                  ) : (
-                    <span className="text-fg-subtle">local</span>
-                  )}
-                </td>
-                <td className="px-4 py-2 font-mono text-xs text-fg-muted">
-                  {s.login}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+        <HostSessionsTable sessions={sessions} />
       </DataPanel>
     </section>
   );
@@ -681,49 +617,7 @@ function AlertsSection({ alerts }: { alerts: EventEnvelope[] }) {
     <section className="mt-6 space-y-2">
       <SectionLabel>recent notable activity · high / critical</SectionLabel>
       <DataPanel className="overflow-hidden">
-        <Table>
-          <thead>
-            <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-              <th className="w-40 px-4 py-2 text-left font-normal">Time</th>
-              <th className="w-24 px-4 py-2 text-left font-normal">Severity</th>
-              <th className="px-4 py-2 text-left font-normal">Action</th>
-              <th className="w-48 px-4 py-2 text-left font-normal">Actor</th>
-            </tr>
-          </thead>
-          <tbody>
-            {alerts.map((a) => (
-              <tr
-                key={a.event_id}
-                className="group relative border-b border-line-soft last:border-0 hover:bg-surface-2"
-              >
-                <td className="relative px-4 py-2.5">
-                  <span
-                    aria-hidden
-                    className={clsx(
-                      "pointer-events-none absolute left-0 top-0 h-full w-0.5",
-                      severityBorderBg(a.severity as string | null | undefined),
-                    )}
-                  />
-                  <TimestampCell value={a.event_time} />
-                </td>
-                <td className="px-4 py-2.5">
-                  <SeverityBadge severity={(a.severity as string) ?? null} />
-                </td>
-                <td className="truncate px-4 py-2.5">
-                  <Link
-                    href={`/events/${a.event_id}`}
-                    className="font-mono text-xs text-fg transition-colors hover:text-signal"
-                  >
-                    {a.action}
-                  </Link>
-                </td>
-                <td className="truncate px-4 py-2.5 text-xs text-fg-muted">
-                  {a.actor?.principal ?? "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+        <EventsDataTable events={alerts.map(toEventTableRow)} variant="compact" tableId="host-alerts-v2" ariaLabel="Recent notable host activity" />
       </DataPanel>
     </section>
   );
@@ -767,7 +661,7 @@ function FimSection({
             events once it detects drift from the established baseline.
           </div>
         ) : (
-          <FimChangesTable changes={changes} />
+          <FimChangesTable changes={changes} scope="host" detectionKey="detection_source" detectedLabel="Source" />
         )}
       </DataPanel>
 
@@ -910,166 +804,6 @@ function Stat({
       </div>
     </div>
   );
-}
-
-function FimChangesTable({ changes }: { changes: FimChange[] }) {
-  return (
-    <Table>
-      <thead>
-        <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-          <th className="w-32 px-4 py-2 text-left font-normal">Time</th>
-          <th className="w-28 px-4 py-2 text-left font-normal">Source</th>
-          <th className="w-24 px-4 py-2 text-left font-normal">Change</th>
-          <th className="px-4 py-2 text-left font-normal">Path</th>
-          <th className="w-44 px-4 py-2 text-left font-normal">Who</th>
-          <th className="w-44 px-4 py-2 text-left font-normal">Diff</th>
-        </tr>
-      </thead>
-      <tbody>
-        {changes.map((c, i) => (
-          <tr
-            key={c.event_id ?? `${c.path}-${i}`}
-            className="border-b border-line-soft last:border-0 hover:bg-surface-2"
-          >
-            <td className="px-4 py-2.5">
-              {c.changed_at ? (
-                <TimestampCell value={c.changed_at} />
-              ) : (
-                <span className="text-xs text-fg-disabled">—</span>
-              )}
-            </td>
-            <td className="px-4 py-2.5">
-              <FimDetectionPill detection={c.detection_source ?? c.detection} />
-            </td>
-            <td className="px-4 py-2.5">
-              <FimChangePill type={c.change_type} />
-            </td>
-            <td className="truncate px-4 py-2.5">
-              {c.event_id ? (
-                <Link
-                  href={`/events/${c.event_id}`}
-                  className="font-mono text-xs text-fg transition-colors hover:text-signal"
-                >
-                  {c.path}
-                </Link>
-              ) : (
-                <span className="font-mono text-xs text-fg">{c.path}</span>
-              )}
-            </td>
-            <td className="truncate px-4 py-2.5">
-              <FimActorCell change={c} />
-            </td>
-            <td className="truncate px-4 py-2.5 font-mono text-xs text-fg-muted">
-              <FimDiff change={c} />
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </Table>
-  );
-}
-
-function FimActorCell({ change }: { change: FimChange }) {
-  if (change.actor_comm == null && change.actor_uid == null) {
-    return (
-      <span className="text-xs text-fg-disabled" title="A change was detected, but auditd did not attribute it to a process.">unknown · no attribution</span>
-    );
-  }
-  const comm = change.actor_comm ?? "?";
-  const uid = change.actor_uid != null ? `uid=${change.actor_uid}` : null;
-  return (
-    <span
-      className="text-xs text-fg"
-      title="Best-effort auditd attribution based on process metadata; not definitive identity proof."
-    >
-      <span className="font-mono">{comm}</span>
-      {uid && (
-        <span className="ml-1.5 text-fg-muted">{uid}</span>
-      )}
-      <span className="ml-1.5 text-fg-subtle">best-effort</span>
-    </span>
-  );
-}
-
-function FimDetectionPill({
-  detection,
-}: {
-  detection: string | null;
-}) {
-  if (detection === "inotify") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-xs">
-        <span className="h-1.5 w-1.5 rounded-full bg-signal" aria-hidden />
-        <span className="text-fg">real-time</span>
-      </span>
-    );
-  }
-  if (detection === "auditd") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
-        <span className="h-1.5 w-1.5 rounded-full bg-sev-medium" aria-hidden />
-        auditd
-      </span>
-    );
-  }
-  // baseline or unknown (older rows pre-Part 2 won't have the field)
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
-      <span className="h-1.5 w-1.5 rounded-full bg-fg-disabled" aria-hidden />
-      baseline
-    </span>
-  );
-}
-
-function FimChangePill({ type }: { type: FimChange["change_type"] }) {
-  // Color encodes how alarming the change is at a glance. Modified content
-  // (new sha256) is the most-actionable signal.
-  const COLOR: Record<FimChange["change_type"], string> = {
-    created:        "bg-sev-medium",
-    modified:       "bg-sev-high",
-    deleted:        "bg-sev-medium",
-    perm_changed:   "bg-sev-medium",
-    owner_changed:  "bg-sev-medium",
-  };
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs">
-      <span
-        className={clsx("h-1.5 w-1.5 rounded-full", COLOR[type])}
-        aria-hidden
-      />
-      <span className="text-fg-muted">{type.replace("_", " ")}</span>
-    </span>
-  );
-}
-
-function FimDiff({ change }: { change: FimChange }) {
-  if (change.change_type === "perm_changed") {
-    return (
-      <span>
-        perm {toOctal(change.perm_before)} → {toOctal(change.perm_after)}
-      </span>
-    );
-  }
-  if (change.change_type === "owner_changed") {
-    return (
-      <span>
-        {change.owner_before ?? "—"} → {change.owner_after ?? "—"}
-      </span>
-    );
-  }
-  if (change.change_type === "deleted") {
-    return <span>was {toOctal(change.perm_before)}, {change.size_before ?? 0} B</span>;
-  }
-  // created or modified — show sha256 prefix diff. Full 64-char hash is in
-  // the event detail; 8 chars is enough for at-a-glance distinction.
-  const before = change.sha256_before?.slice(0, 8) ?? "new";
-  const after = change.sha256_after?.slice(0, 8) ?? "—";
-  return <span>{before} → {after}</span>;
-}
-
-function toOctal(p: number | null): string {
-  if (p === null) return "—";
-  return p.toString(8).padStart(4, "0");
 }
 
 function humanAge(seconds: number): string {
@@ -1295,49 +1029,12 @@ function EventsSection({
     <section className="mt-6 space-y-2">
       <SectionLabel>{title}</SectionLabel>
       <DataPanel className="overflow-hidden">
-        <Table>
-          <thead>
-            <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-              <th className="w-40 px-4 py-2 text-left font-normal">Time</th>
-              <th className="w-28 px-4 py-2 text-left font-normal">Severity</th>
-              <th className="w-56 px-4 py-2 text-left font-normal">Action</th>
-              <th className="px-4 py-2 text-left font-normal">Actor / Detail</th>
-            </tr>
-          </thead>
-          <tbody>
-            {events.map((e) => (
-              <tr
-                key={e.event_id}
-                className="group relative border-b border-line-soft last:border-0 hover:bg-surface-2"
-              >
-                <td className="relative px-4 py-2.5">
-                  <span
-                    aria-hidden
-                    className={clsx(
-                      "pointer-events-none absolute left-0 top-0 h-full w-0.5",
-                      severityBorderBg(e.severity as string | null | undefined),
-                    )}
-                  />
-                  <TimestampCell value={e.event_time} />
-                </td>
-                <td className="px-4 py-2.5">
-                  <SeverityBadge severity={(e.severity as string) ?? null} />
-                </td>
-                <td className="truncate px-4 py-2.5">
-                  <Link
-                    href={`/events/${e.event_id}`}
-                    className="font-mono text-xs text-fg transition-colors hover:text-signal"
-                  >
-                    {e.action}
-                  </Link>
-                </td>
-                <td className="truncate px-4 py-2.5 text-xs text-fg-muted">
-                  {e.actor?.principal ?? "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+        <EventsDataTable
+          events={events.map(toEventTableRow)}
+          variant="compact"
+          tableId={`host-events-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-v2`}
+          ariaLabel={title}
+        />
       </DataPanel>
     </section>
   );

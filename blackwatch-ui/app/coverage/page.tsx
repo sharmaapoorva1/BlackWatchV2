@@ -4,7 +4,7 @@ import { fetchCoverage } from "@/lib/api";
 import type { CoverageRow, CoverageStatus } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
-import { Table } from "@/components/ui/Table";
+import { CoverageTable } from "@/components/domain/CoverageTable";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { TimestampCell } from "@/components/domain/TimestampCell";
 
@@ -60,52 +60,3 @@ function Metric({
   );
 }
 
-function CoverageTable({ rows }: { rows: CoverageRow[] }) {
-  return (
-    <Table tableId="coverage-list">
-      <thead>
-        <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-          <th className="px-4 py-2 text-left font-normal">Source</th>
-          <th className="px-4 py-2 text-left font-normal">Module</th>
-          <th className="px-4 py-2 text-left font-normal">Connector</th>
-          <th className="px-4 py-2 text-left font-normal">Last seen</th>
-          <th className="px-4 py-2 text-left font-normal">Verification</th>
-          <th className="px-4 py-2 text-left font-normal">State</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <CoverageTableRow key={row.connector_id} row={row} />
-        ))}
-      </tbody>
-    </Table>
-  );
-}
-
-function CoverageTableRow({ row }: { row: CoverageRow }) {
-  return (
-    <tr className="border-b border-line-soft hover:bg-surface-2">
-      <td className="px-4 py-2.5 font-mono text-xs text-fg-muted">{row.source}</td>
-      <td className="px-4 py-2.5">
-        <Link href={row.module_href} className="text-sm text-signal hover:underline">{row.module}</Link>
-      </td>
-      <td className="px-4 py-2.5 text-sm text-fg">{row.connector_name}</td>
-      <td className="px-4 py-2.5">
-        {row.last_seen_event ? <TimestampCell value={row.last_seen_event} /> : <span className="font-mono text-xs text-fg-disabled">never</span>}
-      </td>
-      <td className="px-4 py-2.5">
-        <StatusPill severity={row.verified ? "resolved" : "neutral"} label={row.verified ? "verified" : "not tested"} />
-      </td>
-      <td className="px-4 py-2.5">
-        <StatusPill severity={statusSeverity(row.status)} label={row.status} title={row.reason} />
-      </td>
-    </tr>
-  );
-}
-
-function statusSeverity(status: CoverageStatus): "critical" | "high" | "resolved" | "neutral" {
-  if (status === "failing") return "critical";
-  if (status === "stale" || status === "unverified") return "high";
-  if (status === "healthy") return "resolved";
-  return "neutral";
-}

@@ -1,15 +1,14 @@
 import Link from "next/link";
 
 import { fetchStorageSummary } from "@/lib/api";
-import type { StorageGroup, StorageS3SecurityEvent } from "@/lib/types";
+import type { StorageGroup } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { SectionLabel } from "@/components/layout/SectionLabel";
-import { Table } from "@/components/ui/Table";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { StorageGroupCard } from "@/components/domain/StorageGroupCard";
-import { StorageEventRow } from "@/components/domain/StorageEventRow";
+import { StorageEventsTable } from "@/components/domain/StorageEventsTable";
 
 // Sub-domain -> display label + optional deep link. Each group folds together
 // the events whose action prefix matches (see _STORAGE_GROUPS on the backend).
@@ -68,7 +67,7 @@ export default async function StoragePage() {
               </p>
             </EmptyState>
           ) : (
-            <S3SecurityTable events={summary.recent_s3_security} />
+            <StorageEventsTable events={summary.recent_s3_security} variant="s3" />
           )}
         </DataPanel>
       </section>
@@ -93,54 +92,10 @@ export default async function StoragePage() {
               </p>
             </EmptyState>
           ) : (
-            <Table>
-              <thead>
-                <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-                  <th className="px-4 py-2 text-left font-normal">Event</th>
-                  <th className="px-4 py-2 text-left font-normal">Tags</th>
-                  <th className="px-4 py-2 text-left font-normal">Domain</th>
-                  <th className="px-4 py-2 text-left font-normal">Target</th>
-                  <th className="px-4 py-2 text-left font-normal">Principal</th>
-                  <th className="px-4 py-2 text-left font-normal">When</th>
-                  <th className="px-4 py-2 text-right font-normal"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.recent_critical.map((event) => (
-                  <StorageEventRow key={event.event_id ?? event.action + event.event_time} event={event} />
-                ))}
-              </tbody>
-            </Table>
+            <StorageEventsTable events={summary.recent_critical} variant="critical" />
           )}
         </DataPanel>
       </section>
     </>
-  );
-}
-
-function S3SecurityTable({ events }: { events: StorageS3SecurityEvent[] }) {
-  return (
-    <Table tableId="storage-s3-security" ariaLabel="S3 security activity">
-      <thead>
-        <tr className="border-b border-line-soft text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-          <th className="px-4 py-2 text-left font-normal">Event</th>
-          <th className="px-4 py-2 text-left font-normal">Tags</th>
-          <th className="px-4 py-2 text-left font-normal">Signal</th>
-          <th className="px-4 py-2 text-left font-normal">Bucket / object</th>
-          <th className="px-4 py-2 text-left font-normal">Requester / evidence</th>
-          <th className="px-4 py-2 text-left font-normal">When</th>
-          <th className="px-4 py-2 text-right font-normal">Details</th>
-        </tr>
-      </thead>
-      <tbody>
-        {events.map((event) => (
-          <StorageEventRow
-            key={event.event_id ?? event.action + event.event_time}
-            event={event}
-            showSignal
-          />
-        ))}
-      </tbody>
-    </Table>
   );
 }

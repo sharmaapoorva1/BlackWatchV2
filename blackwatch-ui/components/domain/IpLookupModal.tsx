@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import * as Dialog from "@radix-ui/react-dialog";
+import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/Dialog";
 import { X, ExternalLink, Loader2 } from "lucide-react";
 
 import {
@@ -55,17 +55,12 @@ export function IpLookupModal({ ip, onClose }: IpLookupModalProps) {
   }, [ip]);
 
   return (
-    <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px]" />
-        <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-50 w-[min(900px,95vw)] max-h-[90vh] -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain border border-line bg-canvas shadow-2xl"
-          aria-describedby={undefined}
-        >
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+        <DialogContent aria-describedby={undefined} className="bg-canvas">
           <div className="flex items-center justify-between border-b border-line-soft px-5 py-3">
-            <Dialog.Title className="font-mono text-xs uppercase tracking-[0.08em] text-fg-subtle">
+            <DialogTitle className="font-mono text-xs text-fg-subtle">
               IP lookup · {ip}
-            </Dialog.Title>
+            </DialogTitle>
             <div className="flex items-center gap-3">
               {ip && (
                 <div className="flex items-center gap-3">
@@ -85,7 +80,7 @@ export function IpLookupModal({ ip, onClose }: IpLookupModalProps) {
                   </Link>
                 </div>
               )}
-              <Dialog.Close asChild>
+              <DialogClose asChild>
                 <Button size="sm" variant="ghost"
                   type="button"
                   aria-label="Close"
@@ -93,7 +88,7 @@ export function IpLookupModal({ ip, onClose }: IpLookupModalProps) {
                 >
                   <X size={14} />
                 </Button>
-              </Dialog.Close>
+              </DialogClose>
             </div>
           </div>
 
@@ -113,8 +108,7 @@ export function IpLookupModal({ ip, onClose }: IpLookupModalProps) {
               <IpLookupResult query={ip ?? ""} result={result} compact />
             )}
           </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+        </DialogContent>
+    </Dialog>
   );
 }

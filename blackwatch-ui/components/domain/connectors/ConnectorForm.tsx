@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { NativeSelect } from "@/components/ui/NativeSelect";
 import { FormRow } from "@/components/ui/FormRow";
+import { FormActions } from "@/components/ui/FormActions";
 import { Textarea } from "@/components/ui/Textarea";
 import { Checkbox } from "@/components/ui/Checkbox";
 import type {
@@ -53,7 +53,7 @@ export function ConnectorForm({
 
 // --- shared form scaffolding ---------------------------------------------
 
-function FormActions({
+function ConnectorFormActions({
   isEdit,
   cancelHref = "/connectors",
 }: {
@@ -61,17 +61,11 @@ function FormActions({
   cancelHref?: string;
 }) {
   return (
-    <div className="flex items-center gap-3 border-t border-line-soft bg-surface-1 px-4 py-3">
-      <Button type="submit" variant="primary" size="sm">
-        {isEdit ? "Save changes" : "Add connector"}
-      </Button>
-      <Link
-        href={cancelHref}
-        className="text-xs text-fg-muted transition-colors hover:text-fg"
-      >
-        cancel
-      </Link>
-    </div>
+    <FormActions
+      submitLabel={isEdit ? "Save changes" : "Add connector"}
+      pendingLabel="Saving…"
+      cancelHref={cancelHref}
+    />
   );
 }
 
@@ -135,7 +129,7 @@ function CloudTrailSqsForm({ existing }: { existing?: Connector }) {
           mono
         />
       </FormRow>
-      <FormActions isEdit={!!existing} />
+      <ConnectorFormActions isEdit={!!existing} />
       <FormNote>
         Credentials come from the EC2 instance role through boto3&apos;s default
         credential chain. The queue is
@@ -198,7 +192,7 @@ function EcsHealthForm({ existing }: { existing?: Connector }) {
           mono
         />
       </FormRow>
-      <FormActions isEdit={!!existing} />
+      <ConnectorFormActions isEdit={!!existing} />
       <FormNote>
         Iterates probe_targets in this VPC with tier{" "}
         <code className="text-fg">ecs_health</code> or{" "}
@@ -236,7 +230,7 @@ function S3DriftForm({ existing }: { existing?: Connector }) {
           mono
         />
       </FormRow>
-      <FormActions isEdit={!!existing} />
+      <ConnectorFormActions isEdit={!!existing} />
       <FormNote>
         Lists every S3 bucket in the account (via{" "}
         <code className="text-fg">ListBuckets</code> — global) and reads its
@@ -311,7 +305,7 @@ function S3AccessLogsForm({ existing }: { existing?: Connector }) {
           mono
         />
       </FormRow>
-      <FormActions isEdit={!!existing} />
+      <ConnectorFormActions isEdit={!!existing} />
       <FormNote>
         Reads S3 server access-log objects from this bucket and emits one event
         per request. Grant the runtime role only <code className="text-fg">s3:ListBucket</code>
@@ -439,7 +433,7 @@ function PostureDriftForm({ existing }: { existing?: Connector }) {
           </Check>
         </CheckboxList>
       </FormRow>
-      <FormActions isEdit={!!existing} />
+      <ConnectorFormActions isEdit={!!existing} />
       <FormNote>
         Scans current state of AWS resources for posture problems. Findings
         appear at{" "}
@@ -511,7 +505,7 @@ function CertProbeForm({ existing }: { existing?: Connector }) {
           className="w-24"
         />
       </FormRow>
-      <FormActions isEdit={!!existing} />
+      <ConnectorFormActions isEdit={!!existing} />
       <FormNote>
         Opens a TLS handshake to each endpoint, reads the leaf cert, computes
         days until expiry. Emits an event only when{" "}

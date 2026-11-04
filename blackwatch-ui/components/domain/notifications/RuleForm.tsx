@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { NativeSelect } from "@/components/ui/NativeSelect";
 import { FormRow } from "@/components/ui/FormRow";
+import { FormActions } from "@/components/ui/FormActions";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Textarea } from "@/components/ui/Textarea";
 import type { NotificationChannel, NotificationRule } from "@/lib/types";
@@ -281,17 +282,7 @@ export function RuleForm({
         </div>
       </details>
 
-      <div className="flex items-center gap-3 border-t border-line-soft bg-surface-1 px-4 py-3">
-        <Button type="submit" variant="primary" size="sm">
-          {isEdit ? "Save changes" : "Add rule"}
-        </Button>
-        <Link
-          href="/notifications"
-          className="text-xs text-fg-muted hover:text-fg"
-        >
-          cancel
-        </Link>
-      </div>
+      <FormActions submitLabel={isEdit ? "Save changes" : "Add rule"} cancelHref="/notifications" />
     </form>
   );
 }
