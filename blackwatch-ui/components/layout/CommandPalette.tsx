@@ -162,7 +162,7 @@ export function CommandPalette({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/60" />
         <Dialog.Content
-          className="fixed left-1/2 top-[12vh] z-[61] w-[min(36rem,calc(100vw-1.5rem))] -translate-x-1/2 border border-line bg-surface-1 shadow-2xl focus:outline-none"
+          className="fixed left-1/2 top-[12vh] z-[61] w-[min(36rem,calc(100vw-1.5rem))] -translate-x-1/2 rounded-md border border-line bg-surface-1 shadow-2xl focus:outline-none"
           aria-describedby="command-palette-desc"
         >
           <Dialog.Title className="sr-only">Search and jump</Dialog.Title>

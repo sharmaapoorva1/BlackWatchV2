@@ -62,13 +62,13 @@ export const NativeSelect = forwardRef<HTMLButtonElement, NativeSelectProps>(
           ref={ref}
           id={id}
           {...triggerProps}
-          className={`inline-flex min-h-11 min-w-0 w-full items-center justify-between gap-2 border border-line bg-surface px-3 py-1.5 text-left text-sm outline-none transition-colors focus:border-signal focus:ring-2 focus:ring-signal/70 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-8 ${className ?? ""}`}
+          className={`inline-flex min-h-11 min-w-0 w-full items-center justify-between gap-2 rounded-md border border-line bg-surface px-3 py-1.5 text-left text-sm outline-none transition-colors focus:border-signal focus:ring-2 focus:ring-signal/70 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-8 ${className ?? ""}`}
         >
           <Select.Value placeholder={options.find((option) => option.props.value === "")?.props.children ?? "Select"} />
           <Select.Icon><ChevronDown size={14} aria-hidden="true" /></Select.Icon>
         </Select.Trigger>
         <Select.Portal>
-          <Select.Content position="popper" sideOffset={4} className="z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden border border-line bg-surface-2 p-1 text-sm shadow-xl">
+          <Select.Content position="popper" sideOffset={4} className="z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-md border border-line bg-surface-2 p-1 text-sm shadow-xl">
             <Select.Viewport>
               {options.map((option, index) => {
                 const optionValue = option.props.value ?? "";

@@ -11,7 +11,7 @@ export function DataPanel({
   scrollX?: boolean;
 }) {
   return (
-    <section className={`min-w-0 max-w-full border border-line bg-surface-1 ${scrollX ? "overflow-x-auto" : "overflow-x-visible"} ${className ?? ""}`}>
+    <section className={`min-w-0 max-w-full rounded-md border border-line bg-surface-1 ${scrollX ? "overflow-x-auto" : "overflow-x-visible"} ${className ?? ""}`}>
       {children}
     </section>
   );

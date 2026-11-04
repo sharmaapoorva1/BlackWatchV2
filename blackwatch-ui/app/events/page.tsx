@@ -1,25 +1,18 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import clsx from "clsx";
 
 import { fetchEventFilterOptions, fetchEvents } from "@/lib/api";
-import { SEVERITY_VALUES, type EventEnvelope } from "@/lib/types";
+import { SEVERITY_VALUES } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
-import { Table } from "@/components/ui/Table";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { NativeSelect } from "@/components/ui/NativeSelect";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { TimestampCell } from "@/components/domain/TimestampCell";
 import { SavedFilters } from "@/components/domain/SavedFilters";
-import { EventActionCell } from "@/components/domain/EventActionCell";
-import { eventTargetLabel } from "@/lib/event-summary";
-import {
-  SeverityBadge,
-  severityBorderBg,
-} from "@/components/domain/SeverityBadge";
+import { EventsDataTable } from "@/components/domain/EventsDataTable";
+import { toEventTableRow } from "@/lib/event-summary";
 
 type SearchParams = {
   q?: string;
@@ -63,7 +56,7 @@ export default async function EventsPage({
         {events.length === 0 ? (
           <EmptyState size="lg">No events match the current filters.</EmptyState>
         ) : (
-          <EventsTable events={events} />
+          <EventsDataTable events={events.map(toEventTableRow)} />
         )}
       </DataPanel>
     </>
@@ -123,87 +116,5 @@ function FilterBar({
         <Link href="/events">Clear</Link>
       </Button>
     </form>
-  );
-}
-
-function EventsTable({ events }: { events: EventEnvelope[] }) {
-  return (
-    <Table>
-      <thead>
-        <tr className="border-b border-line-soft text-xs text-fg-muted">
-          <th className="w-44 px-4 py-2 text-left font-normal">Time</th>
-          <th className="w-28 px-4 py-2 text-left font-normal">Severity</th>
-          <th className="w-32 px-4 py-2 text-left font-normal">Module</th>
-          <th className="px-4 py-2 text-left font-normal">Event</th>
-          <th className="w-48 px-4 py-2 text-left font-normal">Actor</th>
-          <th className="w-64 px-4 py-2 text-left font-normal">Target</th>
-          <th className="w-52 px-4 py-2 text-left font-normal">Tags</th>
-        </tr>
-      </thead>
-      <tbody>
-        {events.map((ev) => (
-          <EventRow key={ev.event_id} event={ev} />
-        ))}
-      </tbody>
-    </Table>
-  );
-}
-
-function EventRow({ event }: { event: EventEnvelope }) {
-  const severity = (event.severity as string | null | undefined) ?? null;
-  const actor = event.actor?.principal ?? "—";
-  // Role tag (per-agent BLACKWATCH_TAGS) first, then name, then id.
-  const extra = (event.extra as Record<string, unknown> | undefined) ?? {};
-  const tags =
-    (event.tags as Record<string, string> | undefined) ??
-    (extra.tags as Record<string, string> | undefined);
-  const target = eventTargetLabel(event);
-  const moduleName = event.source?.module ?? "—";
-  const tagEntries = Object.entries(tags ?? {});
-
-  return (
-    <tr className="group relative border-b border-line-soft last:border-0 hover:bg-surface-2">
-      <td data-label="Time" className="relative px-4 py-2.5">
-        {/* 2px severity left-border indicator — never a background fill */}
-        <span
-          aria-hidden
-          className={clsx(
-            "pointer-events-none absolute left-0 top-0 h-full w-0.5",
-            severityBorderBg(severity),
-          )}
-        />
-        <TimestampCell value={event.event_time} />
-      </td>
-      <td data-label="Severity" className="px-4 py-2.5">
-        <SeverityBadge severity={severity} />
-      </td>
-      <td data-label="Module" className="truncate px-4 py-2.5 font-mono text-xs text-fg-muted">
-        {moduleName}
-      </td>
-      <td data-label="Event" className="px-4 py-2.5">
-        <EventActionCell eventId={event.event_id} action={event.action} />
-      </td>
-      <td data-label="Actor" className="truncate px-4 py-2.5 text-xs text-fg-muted">{actor}</td>
-      <td data-label="Target" className="truncate px-4 py-2.5 font-mono text-xs text-fg-muted">
-        {target}
-      </td>
-      <td data-label="Tags" className="px-4 py-2.5">
-        {tagEntries.length === 0 ? (
-          <span className="text-xs text-fg-disabled">—</span>
-        ) : (
-          <div className="flex flex-wrap gap-1">
-            {tagEntries.map(([key, value]) => (
-              <span
-                key={key}
-                className="inline-flex max-w-full rounded border border-line-soft bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-fg-muted"
-                title={`${key}: ${value}`}
-              >
-                {key}={value}
-              </span>
-            ))}
-          </div>
-        )}
-      </td>
-    </tr>
   );
 }

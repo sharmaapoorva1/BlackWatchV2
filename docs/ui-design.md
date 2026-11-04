@@ -481,3 +481,40 @@ About half a day of work end-to-end. Most of it is the backend hub.
   - Next.js explicit choice
   - Will deploy on Lightsail behind reverse proxy
 - Project-level design preferences (see `memory/feedback_design_preferences.md`): design before code, stable foundation, no over-engineering.
+
+## Component library (shadcn/ui approach)
+
+The UI is moving to shadcn-style components: Radix primitives plus Tailwind,
+copied into `blackwatch-ui/components/ui/` and styled with this project's own
+tokens, so the palette, fonts and teal accent are unchanged.
+
+- `lib/utils.ts` exports `cn()` (clsx + tailwind-merge). Use it for every
+  component `className`.
+- Variants are declared with `class-variance-authority` (see `Button.tsx`,
+  `Badge.tsx`). `buttonVariants` can style a link as a button.
+- Available primitives: Button, Input, NativeSelect, Badge, Skeleton, Tooltip,
+  Popover, DropdownMenu (plus the existing Dialog-based panels).
+- Controls and panels use `rounded-md`. Colours are not changed by the
+  migration.
+- `components.json` is present so `npx shadcn add <name>` works. File names here
+  are PascalCase, so on Windows the CLI can collide with existing files
+  (`Button.tsx`, `Input.tsx`): never accept an overwrite without reviewing the
+  diff, and rewrite CLI output to use project tokens (`bg-surface-1`,
+  `text-fg-muted`, `border-line`). shadcn's `muted` colour is a background
+  while this project's `text-muted` is text colour, so `--color-muted` is
+  deliberately not aliased.
+
+### Tables
+
+- `components/ui/Table.tsx` (JSX children API: `<Table><thead>…<tbody>…`) stays
+  for the existing ~28 tables. It scrapes cell text to sort, so it is a
+  compatibility layer, not the model for new work.
+- `components/ui/DataTable.tsx` is the data-driven table on TanStack Table v8
+  (pinned: v9 has a different API). It has sortable headers with `aria-sort`,
+  a Columns menu, drag-to-resize, per-browser page size, mobile card layout and
+  live-region announcements, and keeps its page index across auto-refresh.
+- Define columns in a client file (cell renderers are functions) and pass only
+  the fields the table shows, not whole envelopes: see `EventsDataTable.tsx`
+  and `toEventTableRow` in `lib/event-summary.ts`.
+- Migrate an old table by writing its columns, swapping the page to the new
+  client component, and deleting its inline `<Table>` markup.

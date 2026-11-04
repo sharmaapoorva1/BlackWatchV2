@@ -56,3 +56,33 @@ export function eventTargetLabel(event: EventEnvelope): string {
   const role = tags && !Array.isArray(tags) ? tags.role : undefined;
   return role ?? event.target?.name ?? event.target?.id ?? "—";
 }
+
+/** The few fields the events table shows. Sending this instead of the full
+ *  envelope keeps raw payloads out of the page's client-side data. */
+export interface EventTableRow {
+  event_id: string;
+  event_time: string;
+  severity: string | null;
+  action: string;
+  module: string;
+  actor: string;
+  target: string;
+  tags: [string, string][];
+}
+
+export function toEventTableRow(event: EventEnvelope): EventTableRow {
+  const extra = (event.extra as Record<string, unknown> | undefined) ?? {};
+  const tags =
+    (event.tags as Record<string, string> | undefined) ??
+    (extra.tags as Record<string, string> | undefined);
+  return {
+    event_id: event.event_id,
+    event_time: event.event_time,
+    severity: (event.severity as string | null | undefined) ?? null,
+    action: event.action,
+    module: event.source?.module ?? "",
+    actor: event.actor?.principal ?? "",
+    target: eventTargetLabel(event),
+    tags: Object.entries(tags ?? {}).map(([key, value]) => [key, String(value)] as [string, string]),
+  };
+}

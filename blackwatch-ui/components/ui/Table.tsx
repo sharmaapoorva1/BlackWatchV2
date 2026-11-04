@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Columns3 } from "lucide-react";
 import {
   Children,
   Fragment,
@@ -17,6 +17,16 @@ import {
 } from "react";
 import { TablePagination } from "./Pagination";
 import { LiveRegion } from "./LiveRegion";
+import { Button } from "./Button";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./DropdownMenu";
 import {
   DEFAULT_TABLE_PAGE_SIZE,
   TABLE_PAGE_SIZE_EVENT,
@@ -215,43 +225,42 @@ export function Table({
       <LiveRegion message={liveMessage} />
       {columnLabels.length > 1 && (
         <div className="mb-2 flex justify-end">
-          <details className="relative">
-            <summary className="inline-flex min-h-11 cursor-pointer list-none items-center rounded border border-line-soft px-2.5 py-1 text-[10px] uppercase tracking-wider text-fg-muted transition-colors hover:border-signal hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70 sm:min-h-8">
-              Columns
-            </summary>
-            <div className="absolute right-0 z-20 mt-1 min-w-48 border border-line bg-surface-2 p-2 shadow-lg">
-              <p className="mb-2 text-[10px] uppercase tracking-wider text-fg-subtle">Visible columns</p>
-              <div className="space-y-1">
-                {columnLabels.map((column, index) => (
-                  <label key={`${column.label}-${index}`} className="flex items-center gap-2 px-1 py-1 text-xs text-fg hover:bg-surface-1">
-                    <input
-                      type="checkbox"
-                      checked={!hiddenColumnSet.has(index)}
-                      disabled={column.isActions}
-                      onChange={() => toggleColumn(index)}
-                      className="h-3.5 w-3.5 accent-[var(--color-signal)]"
-                    />
-                    <span className="min-w-0 truncate">{column.label}</span>
-                  </label>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" size="sm" variant="ghost">
+                <Columns3 size={14} aria-hidden="true" /> Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuLabel className="text-xs text-fg-subtle">Visible columns</DropdownMenuLabel>
+              {columnLabels.map((column, index) => (
+                <DropdownMenuCheckboxItem
+                  key={`${column.label}-${index}`}
+                  checked={!hiddenColumnSet.has(index)}
+                  disabled={column.isActions}
+                  // Keep the menu open so several columns can be toggled at once.
+                  onSelect={(event) => event.preventDefault()}
+                  onCheckedChange={() => toggleColumn(index)}
+                >
+                  <span className="min-w-0 truncate">{column.label}</span>
+                </DropdownMenuCheckboxItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => {
                   setHiddenColumns([]);
                   setColumnWidths({});
                   setSortColumn(null);
                   setLiveMessage("All columns restored.");
                 }}
-                className="mt-2 min-h-11 w-full cursor-pointer border-t border-line-soft pt-2 text-left text-[10px] uppercase tracking-wider text-fg-muted transition-colors hover:text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70 sm:min-h-8"
               >
                 Reset columns
-              </button>
-            </div>
-          </details>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )}
-      <div className={clsx("bw-table-shell max-w-full border border-line bg-surface", responsive && "bw-table-shell-cards")}>
+      <div className={clsx("bw-table-shell max-w-full rounded-md border border-line bg-surface", responsive && "bw-table-shell-cards")}>
         <table
           className={clsx("bw-table w-full border-collapse text-sm", className)}
           data-responsive={responsive ? "cards" : "scroll"}

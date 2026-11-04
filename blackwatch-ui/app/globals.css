@@ -46,6 +46,30 @@
   --color-severity-medium:   #FACC15;
   --color-severity-low:      #60A5FA;
 
+  /* shadcn/ui semantic aliases. New shadcn-style components are written with
+     the project's own tokens (bg-surface-1, text-fg-muted, border-line, ...),
+     but these aliases let `npx shadcn add <component>` output resolve to the
+     same palette. NOTE: shadcn's `muted` is a background colour while this
+     project's existing `--color-muted` is a text colour, so it is intentionally
+     NOT aliased; review any CLI-added component that uses bg-muted. */
+  --color-background:           #0A0B0F;
+  --color-foreground:           #E4E4E7;
+  --color-card:                 #101218;
+  --color-card-foreground:      #E4E4E7;
+  --color-popover:              #181B22;
+  --color-popover-foreground:   #E4E4E7;
+  --color-primary:              oklch(0.72 0.14 195);
+  --color-primary-foreground:   #0A0B0F;
+  --color-secondary:            #181B22;
+  --color-secondary-foreground: #E4E4E7;
+  --color-accent:               #181B22;
+  --color-accent-foreground:    #E4E4E7;
+  --color-muted-foreground:     #9CA3AF;
+  --color-destructive:          #F43F5E;
+  --color-border:               rgba(255, 255, 255, 0.12);
+  --color-input:                rgba(255, 255, 255, 0.12);
+  --color-ring:                 oklch(0.72 0.14 195);
+
   /* typography — fonts ship via @fontsource (woff2 bundled in node_modules,
      so the build has no network dependency on Google Fonts). */
   --font-sans:           "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
