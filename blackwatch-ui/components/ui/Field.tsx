@@ -37,6 +37,7 @@ export function Field({
   error,
   required,
   layout = "stack",
+  compact = false,
   className,
   children,
 }: {
@@ -45,6 +46,8 @@ export function Field({
   error?: string;
   required?: boolean;
   layout?: "row" | "stack";
+  /** Smaller, muted label for dense toolbars such as filter bars. */
+  compact?: boolean;
   className?: string;
   children: ReactNode;
 }) {
@@ -71,6 +74,7 @@ export function Field({
         </div>
       );
 
+  const labelClass = compact ? "text-xs font-medium text-fg-muted" : "pt-0.5 text-sm font-medium text-fg";
   const labelContent = (
     <>
       {label}
@@ -94,11 +98,11 @@ export function Field({
       )}
     >
       {control ? (
-        <label htmlFor={controlId} className="pt-0.5 text-sm font-medium text-fg">
+        <label htmlFor={controlId} className={labelClass}>
           {labelContent}
         </label>
       ) : (
-        <span id={labelId} className="pt-0.5 text-sm font-medium text-fg">
+        <span id={labelId} className={labelClass}>
           {labelContent}
         </span>
       )}

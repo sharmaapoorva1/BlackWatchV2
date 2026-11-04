@@ -22,6 +22,7 @@ import { SeverityChip } from "@/components/ui/SeverityChip";
 import { ReviewGrid, ReviewLabel, ReviewValue } from "@/components/ui/ReviewGrid";
 import { FieldStack } from "@/components/ui/FormSection";
 import { Wizard, WizardStepHeader } from "@/components/ui/WizardShell";
+import { PendingButton } from "@/components/ui/PendingButton";
 import { TemplateEditor } from "@/components/domain/notifications/TemplateEditor";
 import { TestSendButton } from "@/components/domain/notifications/TestSendButton";
 
@@ -89,6 +90,14 @@ const WIZARD_STEPS = [
 ];
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
+
+// Shown next to a disabled Next button so the user knows what is missing.
+const BLOCKED_REASON: Record<number, string | undefined> = {
+  1: "Choose a metric to continue.",
+  2: "Enter a valid threshold and time window to continue.",
+  3: "Choose where this applies to continue.",
+  4: "Choose at least one channel to continue.",
+};
 
 function uniqueTagPairs(instances: PerfAlertInstance[]): string[] {
   const set = new Set<string>();
@@ -345,16 +354,13 @@ export function PerfAlertForm({
         onBack={() => setStep((s) => (s > 1 ? ((s - 1) as Step) : s))}
         onNext={() => setStep((s) => (s < 6 ? ((s + 1) as Step) : s))}
         canAdvance={canAdvance}
+        canJump={(n) => canGoTo(n as Step)}
+        blockedReason={BLOCKED_REASON[step]}
         isFinal={isFinal}
         finalNode={
-          <Button
-            type="submit"
-            size="sm"
-            variant="primary"
-            disabled={!formValid}
-          >
+          <PendingButton size="sm" variant="primary" pendingLabel="Saving…" disabled={!formValid}>
             <Check size={12} /> {mode === "edit" ? "Save changes" : "Create alert"}
-          </Button>
+          </PendingButton>
         }
       >
         <div hidden={step !== 1}>

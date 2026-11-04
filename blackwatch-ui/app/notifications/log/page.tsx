@@ -4,7 +4,9 @@ import { fetchNotificationLog } from "@/lib/api";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { Input } from "@/components/ui/Input";
-import { Button } from "@/components/ui/Button";
+import { ActiveFilters } from "@/components/ui/ActiveFilters";
+import { Field } from "@/components/ui/Field";
+import { FilterBar } from "@/components/ui/FilterBar";
 import { NativeSelect } from "@/components/ui/NativeSelect";
 import { BackLink } from "@/components/ui/BackLink";
 import { NotificationLogTable } from "@/components/domain/NotificationLogTable";
@@ -42,38 +44,31 @@ export default async function NotificationLogPage({
         subtitle={`${count} entries`}
       />
 
-      <form
-        action="/notifications/log"
-        method="GET"
-        className="mb-4 flex flex-wrap items-center gap-2"
-      >
-        <NativeSelect name="status" defaultValue={params.status ?? ""}>
-          <option value="">any status</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </NativeSelect>
-        <Input
-          name="channel"
-          defaultValue={params.channel ?? ""}
-          placeholder="channel name"
-          className="w-44"
+      <FilterBar action="/notifications/log" label="Filter notification log" clearHref="/notifications/log" className="mb-4">
+        <Field label="Status" compact className="w-full sm:w-44">
+          <NativeSelect name="status" defaultValue={params.status ?? ""}>
+            <option value="">Any status</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </NativeSelect>
+        </Field>
+        <Field label="Channel" compact className="w-full sm:w-48">
+          <Input name="channel" defaultValue={params.channel ?? ""} placeholder="channel name" />
+        </Field>
+        <Field label="Rule" compact className="w-full sm:w-48">
+          <Input name="rule" defaultValue={params.rule ?? ""} placeholder="rule name" />
+        </Field>
+      </FilterBar>
+      <div className="mb-4">
+        <ActiveFilters
+          basePath="/notifications/log"
+          params={{ status: params.status, channel: params.channel, rule: params.rule }}
+          labels={{ status: "Status", channel: "Channel", rule: "Rule" }}
         />
-        <Input
-          name="rule"
-          defaultValue={params.rule ?? ""}
-          placeholder="rule name"
-          className="w-44"
-        />
-        <Button type="submit" variant="primary" size="sm">
-          Filter
-        </Button>
-        <Link href="/notifications/log" className="ml-1 text-xs text-fg-muted hover:text-fg">
-          reset
-        </Link>
-      </form>
+      </div>
 
       <DataPanel className="overflow-hidden">
         {entries.length === 0 ? (

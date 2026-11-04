@@ -561,3 +561,19 @@ actions). Rules:
 - Server actions still report errors by redirecting with `?msg=`; pass a
   field-specific message to `Field error` when an action returns one.
 - `lib/forms.test.ts` guards these rules.
+
+### Filter bars and wizards
+
+- List-page filters use `components/ui/FilterBar.tsx`: a `role="search"` GET form,
+  so the URL is the source of truth (shareable, reload-safe, back-button
+  friendly). Put `Field compact` controls inside it so every filter has a visible
+  label. Add `components/ui/ActiveFilters.tsx` above the list so it is always
+  clear why it is short; each chip removes one filter. Pass page state such as
+  `tab` in `hidden` so it survives "Clear all". Pure URL logic lives in
+  `lib/filters.ts`.
+- Wizards use `components/ui/WizardShell.tsx`. Pass `canJump` so unreachable
+  steps are disabled (not silently ignored) and `blockedReason` so a disabled
+  Next says what is missing. On a step change the shell focuses the new step's
+  heading and announces "Step N of M". Step headings use `WizardStepHeader`; the
+  option groups under them should be a `role="radiogroup"` or `role="group"`
+  labelled by that heading's `id`. Finish with a `PendingButton`.

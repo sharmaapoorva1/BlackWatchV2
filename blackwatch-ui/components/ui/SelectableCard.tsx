@@ -37,7 +37,7 @@ export function SelectableCard({
   error?: boolean;
 }) {
   return (
-    <label className={`relative block border p-3 transition-colors ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:border-fg-muted"} ${error ? "border-danger" : checked ? "border-signal bg-surface" : "border-line bg-canvas"}`}>
+    <label className={`relative block rounded-md border p-3 transition-colors focus-within:ring-2 focus-within:ring-signal/70 ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:border-fg-muted"} ${error ? "border-danger" : checked ? "border-signal bg-surface" : "border-line bg-canvas"}`}>
       <span className="flex w-full items-start gap-2">
         <input type={type} name={name} value={value} checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--color-signal)]" />
         <span className={`min-w-0 text-sm ${checked ? "text-fg" : "text-muted"}`}><span className="block">{title}</span>{description && <span className="mt-1 block text-[11px] text-subtle">{description}</span>}</span>

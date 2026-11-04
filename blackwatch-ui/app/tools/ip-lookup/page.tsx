@@ -4,7 +4,8 @@ import { ArrowLeft } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Input } from "@/components/ui/Input";
-import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { FilterBar } from "@/components/ui/FilterBar";
 import {
   IpLookupResult,
   type IpApiResponse,
@@ -73,31 +74,17 @@ export default async function IpLookupPage({
         subtitle="Fast geolocation plus optional threat sources, local feeds, related indicators, and matching BlackWatch events."
       />
 
-      <form
+      <FilterBar
         action="/tools/ip-lookup"
-        method="GET"
-        className="mb-6 flex items-center gap-2"
+        label="Look up an IP address or hostname"
+        clearHref={ip ? "/tools/ip-lookup" : undefined}
+        applyLabel="Look up"
+        className="mb-6"
       >
-        <Input
-          name="ip"
-          mono
-          defaultValue={ip ?? ""}
-          placeholder="8.8.8.8  or  example.com"
-          className="w-80"
-          autoFocus
-        />
-        <Button type="submit" variant="primary" size="sm">
-          Lookup
-        </Button>
-        {ip && (
-          <Link
-            href="/tools/ip-lookup"
-            className="ml-1 text-xs text-fg-muted hover:text-fg"
-          >
-            clear
-          </Link>
-        )}
-      </form>
+        <Field label="IP address or hostname" compact className="w-full sm:w-80">
+          <Input name="ip" mono defaultValue={ip ?? ""} placeholder="8.8.8.8  or  example.com" autoFocus />
+        </Field>
+      </FilterBar>
 
       {result && <IpLookupResult query={ip ?? ""} result={result} />}
     </>

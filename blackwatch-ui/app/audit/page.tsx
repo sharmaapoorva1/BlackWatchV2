@@ -2,7 +2,9 @@ import { apiFetch } from "@/lib/server-fetch";
 import { AuditDataTable, type AuditEntry } from "@/components/domain/AuditDataTable";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Input } from "@/components/ui/Input";
-import { Button } from "@/components/ui/Button";
+import { ActiveFilters } from "@/components/ui/ActiveFilters";
+import { Field } from "@/components/ui/Field";
+import { FilterBar } from "@/components/ui/FilterBar";
 
 interface SearchParams {
   actor?: string;
@@ -39,41 +41,25 @@ export default async function AuditPage({
         subtitle="Append-only record of every mutation this BlackWatch instance received."
       />
 
-      <form className="flex flex-wrap gap-2 text-sm" action="/audit" method="get">
-        <Input
-          type="text"
-          name="actor"
-          placeholder="actor"
-          defaultValue={sp.actor ?? ""}
-          className="w-auto"
-        />
-        <Input
-          type="text"
-          name="path"
-          placeholder="path contains"
-          defaultValue={sp.path ?? ""}
-          className="w-auto"
-        />
-        <Input
-          type="datetime-local"
-          name="since"
-          defaultValue={sp.since ?? ""}
-          className="w-auto"
-        />
-        <Input
-          type="number"
-          name="limit"
-          placeholder="limit"
-          defaultValue={sp.limit ?? "200"}
-          className="w-24"
-        />
-        <Button
-          type="submit"
-          variant="secondary" size="sm"
-        >
-          Filter
-        </Button>
-      </form>
+      <FilterBar action="/audit" label="Filter audit log" clearHref="/audit">
+        <Field label="Actor" compact className="w-full sm:w-44">
+          <Input type="text" name="actor" defaultValue={sp.actor ?? ""} placeholder="username" />
+        </Field>
+        <Field label="Path contains" compact className="w-full sm:w-56">
+          <Input type="text" name="path" defaultValue={sp.path ?? ""} placeholder="/api/rules" />
+        </Field>
+        <Field label="Since" compact className="w-full sm:w-52">
+          <Input type="datetime-local" name="since" defaultValue={sp.since ?? ""} />
+        </Field>
+        <Field label="Limit" compact className="w-full sm:w-24">
+          <Input type="number" name="limit" min={1} max={1000} defaultValue={sp.limit ?? "200"} />
+        </Field>
+      </FilterBar>
+      <ActiveFilters
+        basePath="/audit"
+        params={{ actor: sp.actor, path: sp.path, since: sp.since }}
+        labels={{ actor: "Actor", path: "Path", since: "Since" }}
+      />
 
       <AuditDataTable rows={rows} />
     </div>

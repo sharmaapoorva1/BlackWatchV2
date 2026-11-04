@@ -5,7 +5,9 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { SectionLabel } from "@/components/layout/SectionLabel";
 import { Input } from "@/components/ui/Input";
-import { Button } from "@/components/ui/Button";
+import { ActiveFilters } from "@/components/ui/ActiveFilters";
+import { Field } from "@/components/ui/Field";
+import { FilterBar } from "@/components/ui/FilterBar";
 import { UebaAnomalyTable } from "@/components/domain/UebaAnomalyTable";
 import { toUebaAnomalyRow } from "@/lib/ueba-rows";
 import { BaselineTable } from "@/components/domain/BaselineTable";
@@ -76,48 +78,31 @@ export default async function UebaPage({
         </DataPanel>
       ) : (
         <>
-          <form
-            method="get"
-            className="mb-4 flex flex-wrap items-end gap-3 text-sm"
-          >
-            <input type="hidden" name="tab" value="baselines" />
-            <label className="flex flex-col gap-1">
-              <SectionLabel>principal type</SectionLabel>
-              <Input
-                type="text"
-                name="principal_type"
-                defaultValue={params.principal_type ?? ""}
-                placeholder="user, role, service"
-                className="w-40"
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <SectionLabel>principal id</SectionLabel>
-              <Input
-                type="text"
-                name="principal_id"
-                defaultValue={params.principal_id ?? ""}
-                placeholder="alice"
-                className="w-56"
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <SectionLabel>dimension</SectionLabel>
-              <Input
-                type="text"
-                name="dimension"
-                defaultValue={params.dimension ?? ""}
-                placeholder="source_ip"
-                className="w-44"
-              />
-            </label>
-            <Button
-              type="submit"
-              variant="secondary" size="sm"
-            >
-              Filter
-            </Button>
-          </form>
+          <div className="mb-4 space-y-3">
+            <FilterBar action="/ueba" label="Filter baselines" clearHref="/ueba?tab=baselines" applyLabel="Filter">
+              <input type="hidden" name="tab" value="baselines" />
+              <Field label="Principal type" compact className="w-full sm:w-40">
+                <Input type="text" name="principal_type" defaultValue={params.principal_type ?? ""} placeholder="user, role, service" />
+              </Field>
+              <Field label="Principal ID" compact className="w-full sm:w-56">
+                <Input type="text" name="principal_id" defaultValue={params.principal_id ?? ""} placeholder="alice" />
+              </Field>
+              <Field label="Dimension" compact className="w-full sm:w-44">
+                <Input type="text" name="dimension" defaultValue={params.dimension ?? ""} placeholder="source_ip" />
+              </Field>
+            </FilterBar>
+            <ActiveFilters
+              basePath="/ueba"
+              params={{
+                tab: "baselines",
+                principal_type: params.principal_type,
+                principal_id: params.principal_id,
+                dimension: params.dimension,
+              }}
+              labels={{ principal_type: "Principal type", principal_id: "Principal ID", dimension: "Dimension" }}
+              hidden={["tab"]}
+            />
+          </div>
           <DataPanel className="overflow-hidden">
             <BaselineTable rows={baselines.baselines} />
           </DataPanel>

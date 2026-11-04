@@ -11,6 +11,9 @@ import { Button } from "@/components/ui/Button";
 import { NativeSelect } from "@/components/ui/NativeSelect";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SavedFilters } from "@/components/domain/SavedFilters";
+import { ActiveFilters } from "@/components/ui/ActiveFilters";
+import { Field } from "@/components/ui/Field";
+import { FilterBar } from "@/components/ui/FilterBar";
 import { EventsDataTable } from "@/components/domain/EventsDataTable";
 import { toEventTableRow } from "@/lib/event-summary";
 
@@ -50,7 +53,14 @@ export default async function EventsPage({
       <Suspense fallback={null}>
         <SavedFilters storageKey="bw.events.savedFilters" />
       </Suspense>
-      <FilterBar params={params} options={options} />
+      <EventFilters params={params} options={options} />
+      <div className="mt-3">
+        <ActiveFilters
+          basePath="/events"
+          params={params}
+          labels={{ q: "Search", severity: "Severity", category: "Category", module: "Module", action: "Action" }}
+        />
+      </div>
 
       <DataPanel className="mt-4 overflow-hidden">
         {events.length === 0 ? (
@@ -63,7 +73,7 @@ export default async function EventsPage({
   );
 }
 
-function FilterBar({
+function EventFilters({
   params,
   options,
 }: {
@@ -76,45 +86,43 @@ function FilterBar({
   };
 }) {
   return (
-    <form
-      action="/events"
-      method="GET"
-    className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(18rem,2fr)_repeat(4,minmax(11rem,1fr))_minmax(8rem,auto)_minmax(6rem,auto)]"
-  >
-      <Input
-        name="q"
-        aria-label="Search events"
-        autoComplete="off"
-        defaultValue={params.q ?? ""}
-        placeholder="Search actor, IP, target, action…"
-        className="w-full"
-      />
-      <NativeSelect name="severity" aria-label="Severity" defaultValue={params.severity ?? ""} className="w-full">
-        <option value="">All severities</option>
-        {(options.severities.length ? options.severities : SEVERITY_VALUES).map((s) => (
-          <option key={s} value={s}>
-            {s}
-          </option>
-        ))}
-      </NativeSelect>
-      <NativeSelect name="category" aria-label="Category" defaultValue={params.category ?? ""} className="w-full">
-        <option value="">All categories</option>
-        {options.categories.map((value) => <option key={value} value={value}>{value}</option>)}
-      </NativeSelect>
-      <NativeSelect name="module" aria-label="Source module" defaultValue={params.module ?? ""} className="w-full">
-        <option value="">All source modules</option>
-        {options.modules.map((value) => <option key={value} value={value}>{value}</option>)}
-      </NativeSelect>
-      <NativeSelect name="action" aria-label="Action" defaultValue={params.action ?? ""} className="w-full">
-        <option value="">All actions</option>
-        {options.actions.map((value) => <option key={value} value={value}>{value}</option>)}
-      </NativeSelect>
-      <Button type="submit" variant="primary" size="sm" className="w-full min-w-32 justify-self-stretch">
-        Apply filters
-      </Button>
-      <Button asChild variant="secondary" size="sm" className="w-full min-w-24 justify-self-stretch">
-        <Link href="/events">Clear</Link>
-      </Button>
-    </form>
+    <FilterBar action="/events" label="Filter events" clearHref="/events">
+      <Field label="Search" compact className="w-full sm:w-72">
+        <Input
+          name="q"
+          autoComplete="off"
+          defaultValue={params.q ?? ""}
+          placeholder="Actor, IP, target, action…"
+        />
+      </Field>
+      <Field label="Severity" compact className="w-full sm:w-40">
+        <NativeSelect name="severity" defaultValue={params.severity ?? ""}>
+          <option value="">All severities</option>
+          {(options.severities.length ? options.severities : SEVERITY_VALUES).map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </NativeSelect>
+      </Field>
+      <Field label="Category" compact className="w-full sm:w-40">
+        <NativeSelect name="category" defaultValue={params.category ?? ""}>
+          <option value="">All categories</option>
+          {options.categories.map((value) => <option key={value} value={value}>{value}</option>)}
+        </NativeSelect>
+      </Field>
+      <Field label="Source module" compact className="w-full sm:w-48">
+        <NativeSelect name="module" defaultValue={params.module ?? ""}>
+          <option value="">All source modules</option>
+          {options.modules.map((value) => <option key={value} value={value}>{value}</option>)}
+        </NativeSelect>
+      </Field>
+      <Field label="Action" compact className="w-full sm:w-56">
+        <NativeSelect name="action" defaultValue={params.action ?? ""}>
+          <option value="">All actions</option>
+          {options.actions.map((value) => <option key={value} value={value}>{value}</option>)}
+        </NativeSelect>
+      </Field>
+    </FilterBar>
   );
 }

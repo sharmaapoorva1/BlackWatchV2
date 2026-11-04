@@ -50,3 +50,41 @@ test("login and password forms use Field instead of hand-rolled uppercase labels
     assert.doesNotMatch(source, /<label[\s\S]{0,80}uppercase/, `${file} should not hand-roll labels`);
   }
 });
+
+test("the wizard stepper is an accessible list with reachability and a stated reason", () => {
+  const shell = read("components/ui/WizardShell.tsx");
+  assert.match(shell, /<nav aria-label="Progress"/);
+  assert.match(shell, /<ol /);
+  assert.match(shell, /aria-current=\{isActive \? "step" : undefined\}/);
+  assert.match(shell, /disabled=\{!reachable && !isActive\}/);
+  assert.match(shell, /data-wizard-step-title/);
+  assert.match(shell, /aria-describedby=\{showReason \? reasonId : undefined\}/);
+  assert.match(shell, /Step \$\{/);
+});
+
+test("both wizards pass reachability and a blocked reason, and save with a pending button", () => {
+  for (const file of ["app/notifications/AlertWizard.tsx", "components/domain/notifications/PerfAlertForm.tsx"]) {
+    const source = read(file);
+    assert.match(source, /canJump=\{/, `${file} should pass canJump`);
+    assert.match(source, /blockedReason=\{/, `${file} should explain a disabled Next`);
+    assert.match(source, /<PendingButton/, `${file} should save with a PendingButton`);
+  }
+  const alert = read("app/notifications/AlertWizard.tsx");
+  assert.match(alert, /role="radiogroup" aria-labelledby="alert-step-source"/);
+  assert.match(alert, /role="radiogroup" aria-labelledby="alert-step-channel"/);
+});
+
+test("list pages use the shared FilterBar with visible labels and active-filter chips", () => {
+  const bar = read("components/ui/FilterBar.tsx");
+  assert.match(bar, /role="search"/);
+  assert.match(bar, /method="GET"/);
+  for (const file of ["app/events/page.tsx", "app/audit/page.tsx", "app/notifications/log/page.tsx", "app/ueba/page.tsx"]) {
+    const source = read(file);
+    assert.match(source, /<FilterBar/, `${file} should use FilterBar`);
+    assert.match(source, /<Field label=/, `${file} filters should have visible labels`);
+    assert.match(source, /<ActiveFilters/, `${file} should show active filters`);
+  }
+  for (const file of ["app/tools/ip-lookup/page.tsx", "app/tools/dns-lookup/page.tsx"]) {
+    assert.match(read(file), /<FilterBar/, `${file} should use FilterBar`);
+  }
+});

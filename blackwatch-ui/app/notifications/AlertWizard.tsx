@@ -11,7 +11,7 @@ import type {
 } from "@/lib/types";
 import type { PreviewSampleKind } from "@/lib/api";
 
-import { Button } from "@/components/ui/Button";
+import { PendingButton } from "@/components/ui/PendingButton";
 import { SelectableCard } from "@/components/ui/SelectableCard";
 import { SeverityChip } from "@/components/ui/SeverityChip";
 import { ReviewGrid, ReviewLabel, ReviewValue } from "@/components/ui/ReviewGrid";
@@ -77,6 +77,13 @@ const WIZARD_STEPS = [
   { n: 4, label: "Message" },
   { n: 5, label: "Review" },
 ];
+
+// Shown next to a disabled Next button so the user knows what is missing.
+const BLOCKED_REASON: Record<number, string | undefined> = {
+  1: "Choose a source to continue.",
+  2: "Select at least one severity to continue.",
+  3: "Choose a channel to continue.",
+};
 
 type Channel = { id: string; name: string; type: string; enabled: boolean };
 type Step = 1 | 2 | 3 | 4 | 5;
@@ -166,7 +173,7 @@ export function AlertWizard({
         subtitle={
           isEdit
             ? "Change the trigger, channel, or message for this alert."
-            : "Four steps: pick source, severity, channel, and an optional custom message."
+            : "Pick a source, a severity and a channel, optionally write a custom message, then review."
         }
         steps={WIZARD_STEPS}
         current={step}
@@ -175,11 +182,13 @@ export function AlertWizard({
         onBack={() => setStep((s) => (s > 1 ? ((s - 1) as Step) : s))}
         onNext={() => setStep((s) => (s < 5 ? ((s + 1) as Step) : s))}
         canAdvance={canAdvance}
+        canJump={(n) => canGoTo(n as Step)}
+        blockedReason={BLOCKED_REASON[step]}
         isFinal={isFinal}
         finalNode={
-          <Button type="submit" size="sm" variant="primary">
+          <PendingButton size="sm" variant="primary" pendingLabel="Saving…">
             <Check size={12} /> {isEdit ? "Save changes" : "Create alert"}
-          </Button>
+          </PendingButton>
         }
       >
         <div hidden={step !== 1}>
@@ -249,10 +258,11 @@ function SourceStep({
   return (
     <div>
       <WizardStepHeader
+        id="alert-step-source"
         title="Which source triggers this alert?"
         subtitle="Pick a module. The alert will fire for events coming from that source."
       />
-      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+      <div role="radiogroup" aria-labelledby="alert-step-source" className="grid grid-cols-1 gap-2 md:grid-cols-2">
         {catalog.map((m) => (
           <SelectableCard
             key={m.key}
@@ -300,10 +310,11 @@ function TriggerStep({
   return (
     <div>
       <WizardStepHeader
+        id="alert-step-severity"
         title="Which severities should trigger it?"
         subtitle="Usually one. Creating a separate route per severity lets you customize the channel and message for each. Multi-select routes them to the same channel with the same message."
       />
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <div role="group" aria-labelledby="alert-step-severity" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {SEVERITIES.map((s) => (
           <SelectableCard
             key={s.key}
@@ -336,6 +347,7 @@ function ChannelStep({
   return (
     <div>
       <WizardStepHeader
+        id="alert-step-channel"
         title="Which channel should receive it?"
         subtitle="Pick a delivery channel — Slack, email, webhook, etc."
       />
@@ -350,7 +362,7 @@ function ChannelStep({
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div role="radiogroup" aria-labelledby="alert-step-channel" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {channels.map((c) => (
             <SelectableCard
               key={c.name}

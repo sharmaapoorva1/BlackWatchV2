@@ -3,7 +3,8 @@ import { ArrowLeft } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Input } from "@/components/ui/Input";
-import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { FilterBar } from "@/components/ui/FilterBar";
 import { DnsLookupResult } from "@/components/domain/DnsLookupResult";
 import type { DnsLookupResponse } from "@/app/api/tools/dns-lookup/route";
 
@@ -60,31 +61,17 @@ export default async function DnsLookupPage({
         subtitle="A, AAAA, MX, TXT, CNAME, NS, SOA — all in one pass. Resolved by the local Node resolver."
       />
 
-      <form
+      <FilterBar
         action="/tools/dns-lookup"
-        method="GET"
-        className="mb-6 flex items-center gap-2"
+        label="Look up DNS records"
+        clearHref={host ? "/tools/dns-lookup" : undefined}
+        applyLabel="Look up"
+        className="mb-6"
       >
-        <Input
-          name="host"
-          mono
-          defaultValue={host ?? ""}
-          placeholder="example.com"
-          className="w-80"
-          autoFocus
-        />
-        <Button type="submit" variant="primary" size="sm">
-          Lookup
-        </Button>
-        {host && (
-          <Link
-            href="/tools/dns-lookup"
-            className="ml-1 text-xs text-fg-muted hover:text-fg"
-          >
-            clear
-          </Link>
-        )}
-      </form>
+        <Field label="Hostname" compact className="w-full sm:w-80">
+          <Input name="host" mono defaultValue={host ?? ""} placeholder="example.com" autoFocus />
+        </Field>
+      </FilterBar>
 
       {result && <DnsLookupResult result={result} />}
     </>
