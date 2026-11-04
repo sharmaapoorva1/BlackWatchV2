@@ -61,6 +61,8 @@ const TYPE_CARDS: Array<{
   },
 ];
 
+export const metadata = { title: "Add channel" };
+
 export default async function NewChannelPage({
   searchParams,
 }: {

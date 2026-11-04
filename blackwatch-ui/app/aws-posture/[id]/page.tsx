@@ -8,6 +8,8 @@ import { TimestampCell } from "@/components/domain/TimestampCell";
 import { SeverityBadge } from "@/components/domain/SeverityBadge";
 import { CopyButton } from "@/components/ui/CopyButton";
 
+export const metadata = { title: "Posture finding" };
+
 export default async function PostureFindingDetailPage({
   params,
 }: {

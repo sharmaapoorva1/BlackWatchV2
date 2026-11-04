@@ -9,6 +9,8 @@ import { BackLink } from "@/components/ui/BackLink";
 // performance-based rules evaluate continuous host metrics against a
 // threshold + window. Different mechanics → different forms; this page
 // makes the choice explicit instead of pretending they're the same thing.
+export const metadata = { title: "Create alert" };
+
 export default function CreateAlertChooser() {
   return (
     <div className="mx-auto max-w-3xl">
@@ -62,7 +64,7 @@ function ChoiceCard({
 }) {
   return (
     <Link href={href} className="group block focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal">
-      <div className="relative flex h-full flex-col border border-line-soft bg-surface-1 transition-colors group-hover:border-signal group-focus-visible:border-signal">
+      <div className="relative flex h-full flex-col rounded-md border border-line-soft bg-surface-1 transition-colors group-hover:border-signal group-focus-visible:border-signal">
         <div className="h-px bg-gradient-to-r from-transparent via-signal/30 to-transparent transition-opacity group-hover:via-signal/70" />
 
         <div className="flex flex-1 flex-col p-6">

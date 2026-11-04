@@ -1,6 +1,6 @@
 import Link from "next/link";
 import clsx from "clsx";
-import { Children, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { fetchHostDetail, hostLabel } from "@/lib/api";
 import { HostDisplayNameEditor } from "@/components/domain/HostDisplayNameEditor";
@@ -8,6 +8,7 @@ import { HostMetricsChart } from "@/components/domain/HostMetricsChart";
 import { HostInventoryTable, type HostInventoryRow } from "@/components/domain/HostInventoryTable";
 import type {
   HostRecord,
+  HostDetailResponse,
   HostSnapshots,
   HostSession,
   EventEnvelope,
@@ -17,6 +18,10 @@ import type {
   AgentDeliveryStatus,
 } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { DetailLayout } from "@/components/layout/DetailLayout";
+import { Section, AutoGrid } from "@/components/layout/Section";
+import { Subsection } from "@/components/layout/Subsection";
+import type { NavGroup } from "@/components/layout/SectionNav";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { HostRecentActivityTable, HostSessionsTable, type HostActivityItem } from "@/components/domain/HostDetailTables";
 import { EventsDataTable } from "@/components/domain/EventsDataTable";
@@ -31,6 +36,15 @@ import {
   severityBorderBg,
 } from "@/components/domain/SeverityBadge";
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  return { title: `Host · ${decodeURIComponent(id)}` };
+}
+
 export default async function HostDetailPage({
   params,
 }: {
@@ -38,17 +52,7 @@ export default async function HostDetailPage({
 }) {
   const { id } = await params;
   const data = await fetchHostDetail(id);
-  const {
-    host, snapshots, age_seconds, stale,
-    health_state, health_reason, delivery,
-    auth_events, state_changes, alerts,
-    fim_coverage, fim_recent_changes,
-  } = data;
-  const systemd = snapshots?.systemd_units;
-  const enabledSystemdUnits = Array.isArray(systemd) ? systemd : systemd?.enabled ?? [];
-  const activeSystemdUnits = Array.isArray(systemd) ? [] : systemd?.active ?? [];
-  const runningSystemdUnits = Array.isArray(systemd) ? [] : systemd?.running ?? [];
-  const packageDetails = new Map((snapshots.package_details ?? []).map((item) => [item.name, item]));
+  const { host } = data;
 
   return (
     <>
@@ -81,115 +85,195 @@ export default async function HostDetailPage({
         </DataPanel>
       )}
 
-      {host && (
-        <div className="mt-5 space-y-8">
-          <nav aria-label="Host detail sections" className="sticky top-0 z-20 -mx-4 border-y border-line bg-canvas px-4 sm:-mx-6 sm:px-6">
-            <div className="flex min-w-0 gap-1 overflow-x-auto py-1.5">
-              {[
-                ["overview", "Overview"],
-                ["access", "Access"],
-                ["integrity", "Integrity"],
-                ["runtime", "Runtime"],
-                ["capacity", "Capacity"],
-                ["agent-delivery", "Agent & delivery"],
-              ].map(([sectionId, label]) => (
-                <a key={sectionId} href={`#${sectionId}`} className="inline-flex min-h-11 shrink-0 items-center border border-transparent px-3 text-xs text-fg-muted transition-colors hover:border-line-soft hover:bg-surface-1 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal sm:min-h-9">
-                  {label}
-                </a>
-              ))}
-            </div>
-          </nav>
-          <section id="overview" aria-labelledby="host-overview-title" className="scroll-mt-16">
-            <h2 id="host-overview-title" className="sr-only">Overview</h2>
-            <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.6fr)]">
-              <StatusSection
-                host={host}
-                ageSeconds={age_seconds}
-                stale={stale}
-                healthState={health_state}
-                healthReason={health_reason}
-              />
-              <HostActivitySection
-                alerts={alerts}
-                authEvents={auth_events}
-                stateChanges={state_changes}
-                fimChanges={fim_recent_changes}
-              />
-            </div>
-            <div className="mt-6">
-              <HostMetricsChart instanceId={host.instance_id} />
-            </div>
-          </section>
-
-          <HostEvidenceSection id="access" title="Access and identity" description="Authentication, privilege use, interactive accounts, and authorized access." >
-            {((host.extra?.active_sessions?.length ?? 0) > 0 || auth_events.length > 0 || (snapshots.users?.length ?? 0) > 0 || (snapshots.authorized_keys?.length ?? 0) > 0) && <nav className="flex flex-wrap gap-x-4 gap-y-2 text-xs" aria-label="Jump to access inventory">
-              {(host.extra?.active_sessions?.length ?? 0) > 0 && <a href="#host-sessions" className="text-signal hover:underline">Current sessions</a>}
-              {auth_events.length > 0 && <a href="#host-auth-events" className="text-signal hover:underline">SSH and sudo activity</a>}
-              {(snapshots.users?.length ?? 0) > 0 && <a href="#host-users" className="text-signal hover:underline">Users</a>}
-              {(snapshots.authorized_keys?.length ?? 0) > 0 && <a href="#host-authorized-keys" className="text-signal hover:underline">Authorized keys</a>}
-            </nav>}
-            {(host.extra?.active_sessions?.length ?? 0) > 0 && <div id="host-sessions" className="scroll-mt-16"><SessionsSection sessions={host.extra!.active_sessions!} /></div>}
-            {auth_events.length > 0 && <div id="host-auth-events" className="scroll-mt-16"><EventsSection title="SSH and sudo activity" events={auth_events} /></div>}
-            {(snapshots.users?.length ?? 0) > 0 && <div id="host-users" className="scroll-mt-16"><UsersSection rows={snapshots.users!} /></div>}
-            {(snapshots.authorized_keys?.length ?? 0) > 0 && <div id="host-authorized-keys" className="scroll-mt-16"><AuthorizedKeysSection rows={snapshots.authorized_keys!} /></div>}
-            {snapshots.sudoers && Object.keys(snapshots.sudoers).length > 0 && <FileHashSection title="Sudo policy files · SHA-256" data={snapshots.sudoers} />}
-          </HostEvidenceSection>
-
-          <HostEvidenceSection id="integrity" title="Integrity and persistence" description="File changes, monitored scope, system configuration, and persistence surfaces." >
-            {(Boolean(snapshots.cron && Object.keys(snapshots.cron).length) || enabledSystemdUnits.length > 0 || activeSystemdUnits.length > 0 || runningSystemdUnits.length > 0 || (snapshots.kernel_modules?.length ?? 0) > 0) && <nav className="flex flex-wrap gap-x-4 gap-y-2 text-xs" aria-label="Jump to integrity inventory">
-              {snapshots.cron && Object.keys(snapshots.cron).length > 0 && <a href="#host-cron" className="text-signal hover:underline">Cron files</a>}
-              {enabledSystemdUnits.length > 0 && <a href="#host-enabled-units" className="text-signal hover:underline">Enabled units</a>}
-              {activeSystemdUnits.length > 0 && <a href="#host-active-units" className="text-signal hover:underline">Active services and timers</a>}
-              {runningSystemdUnits.length > 0 && <a href="#host-running-units" className="text-signal hover:underline">Running services</a>}
-              {(snapshots.kernel_modules?.length ?? 0) > 0 && <a href="#host-modules" className="text-signal hover:underline">Kernel modules</a>}
-            </nav>}
-            {(fim_coverage || fim_recent_changes.length > 0) && <FimSection coverage={fim_coverage} changes={fim_recent_changes} />}
-            {state_changes.length > 0 && <EventsSection title="Host configuration and inventory changes" events={state_changes} />}
-            {snapshots.critical_files && Object.keys(snapshots.critical_files).length > 0 && <FileHashSection title="Critical file hashes · FIM" data={snapshots.critical_files} />}
-            {snapshots.cron && Object.keys(snapshots.cron).length > 0 && <div id="host-cron" className="scroll-mt-16"><FileHashSection title="Cron file hashes" data={snapshots.cron} /></div>}
-            {enabledSystemdUnits.length > 0 && <div id="host-enabled-units" className="scroll-mt-16"><ScrollableList title="Enabled systemd units" items={enabledSystemdUnits} /></div>}
-            {activeSystemdUnits.length > 0 && <div id="host-active-units" className="scroll-mt-16"><ScrollableList title="Active services and timers" items={activeSystemdUnits} /></div>}
-            {runningSystemdUnits.length > 0 && <div id="host-running-units" className="scroll-mt-16"><ScrollableList title="Running services" items={runningSystemdUnits} /></div>}
-            {(snapshots.suid?.length ?? 0) > 0 && <ScrollableList title="SUID binaries" items={snapshots.suid!} />}
-            {(snapshots.kernel_modules?.length ?? 0) > 0 && <div id="host-modules" className="scroll-mt-16"><ScrollableList title="Kernel modules · inventory, not a rootkit verdict" items={snapshots.kernel_modules!} /></div>}
-          </HostEvidenceSection>
-
-          <HostEvidenceSection id="runtime" title="Runtime and network" description="Current listening endpoints and process inventory." >
-            <nav className="flex flex-wrap gap-x-4 gap-y-2 text-xs" aria-label="Jump to runtime inventory">
-              <a href="#host-ports" className="text-signal hover:underline">Listening ports</a>
-              {(snapshots.processes?.length ?? 0) > 0 && <a href="#host-processes" className="text-signal hover:underline">Running processes</a>}
-            </nav>
-            <div id="host-ports" className="scroll-mt-16"><PortsSection rows={snapshots.ports ?? []} /></div>
-            {(snapshots.processes?.length ?? 0) > 0 && <div id="host-processes" className="scroll-mt-16"><ProcessesSection rows={snapshots.processes!} /></div>}
-          </HostEvidenceSection>
-
-          <HostEvidenceSection id="capacity" title="Capacity and software" description="Storage pressure and the supporting package inventory." >
-            {((snapshots.disk?.length ?? 0) > 0 || (snapshots.packages?.length ?? 0) > 0) && <nav className="flex flex-wrap gap-x-4 gap-y-2 text-xs" aria-label="Jump to capacity inventory">
-              {(snapshots.disk?.length ?? 0) > 0 && <a href="#host-disk" className="text-signal hover:underline">Disk usage</a>}
-              {(snapshots.packages?.length ?? 0) > 0 && <a href="#host-packages" className="text-signal hover:underline">Package inventory</a>}
-            </nav>}
-            {(snapshots.disk?.length ?? 0) > 0 && <div id="host-disk" className="scroll-mt-16"><DiskSection rows={snapshots.disk!} /></div>}
-            {(snapshots.packages?.length ?? 0) > 0 && (
-              <div id="host-packages" className="scroll-mt-16"><ScrollableList
-                title={`Supporting package inventory · ${snapshots.packages!.length} packages; context only, not vulnerability or signature verification`}
-                items={snapshots.packages!.map((name) => {
-                  const detail = packageDetails.get(name);
-                  return detail
-                    ? `${name} · ${detail.version}${detail.installed_at ? ` · installed ${new Date(detail.installed_at).toLocaleDateString()}` : ""}`
-                    : name;
-                })}
-              /></div>
-            )}
-          </HostEvidenceSection>
-
-          <HostAgentDetailsSection host={host} delivery={delivery} />
-
-          <DataPanel className="px-4 py-3 text-[11px] leading-relaxed text-fg-subtle">
-            BlackWatch shows the telemetry currently collected from this host. It does not provide full outbound network-flow history, process ancestry, memory capture, or executable signature verification.
-          </DataPanel>
-        </div>
-      )}
+      {host && <HostBody data={data} />}
     </>
+  );
+}
+
+// =========================================================================
+// body: a table of contents on the left, sections of collapsible blocks on
+// the right. Blocks that have no data are simply not rendered (or listed).
+// =========================================================================
+
+type Block = {
+  id: string;
+  title: string;
+  count?: number;
+  summary?: ReactNode;
+  defaultOpen?: boolean;
+  node: ReactNode;
+};
+type BlockGroup = { id: string; title: string; description: string; blocks: Block[] };
+
+/** Short lists start open; long inventories start closed so you can scroll past. */
+const isShort = (count: number) => count <= 12;
+
+function HostBody({ data }: { data: HostDetailResponse }) {
+  const {
+    host, snapshots, age_seconds, stale,
+    health_state, health_reason, delivery,
+    auth_events, state_changes, alerts,
+    fim_coverage, fim_recent_changes,
+  } = data;
+  if (!host) return null;
+
+  const systemd = snapshots?.systemd_units;
+  const enabledUnits = Array.isArray(systemd) ? systemd : systemd?.enabled ?? [];
+  const activeUnits = Array.isArray(systemd) ? [] : systemd?.active ?? [];
+  const runningUnits = Array.isArray(systemd) ? [] : systemd?.running ?? [];
+  const packageDetails = new Map((snapshots.package_details ?? []).map((item) => [item.name, item]));
+
+  const sessions = host.extra?.active_sessions ?? [];
+  const users = snapshots.users ?? [];
+  const keys = snapshots.authorized_keys ?? [];
+  const sudoers = snapshots.sudoers ?? {};
+  const critical = snapshots.critical_files ?? {};
+  const cron = snapshots.cron ?? {};
+  const suid = snapshots.suid ?? [];
+  const modules = snapshots.kernel_modules ?? [];
+  const ports = snapshots.ports ?? [];
+  const processes = snapshots.processes ?? [];
+  const disk = snapshots.disk ?? [];
+  const packages = snapshots.packages ?? [];
+  const entries = (record: Record<string, string>) => Object.keys(record).length;
+
+  const keep = (...items: (Block | false)[]): Block[] => items.filter((item): item is Block => item !== false);
+
+  const groups: BlockGroup[] = [
+    {
+      id: "access",
+      title: "Access and identity",
+      description: "Who can log in, who has, and what privileges they hold.",
+      blocks: keep(
+        sessions.length > 0 && { id: "host-sessions", title: "Current sessions", count: sessions.length, node: <SessionsSection sessions={sessions} /> },
+        auth_events.length > 0 && { id: "host-auth-events", title: "SSH and sudo activity", count: auth_events.length, node: <EventsSection title="SSH and sudo activity" events={auth_events} /> },
+        users.length > 0 && { id: "host-users", title: "Users", count: users.length, defaultOpen: isShort(users.length), node: <UsersSection rows={users} /> },
+        keys.length > 0 && { id: "host-authorized-keys", title: "Authorized SSH keys", count: keys.length, defaultOpen: isShort(keys.length), node: <AuthorizedKeysSection rows={keys} /> },
+        entries(sudoers) > 0 && { id: "host-sudoers", title: "Sudo policy files", count: entries(sudoers), defaultOpen: false, summary: "SHA-256", node: <FileHashSection title="Sudo policy files · SHA-256" data={sudoers} /> },
+      ),
+    },
+    {
+      id: "integrity",
+      title: "Integrity and persistence",
+      description: "File changes, monitored scope, system configuration and persistence surfaces.",
+      blocks: keep(
+        (fim_coverage !== null || fim_recent_changes.length > 0) && {
+          id: "host-fim",
+          title: "File integrity",
+          count: fim_recent_changes.length,
+          summary: fimModeSummary(fim_coverage),
+          node: <FimSection coverage={fim_coverage} changes={fim_recent_changes} />,
+        },
+        state_changes.length > 0 && { id: "host-config-changes", title: "Configuration and inventory changes", count: state_changes.length, defaultOpen: isShort(state_changes.length), node: <EventsSection title="Host configuration and inventory changes" events={state_changes} /> },
+        entries(critical) > 0 && { id: "host-critical-files", title: "Critical file hashes", count: entries(critical), defaultOpen: false, summary: "FIM baseline", node: <FileHashSection title="Critical file hashes · FIM" data={critical} /> },
+        entries(cron) > 0 && { id: "host-cron", title: "Cron files", count: entries(cron), defaultOpen: false, summary: "SHA-256", node: <FileHashSection title="Cron file hashes" data={cron} /> },
+        enabledUnits.length > 0 && { id: "host-enabled-units", title: "Enabled systemd units", count: enabledUnits.length, defaultOpen: false, node: <ScrollableList title="Enabled systemd units" items={enabledUnits} /> },
+        activeUnits.length > 0 && { id: "host-active-units", title: "Active services and timers", count: activeUnits.length, defaultOpen: false, node: <ScrollableList title="Active services and timers" items={activeUnits} /> },
+        runningUnits.length > 0 && { id: "host-running-units", title: "Running services", count: runningUnits.length, defaultOpen: false, node: <ScrollableList title="Running services" items={runningUnits} /> },
+        suid.length > 0 && { id: "host-suid", title: "SUID binaries", count: suid.length, defaultOpen: false, node: <ScrollableList title="SUID binaries" items={suid} /> },
+        modules.length > 0 && { id: "host-modules", title: "Kernel modules", count: modules.length, defaultOpen: false, summary: "inventory, not a rootkit verdict", node: <ScrollableList title="Kernel modules" items={modules} /> },
+      ),
+    },
+    {
+      id: "runtime",
+      title: "Runtime and network",
+      description: "What is listening and what is running right now.",
+      blocks: keep(
+        { id: "host-ports", title: "Listening ports", count: ports.length, node: <PortsSection rows={ports} /> },
+        processes.length > 0 && { id: "host-processes", title: "Running processes", count: processes.length, defaultOpen: false, node: <ProcessesSection rows={processes} /> },
+      ),
+    },
+    {
+      id: "capacity",
+      title: "Capacity and software",
+      description: "Storage pressure and the supporting package inventory.",
+      blocks: keep(
+        disk.length > 0 && { id: "host-disk", title: "Disk usage", count: disk.length, node: <DiskSection rows={disk} /> },
+        packages.length > 0 && {
+          id: "host-packages",
+          title: "Installed packages",
+          count: packages.length,
+          defaultOpen: false,
+          summary: "context only, not vulnerability or signature verification",
+          node: (
+            <ScrollableList
+              title="Installed packages"
+              items={packages.map((name) => {
+                const detail = packageDetails.get(name);
+                return detail
+                  ? `${name} · ${detail.version}${detail.installed_at ? ` · installed ${new Date(detail.installed_at).toLocaleDateString()}` : ""}`
+                  : name;
+              })}
+            />
+          ),
+        },
+      ),
+    },
+    {
+      id: "agent-delivery",
+      title: "Agent and delivery",
+      description: "Agent identity, collection health and report delivery diagnostics.",
+      blocks: [
+        { id: "host-identity", title: "Host identity", node: <HostIdentityPanel host={host} /> },
+        { id: "host-collectors", title: "Collector health", node: <HostCollectorPanel host={host} /> },
+        { id: "host-delivery", title: "Report delivery", node: <HostDeliveryPanel delivery={delivery} /> },
+      ],
+    },
+  ];
+
+  const visible = groups.filter((group) => group.blocks.length > 0);
+  const nav: NavGroup[] = [
+    { id: "overview", label: "Overview" },
+    ...visible.map((group) => ({
+      id: group.id,
+      label: group.title,
+      items: group.blocks.map((block) => ({ id: block.id, label: block.title, count: block.count })),
+    })),
+  ];
+
+  return (
+    <DetailLayout nav={nav}>
+      <Section id="overview" title="Overview" description="Health, what needs attention, and resource trends.">
+        <AutoGrid min="26rem" gap="lg">
+          <StatusSection
+            host={host}
+            ageSeconds={age_seconds}
+            stale={stale}
+            healthState={health_state}
+            healthReason={health_reason}
+          />
+          <HostActivitySection
+            alerts={alerts}
+            authEvents={auth_events}
+            stateChanges={state_changes}
+            fimChanges={fim_recent_changes}
+          />
+        </AutoGrid>
+        <HostMetricsChart instanceId={host.instance_id} />
+      </Section>
+
+      {visible.map((group) => (
+        <Section key={group.id} id={group.id} title={group.title} description={group.description}>
+          {group.blocks.map((block) => (
+            <Subsection
+              key={block.id}
+              id={block.id}
+              title={block.title}
+              count={block.count}
+              summary={block.summary}
+              defaultOpen={block.defaultOpen ?? true}
+            >
+              {block.node}
+            </Subsection>
+          ))}
+        </Section>
+      ))}
+
+      <p className="max-w-3xl text-xs leading-relaxed text-fg-subtle">
+        BlackWatch shows the telemetry currently collected from this host. It does not provide full outbound
+        network-flow history, process ancestry, memory capture, or executable signature verification.
+      </p>
+    </DetailLayout>
   );
 }
 
@@ -197,90 +281,50 @@ export default async function HostDetailPage({
 // status
 // =========================================================================
 
-function HostEvidenceSection({
-  id,
-  title,
-  description,
-  children,
-}: {
-  id: string;
-  title: string;
-  description: string;
-  children: ReactNode;
-}) {
-  const sections = Children.toArray(children).filter(Boolean);
+function HostIdentityPanel({ host }: { host: HostRecord }) {
+  const extra = host.extra ?? {};
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-16 border-t border-line pt-6">
-      <div className="mb-5 max-w-3xl">
-        <h2 id={`${id}-title`} className="font-display text-lg font-semibold text-fg">{title}</h2>
-        <p className="mt-1 text-sm text-fg-muted">{description}</p>
-      </div>
-      {sections.length > 0 ? (
-        <div className="space-y-5">{sections}</div>
-      ) : (
-        <DataPanel className="px-4 py-5 text-sm text-fg-muted">No records have been reported for this category.</DataPanel>
-      )}
-    </section>
+  <DataPanel className="px-4 py-2">
+    <dl className="divide-y divide-line-soft">
+      <KeyValueRow label="Display name"><HostDisplayNameEditor instanceId={host.instance_id} initial={host.display_name ?? null} /></KeyValueRow>
+      <KeyValueRow label="Hostname"><span className="font-mono text-xs text-fg">{host.hostname ?? "—"}</span></KeyValueRow>
+      <KeyValueRow label="Instance ID"><span className="break-all font-mono text-xs text-fg-muted">{host.instance_id}</span></KeyValueRow>
+      <KeyValueRow label="Account / region"><span className="font-mono text-xs text-fg-muted">{[host.account, host.region].filter(Boolean).join(" · ") || "—"}</span></KeyValueRow>
+      {extra.uptime_seconds != null && <KeyValueRow label="Uptime"><span className="font-mono text-xs text-fg-muted">{humanAge(extra.uptime_seconds)}</span></KeyValueRow>}
+      {extra.agent_version && <KeyValueRow label="Agent version"><span className="font-mono text-xs text-fg-muted">{extra.agent_version}</span></KeyValueRow>}
+      {extra.tick_duration_ms != null && <KeyValueRow label="Last collection tick"><span className="font-mono text-xs text-fg-muted">{extra.tick_duration_ms}ms</span></KeyValueRow>}
+      {extra.tags && Object.keys(extra.tags).length > 0 && <KeyValueRow label="Tags"><div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs">{Object.entries(extra.tags).map(([key, value]) => <code key={key} className="text-fg-muted">{key}={value}</code>)}</div></KeyValueRow>}
+      {extra.rpm_db_corrupted && <KeyValueRow label="Package DB"><div className="text-xs text-sev-critical">RPM database reports {extra.rpm_db_corrupted.lock_count} lock file(s). Investigate package database health on the host.</div></KeyValueRow>}
+    </dl>
+  </DataPanel>
   );
 }
 
-function HostAgentDetailsSection({
-  host,
-  delivery,
-}: {
-  host: HostRecord;
-  delivery?: AgentDeliveryStatus;
-}) {
+function HostCollectorPanel({ host }: { host: HostRecord }) {
   const extra = host.extra ?? {};
   const statuses = extra.collector_status ?? {};
   const errors = extra.collector_errors ?? {};
   const stalled = extra.stalled_collectors ?? [];
-
   return (
-    <section id="agent-delivery" aria-labelledby="agent-delivery-title" className="scroll-mt-16 border-t border-line pt-6">
-      <div className="mb-5 max-w-3xl">
-        <h2 id="agent-delivery-title" className="font-display text-lg font-semibold text-fg">Agent and delivery</h2>
-        <p className="mt-1 text-sm text-fg-muted">Agent identity, collection health, and report delivery diagnostics.</p>
-      </div>
-      <div className="grid min-w-0 gap-5 xl:grid-cols-2">
-        <div className="space-y-2">
-          <SectionLabel>host identity</SectionLabel>
-          <DataPanel className="px-4 py-2">
-            <dl className="divide-y divide-line-soft">
-              <KeyValueRow label="Display name"><HostDisplayNameEditor instanceId={host.instance_id} initial={host.display_name ?? null} /></KeyValueRow>
-              <KeyValueRow label="Hostname"><span className="font-mono text-xs text-fg">{host.hostname ?? "—"}</span></KeyValueRow>
-              <KeyValueRow label="Instance ID"><span className="break-all font-mono text-xs text-fg-muted">{host.instance_id}</span></KeyValueRow>
-              <KeyValueRow label="Account / region"><span className="font-mono text-xs text-fg-muted">{[host.account, host.region].filter(Boolean).join(" · ") || "—"}</span></KeyValueRow>
-              {extra.uptime_seconds != null && <KeyValueRow label="Uptime"><span className="font-mono text-xs text-fg-muted">{humanAge(extra.uptime_seconds)}</span></KeyValueRow>}
-              {extra.agent_version && <KeyValueRow label="Agent version"><span className="font-mono text-xs text-fg-muted">{extra.agent_version}</span></KeyValueRow>}
-              {extra.tick_duration_ms != null && <KeyValueRow label="Last collection tick"><span className="font-mono text-xs text-fg-muted">{extra.tick_duration_ms}ms</span></KeyValueRow>}
-              {extra.tags && Object.keys(extra.tags).length > 0 && <KeyValueRow label="Tags"><div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs">{Object.entries(extra.tags).map(([key, value]) => <code key={key} className="text-fg-muted">{key}={value}</code>)}</div></KeyValueRow>}
-              {extra.rpm_db_corrupted && <KeyValueRow label="Package DB"><div className="text-xs text-sev-critical">RPM database reports {extra.rpm_db_corrupted.lock_count} lock file(s). Investigate package database health on the host.</div></KeyValueRow>}
-            </dl>
-          </DataPanel>
-        </div>
-        <div className="space-y-2">
-          <SectionLabel>collector health</SectionLabel>
-          <DataPanel className="px-4 py-3">
-            <CollectorHealthSummary statuses={statuses} errors={errors} stalled={stalled} />
-          </DataPanel>
-        </div>
-      </div>
-      <div className="mt-5 space-y-2">
-        <SectionLabel>report delivery</SectionLabel>
-        <DataPanel className="px-4 py-2">
-          {delivery ? (
-            <dl className="divide-y divide-line-soft">
-              <KeyValueRow label="Transport / rollout"><span className="font-mono text-xs text-fg-muted">{delivery.transport ?? "unknown"}{delivery.rollout ? ` · ${delivery.rollout}` : ""}</span></KeyValueRow>
-              <KeyValueRow label="Last sequence / reported gaps"><span className="font-mono text-xs text-fg-muted">{delivery.last_sequence ?? "—"}{delivery.sequence_gaps > 0 ? ` · ${delivery.sequence_gaps} reported gap(s)` : ""}{delivery.sequence_tracking_overflow ? " · tracking limit exceeded" : ""}</span></KeyValueRow>
-              <KeyValueRow label="Queue / processing delay"><span className="font-mono text-xs text-fg-muted">queue {delivery.queue_delay_seconds == null ? "—" : `${Math.round(delivery.queue_delay_seconds)}s`} · processing {delivery.processing_delay_seconds == null ? "—" : `${Math.round(delivery.processing_delay_seconds)}s`}</span></KeyValueRow>
-              <KeyValueRow label="Last accepted / processed"><span className="font-mono text-xs text-fg-muted">{delivery.last_accepted_at ? new Date(delivery.last_accepted_at).toLocaleString() : "—"} · {delivery.last_processed_at ? new Date(delivery.last_processed_at).toLocaleString() : "—"}</span></KeyValueRow>
-              {delivery.last_error && <KeyValueRow label="Delivery error"><span className="break-words text-xs text-sev-critical">{delivery.last_error}</span></KeyValueRow>}
-            </dl>
-          ) : <p className="text-sm text-fg-muted">No delivery diagnostics reported.</p>}
-        </DataPanel>
-      </div>
-    </section>
+  <DataPanel className="px-4 py-3">
+    <CollectorHealthSummary statuses={statuses} errors={errors} stalled={stalled} />
+  </DataPanel>
+  );
+}
+
+function HostDeliveryPanel({ delivery }: { delivery?: AgentDeliveryStatus }) {
+  return (
+    <DataPanel className="px-4 py-2">
+      {delivery ? (
+        <dl className="divide-y divide-line-soft">
+          <KeyValueRow label="Transport / rollout"><span className="font-mono text-xs text-fg-muted">{delivery.transport ?? "unknown"}{delivery.rollout ? ` · ${delivery.rollout}` : ""}</span></KeyValueRow>
+          <KeyValueRow label="Last sequence / reported gaps"><span className="font-mono text-xs text-fg-muted">{delivery.last_sequence ?? "—"}{delivery.sequence_gaps > 0 ? ` · ${delivery.sequence_gaps} reported gap(s)` : ""}{delivery.sequence_tracking_overflow ? " · tracking limit exceeded" : ""}</span></KeyValueRow>
+          <KeyValueRow label="Queue / processing delay"><span className="font-mono text-xs text-fg-muted">queue {delivery.queue_delay_seconds == null ? "—" : `${Math.round(delivery.queue_delay_seconds)}s`} · processing {delivery.processing_delay_seconds == null ? "—" : `${Math.round(delivery.processing_delay_seconds)}s`}</span></KeyValueRow>
+          <KeyValueRow label="Last accepted / processed"><span className="font-mono text-xs text-fg-muted">{delivery.last_accepted_at ? new Date(delivery.last_accepted_at).toLocaleString() : "—"} · {delivery.last_processed_at ? new Date(delivery.last_processed_at).toLocaleString() : "—"}</span></KeyValueRow>
+          {delivery.last_error && <KeyValueRow label="Delivery error"><span className="break-words text-xs text-sev-critical">{delivery.last_error}</span></KeyValueRow>}
+        </dl>
+      ) : <p className="text-sm text-fg-muted">No delivery diagnostics reported.</p>}
+    </DataPanel>
   );
 }
 
@@ -311,7 +355,7 @@ function StatusSection({
 
   return (
     <section className="space-y-2">
-      <SectionLabel>status</SectionLabel>
+      <SectionLabel as="h3">status</SectionLabel>
       <DataPanel className="space-y-1 px-4 py-3">
         <dl className="divide-y divide-line-soft">
           <KeyValueRow label="Agent">
@@ -463,7 +507,7 @@ function HostActivitySection({
     <section className="min-w-0 space-y-5" aria-labelledby="host-activity-title">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h2 id="host-activity-title" className="font-display text-base font-semibold text-fg">Needs attention</h2>
+          <h3 id="host-activity-title" className="text-sm font-semibold text-fg">Needs attention</h3>
           <p className="mt-1 text-xs text-fg-muted">High and critical alerts, followed by the latest host activity.</p>
         </div>
         <Link href="/events" className="text-xs text-signal hover:underline">All events</Link>
@@ -491,7 +535,7 @@ function HostActivitySection({
 
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold text-fg">Recent activity</h3>
+          <h4 className="text-sm font-medium text-fg">Recent activity</h4>
           <p className="mt-1 text-xs text-fg-muted">Access, privilege, integrity, and host changes · newest first.</p>
         </div>
         <span className="text-[11px] text-fg-subtle">{activity.length} entries</span>
@@ -594,38 +638,24 @@ function CollectorHealthSummary({
 
 function SessionsSection({ sessions }: { sessions: HostSession[] }) {
   return (
-    <section className="mt-6 space-y-2">
-      <div className="flex items-baseline justify-between">
-        <SectionLabel>currently logged in</SectionLabel>
-        <span className="text-[11px] text-fg-subtle">
-          {sessions.length} session{sessions.length === 1 ? "" : "s"}
-        </span>
-      </div>
-      <DataPanel className="overflow-hidden">
+    <DataPanel className="overflow-hidden">
         <HostSessionsTable sessions={sessions} />
       </DataPanel>
-    </section>
-  );
-}
-
-// =========================================================================
-// alerts
-// =========================================================================
-
-function AlertsSection({ alerts }: { alerts: EventEnvelope[] }) {
-  return (
-    <section className="mt-6 space-y-2">
-      <SectionLabel>recent notable activity · high / critical</SectionLabel>
-      <DataPanel className="overflow-hidden">
-        <EventsDataTable events={alerts.map(toEventTableRow)} variant="compact" tableId="host-alerts-v2" ariaLabel="Recent notable host activity" />
-      </DataPanel>
-    </section>
   );
 }
 
 // =========================================================================
 // File Integrity Monitoring (FIM)  — Part 1: periodic baseline
 // =========================================================================
+
+/** One-line description of how FIM is collecting on this host. */
+function fimModeSummary(coverage: FimCoverage | null): string {
+  const realtime = coverage?.inotify_active ?? false;
+  const whodata = coverage?.auditd_active ?? false;
+  if (realtime && whodata) return "real-time · inotify + auditd whodata + 6h baseline scan";
+  if (realtime) return "real-time · inotify + 6h baseline scan (whodata off)";
+  return "periodic baseline · 6h scan (inotify inactive)";
+}
 
 function FimSection({
   coverage,
@@ -634,24 +664,8 @@ function FimSection({
   coverage: FimCoverage | null;
   changes: FimChange[];
 }) {
-  const realtime = coverage?.inotify_active ?? false;
-  const whodata = coverage?.auditd_active ?? false;
-  let subtitle: string;
-  if (realtime && whodata) {
-    subtitle = "real-time · inotify + auditd whodata + 6h baseline scan";
-  } else if (realtime) {
-    subtitle = "real-time · inotify + 6h baseline scan (whodata off)";
-  } else {
-    subtitle = "periodic baseline · 6h scan (inotify inactive)";
-  }
-
   return (
-    <section className="mt-6 space-y-2">
-      <div className="flex items-baseline justify-between">
-        <SectionLabel>file integrity</SectionLabel>
-        <span className="text-[11px] text-fg-subtle">{subtitle}</span>
-      </div>
-
+    <div className="flex flex-col gap-3">
       <FimCoverageCard coverage={coverage} />
 
       <DataPanel className="overflow-hidden">
@@ -668,7 +682,7 @@ function FimSection({
       {coverage?.configured_paths && (
         <FimWatchedPaths paths={coverage.configured_paths} />
       )}
-    </section>
+    </div>
   );
 }
 
@@ -837,21 +851,13 @@ function DiskSection({
     ],
   }));
   return (
-    <section className="mt-6 space-y-2">
-      <div className="flex items-baseline justify-between">
-        <SectionLabel>disk usage</SectionLabel>
-        <span className="text-[11px] text-fg-subtle">
-          {rows.length} mount{rows.length === 1 ? "" : "s"}
-        </span>
-      </div>
-      <DataPanel scrollX>
+    <DataPanel scrollX>
         <HostInventoryTable title="disk mounts" columns={[
           { label: "Mount", mono: true }, { label: "Filesystem", mono: true },
           { label: "Used" }, { label: "Inodes" }, { label: "Used / total", mono: true },
           { label: "Sampled", mono: true },
         ]} rows={inventoryRows} />
       </DataPanel>
-    </section>
   );
 }
 
@@ -865,18 +871,12 @@ function PortsSection({
     cells: [port.proto, port.address, String(port.port), port.process ?? "—"],
   }));
   return (
-    <section className="mt-6 space-y-2">
-      <div className="flex items-baseline justify-between">
-        <SectionLabel>listening ports</SectionLabel>
-        <span className="text-[11px] text-fg-subtle">{rows.length}</span>
-      </div>
-      <DataPanel scrollX>
+    <DataPanel scrollX>
         <HostInventoryTable title="listening ports" columns={[
           { label: "Protocol", mono: true }, { label: "Address", mono: true },
           { label: "Port", mono: true }, { label: "Process", mono: true },
         ]} rows={inventoryRows} />
       </DataPanel>
-    </section>
   );
 }
 
@@ -890,17 +890,11 @@ function ProcessesSection({
     cells: [process.user, String(process.pid), process.comm],
   }));
   return (
-    <section className="mt-6 space-y-2">
-      <div className="flex items-baseline justify-between">
-        <SectionLabel>running processes</SectionLabel>
-        <span className="text-[11px] text-fg-subtle">{rows.length}</span>
-      </div>
-      <DataPanel scrollX>
+    <DataPanel scrollX>
         <HostInventoryTable title="running processes" columns={[
           { label: "User" }, { label: "PID", mono: true }, { label: "Command", mono: true },
         ]} rows={inventoryRows} />
       </DataPanel>
-    </section>
   );
 }
 
@@ -920,18 +914,12 @@ function UsersSection({
     ],
   }));
   return (
-    <section className="mt-6 space-y-2">
-      <div className="flex items-baseline justify-between">
-        <SectionLabel>users</SectionLabel>
-        <span className="text-[11px] text-fg-subtle">{rows.length}</span>
-      </div>
-      <DataPanel scrollX>
+    <DataPanel scrollX>
         <HostInventoryTable title="users and access" columns={[
           { label: "Name" }, { label: "UID", mono: true }, { label: "Class and access" },
           { label: "Groups", mono: true }, { label: "Shell", mono: true },
         ]} rows={inventoryRows} />
       </DataPanel>
-    </section>
   );
 }
 
@@ -945,17 +933,11 @@ function AuthorizedKeysSection({
     cells: [key.user, key.fingerprint, key.preview],
   }));
   return (
-    <section className="mt-6 space-y-2">
-      <div className="flex items-baseline justify-between">
-        <SectionLabel>authorized SSH keys</SectionLabel>
-        <span className="text-[11px] text-fg-subtle">{rows.length}</span>
-      </div>
-      <DataPanel scrollX>
+    <DataPanel scrollX>
         <HostInventoryTable title="authorized SSH keys" columns={[
           { label: "User" }, { label: "Fingerprint", mono: true }, { label: "Key preview", mono: true },
         ]} rows={inventoryRows} />
       </DataPanel>
-    </section>
   );
 }
 
@@ -976,17 +958,11 @@ function FileHashSection({
     cells: [path, hash],
   }));
   return (
-    <section className="mt-6 space-y-2">
-      <div className="flex items-baseline justify-between">
-        <SectionLabel>{title}</SectionLabel>
-        <span className="text-[11px] text-fg-subtle">{rows.length}</span>
-      </div>
-      <DataPanel scrollX>
+    <DataPanel scrollX>
         <HostInventoryTable title={title} columns={[
           { label: "Path", mono: true }, { label: "SHA-256", mono: true },
         ]} rows={inventoryRows} />
       </DataPanel>
-    </section>
   );
 }
 
@@ -1002,15 +978,9 @@ function ScrollableList({
     cells: [item],
   }));
   return (
-    <section className="mt-6 space-y-2">
-      <div className="flex items-baseline justify-between">
-        <SectionLabel>{title}</SectionLabel>
-        <span className="text-[11px] text-fg-subtle">{items.length}</span>
-      </div>
-      <DataPanel scrollX>
+    <DataPanel scrollX>
         <HostInventoryTable title={title} columns={[{ label: "Value", mono: true }]} rows={inventoryRows} />
       </DataPanel>
-    </section>
   );
 }
 
@@ -1026,9 +996,7 @@ function EventsSection({
   events: EventEnvelope[];
 }) {
   return (
-    <section className="mt-6 space-y-2">
-      <SectionLabel>{title}</SectionLabel>
-      <DataPanel className="overflow-hidden">
+    <DataPanel className="overflow-hidden">
         <EventsDataTable
           events={events.map(toEventTableRow)}
           variant="compact"
@@ -1036,7 +1004,6 @@ function EventsSection({
           ariaLabel={title}
         />
       </DataPanel>
-    </section>
   );
 }
 

@@ -23,6 +23,8 @@ import { TimestampCell } from "@/components/domain/TimestampCell";
 import { IpCell } from "@/components/domain/IpCell";
 import { EmptyState } from "@/components/ui/EmptyState";
 
+export const metadata = { title: "API Gateway" };
+
 export default async function ApiGwPage() {
   const [summary, apis, sources, alerts, failures] = await Promise.all([
     fetchApiGwSummary(),

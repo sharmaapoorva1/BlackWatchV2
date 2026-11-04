@@ -284,7 +284,7 @@ export function TemplateEditor({
                 type="button"
                 onClick={() => setValue(p.template)}
                 title={p.blurb}
-                className="border border-line bg-surface-1 px-2 py-1 text-xs text-fg-muted transition-colors hover:border-signal hover:bg-signal/10 hover:text-fg"
+                className="rounded-md border border-line bg-surface-1 px-2 py-1 text-xs text-fg-muted transition-colors hover:border-signal hover:bg-signal/10 hover:text-fg"
               >
                 {p.name}
               </Button>
@@ -343,7 +343,7 @@ export function TemplateEditor({
               }}
               onClick={() => insertVariable(v.path)}
               title={`Example value: ${v.example}`}
-              className="inline-flex cursor-grab items-center gap-1.5 border border-line-soft bg-surface-1 px-2 py-1 text-xs text-fg-muted transition-colors hover:border-line hover:text-fg active:cursor-grabbing"
+              className="inline-flex cursor-grab items-center gap-1.5 rounded-md border border-line-soft bg-surface-1 px-2 py-1 text-xs text-fg-muted transition-colors hover:border-line hover:text-fg active:cursor-grabbing"
             >
               <span>{v.name}</span>
               <code className="font-mono text-[10px] text-fg-subtle">
@@ -358,7 +358,7 @@ export function TemplateEditor({
           (e.g. perf-alert where the template renders server-side and
           the parent form shows its own summary preview). */}
       {!hideLivePreview && (
-      <div className="border border-line-soft bg-surface-0">
+      <div className="rounded-md border border-line-soft bg-surface-0">
         <div className="space-y-1.5 border-b border-line-soft px-3 py-2">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">

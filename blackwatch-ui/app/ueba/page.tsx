@@ -20,6 +20,8 @@ type SearchParams = {
   dimension?: string;
 };
 
+export const metadata = { title: "UEBA" };
+
 export default async function UebaPage({
   searchParams,
 }: {

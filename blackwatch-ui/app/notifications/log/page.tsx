@@ -20,6 +20,8 @@ type SearchParams = {
   rule?: string;
 };
 
+export const metadata = { title: "Notification log" };
+
 export default async function NotificationLogPage({
   searchParams,
 }: {

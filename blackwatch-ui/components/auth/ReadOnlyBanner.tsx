@@ -12,7 +12,7 @@ export function ReadOnlyBanner({ message }: { message?: string }) {
   return (
     <div
       role="status"
-      className="mb-3 flex items-center gap-2 border border-line-soft bg-surface-1 px-3 py-1.5 text-xs text-fg-muted"
+      className="mb-3 flex items-center gap-2 rounded-md border border-line-soft bg-surface-1 px-3 py-1.5 text-xs text-fg-muted"
     >
       <Lock size={12} className="text-fg-subtle" />
       <span>

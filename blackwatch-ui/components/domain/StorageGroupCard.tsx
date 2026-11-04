@@ -27,7 +27,7 @@ export function StorageGroupCard({
     <Wrapper
       {...(wrapperProps as { href: string })}
       className={clsx(
-        "block border border-line-soft bg-surface-1 px-4 py-3 transition-colors",
+        "block rounded-md border border-line-soft bg-surface-1 px-4 py-3 transition-colors",
         href && "hover:border-line hover:bg-surface-2",
       )}
     >

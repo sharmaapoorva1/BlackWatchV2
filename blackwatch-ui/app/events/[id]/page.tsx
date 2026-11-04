@@ -9,6 +9,8 @@ import { SeverityBadge } from "@/components/domain/SeverityBadge";
 import { IntelBadge, type IntelData } from "@/components/domain/IntelBadge";
 import { CopyButton } from "@/components/ui/CopyButton";
 
+export const metadata = { title: "Event" };
+
 export default async function EventDetailPage({
   params,
 }: {

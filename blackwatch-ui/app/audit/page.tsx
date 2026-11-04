@@ -26,6 +26,8 @@ async function loadAudit(sp: SearchParams): Promise<AuditEntry[]> {
   return j.rows ?? [];
 }
 
+export const metadata = { title: "Audit log" };
+
 export default async function AuditPage({
   searchParams,
 }: {

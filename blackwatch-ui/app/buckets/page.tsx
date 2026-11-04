@@ -14,6 +14,8 @@ import { TimestampCell } from "@/components/domain/TimestampCell";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { EmptyState } from "@/components/ui/EmptyState";
 
+export const metadata = { title: "S3 buckets" };
+
 export default async function BucketsPage() {
   const { count, buckets, counts } = await fetchBuckets();
 
@@ -102,7 +104,7 @@ function CountCell({
           ? "text-sev-medium"
           : "text-fg";
   return (
-    <div className="border border-line-soft bg-surface-1 px-4 py-3">
+    <div className="rounded-md border border-line-soft bg-surface-1 px-4 py-3">
       <div className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
         {label}
       </div>

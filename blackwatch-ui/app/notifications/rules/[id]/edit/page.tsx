@@ -12,6 +12,8 @@ import { BackLink } from "@/components/ui/BackLink";
 //
 // Prevents the wizard from being stuck on step 2 ("pick severities") for
 // custom rules that don't have any severity clause.
+export const metadata = { title: "Edit notification rule" };
+
 export default async function EditAlertPage({
   params,
 }: {

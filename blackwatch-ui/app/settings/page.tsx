@@ -15,6 +15,8 @@ import { changePasswordAction } from "./actions";
 
 type SearchParams = { msg?: string };
 
+export const metadata = { title: "Settings" };
+
 export default async function SettingsPage({
   searchParams,
 }: {

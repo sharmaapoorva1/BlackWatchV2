@@ -577,3 +577,48 @@ actions). Rules:
   heading and announces "Step N of M". Step headings use `WizardStepHeader`; the
   option groups under them should be a `role="radiogroup"` or `role="group"`
   labelled by that heading's `id`. Finish with a `PendingButton`.
+
+### Page chrome conventions
+
+- Every `page.tsx` exports `metadata = { title: "…" }` (or `generateMetadata` when
+  the title includes the route id); the root layout renders it as
+  "Page · BlackWatch", so tabs, history and screen readers name the page.
+  Redirect-only pages are exempt. `lib/polish.test.ts` enforces this.
+- Bordered, filled panels (`border border-line bg-surface…`) are `rounded-md`
+  (chips and tags use `rounded`). The right-hand drawer is the one exception:
+  it sits flush against the screen edge, so it is `rounded-none`.
+- `app/not-found.tsx` handles unknown URLs. `EmptyState` takes optional `icon`
+  and `action` props: an empty panel should say what is empty and offer the
+  next step, never end on a dead end.
+
+### Page hierarchy and detail layout
+
+Three heading levels, always in this order (the host detail page is the
+reference implementation):
+
+| Level | Component | Size | Use |
+|---|---|---|---|
+| h1 | `PageHeader` | 24px bold | The page: one per page |
+| h2 | `Section` / `PageSection` | 18px semibold | A topic, anchored by `id` |
+| h3 | `Subsection` / `SectionLabel as="h3"` | 14px semibold | A block or panel inside a topic |
+| (none) | labels, captions | 12px muted | Never a heading |
+
+Long pages use `components/layout/DetailLayout`:
+
+- **Sidebar contents** (`SectionNav`): sections with their blocks and counts,
+  highlighted as you scroll; clicking scrolls there and opens the block if it is
+  collapsed. Sticky beside the content on wide screens; a plain "On this page"
+  disclosure above the content on narrow ones. Nothing floats over the page.
+- **`Section`** owns the heading and the vertical rhythm (`Stack`, 16px between
+  blocks, 40px between sections). Panels never add their own top margin.
+- **`Subsection`** is the collapsible block. Short lists start open; long
+  inventories (processes, packages, units, modules) start collapsed. Content
+  stays mounted, so tables keep sort, page and column choices.
+- **`AutoGrid`** arranges panels without breakpoints: as many columns of at
+  least `min` width as fit, sharing the leftover space.
+- Build the page as data: a list of `{ id, title, count, defaultOpen, node }`
+  blocks per section. The sidebar and the page render from the same list, so
+  they cannot disagree, and empty blocks simply do not appear.
+- No sticky bars, and no loose text links standing in for buttons: if it acts,
+  it is a `Button`; if it navigates the page, it belongs in the sidebar.
+- `lib/layout-hierarchy.test.ts` guards these rules.

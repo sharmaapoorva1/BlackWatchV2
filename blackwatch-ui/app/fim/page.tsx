@@ -14,6 +14,8 @@ import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { TimestampCell } from "@/components/domain/TimestampCell";
 import { EmptyState } from "@/components/ui/EmptyState";
 
+export const metadata = { title: "File integrity" };
+
 export default async function FimPage() {
   const { count, hosts, recent_changes } = await fetchFimView();
 

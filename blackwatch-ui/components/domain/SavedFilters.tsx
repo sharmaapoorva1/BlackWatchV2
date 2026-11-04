@@ -127,7 +127,7 @@ export function SavedFilters({ storageKey }: { storageKey: string }) {
             onKeyDown={(event) => event.key === "Escape" && setNaming(false)}
             maxLength={40}
             placeholder="Name this filter"
-            className="min-h-11 w-44 border border-line bg-surface-2 px-2 text-sm text-fg placeholder:text-fg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70 sm:min-h-7"
+            className="min-h-11 w-44 rounded-md border border-line bg-surface-2 px-2 text-sm text-fg placeholder:text-fg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70 sm:min-h-7"
           />
           <button
             type="submit"

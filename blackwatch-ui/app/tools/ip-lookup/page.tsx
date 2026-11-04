@@ -50,6 +50,8 @@ async function lookup(ip: string): Promise<IpApiResponse | null> {
 
 type SearchParams = { ip?: string };
 
+export const metadata = { title: "IP lookup" };
+
 export default async function IpLookupPage({
   searchParams,
 }: {

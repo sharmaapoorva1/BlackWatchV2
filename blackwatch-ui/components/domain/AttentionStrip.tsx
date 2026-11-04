@@ -23,7 +23,7 @@ const LEVEL_LABEL: Record<AttentionItem["level"], string> = {
 export function AttentionStrip({ items }: { items: AttentionItem[] }) {
   if (items.length === 0) {
     return (
-      <section aria-label="Needs attention" className="flex items-center gap-3 border border-line-soft bg-surface-1 px-4 py-3">
+      <section aria-label="Needs attention" className="flex items-center gap-3 rounded-md border border-line-soft bg-surface-1 px-4 py-3">
         <CheckCircle2 size={16} aria-hidden="true" className="shrink-0 text-sev-resolved" />
         <p className="text-sm text-fg">Nothing needs attention. Hosts, connectors and ingestion are healthy, and no high-severity findings are open.</p>
       </section>
@@ -31,7 +31,7 @@ export function AttentionStrip({ items }: { items: AttentionItem[] }) {
   }
 
   return (
-    <section aria-labelledby="attention-title" className="border border-line bg-surface-1">
+    <section aria-labelledby="attention-title" className="rounded-md border border-line bg-surface-1">
       <div className="flex items-baseline justify-between border-b border-line-soft px-4 py-2.5">
         <h2 id="attention-title" className="font-display text-base font-semibold text-fg">
           Needs attention

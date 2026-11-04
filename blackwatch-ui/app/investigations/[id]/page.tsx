@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { fetchInvestigation } from "@/lib/api";
 import { InvestigationNotebook } from "../InvestigationNotebook";
 
+export const metadata = { title: "Investigation" };
+
 export default async function InvestigationDetailPage({
   params,
 }: {

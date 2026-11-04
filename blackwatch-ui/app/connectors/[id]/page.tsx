@@ -15,6 +15,8 @@ const KNOWN: ConnectorType[] = [
   "cert_probe",
 ];
 
+export const metadata = { title: "Edit connector" };
+
 export default async function EditConnectorPage({
   params,
 }: {

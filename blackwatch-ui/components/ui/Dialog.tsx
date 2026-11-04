@@ -25,14 +25,14 @@ export const DialogOverlay = React.forwardRef<
 DialogOverlay.displayName = "DialogOverlay";
 
 const dialogContentVariants = cva(
-  "fixed z-[61] border border-line bg-surface-1 shadow-2xl focus:outline-none",
+  "fixed z-[61] rounded-md border border-line bg-surface-1 shadow-2xl focus:outline-none",
   {
     variants: {
       placement: {
         center:
           "left-1/2 top-1/2 max-h-[90vh] w-[min(900px,95vw)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-md",
         top: "left-1/2 top-[12vh] w-[min(36rem,calc(100vw-1.5rem))] -translate-x-1/2 rounded-md",
-        right: "inset-y-0 right-0 flex w-[min(30rem,100vw)] flex-col border-y-0 border-r-0",
+        right: "inset-y-0 right-0 flex w-[min(30rem,100vw)] flex-col rounded-none border-y-0 border-r-0",
       },
     },
     defaultVariants: { placement: "center" },

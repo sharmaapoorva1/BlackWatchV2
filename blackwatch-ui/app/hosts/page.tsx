@@ -15,6 +15,8 @@ import { HostActivityDataTable } from "@/components/domain/HostActivityDataTable
 import { toHostActivityRow } from "@/lib/host-activity";
 import { SeverityBadge, severityBorderBg } from "@/components/domain/SeverityBadge";
 
+export const metadata = { title: "Hosts" };
+
 export default async function HostsPage() {
   const [{ count, servers, auth, changes }, ingress] = await Promise.all([
     fetchHosts(),

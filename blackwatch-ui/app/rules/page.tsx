@@ -9,6 +9,8 @@ import { RulesTable } from "./RulesTable";
 
 type SearchParams = { msg?: string };
 
+export const metadata = { title: "Rules" };
+
 export default async function RulesPage({
   searchParams,
 }: {

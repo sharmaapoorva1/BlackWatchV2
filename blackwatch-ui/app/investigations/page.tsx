@@ -7,6 +7,8 @@ import { InvestigationStartForm } from "./InvestigationStartForm";
 
 type SearchParams = { ip?: string };
 
+export const metadata = { title: "Investigations" };
+
 export default async function InvestigationsPage({
   searchParams,
 }: {

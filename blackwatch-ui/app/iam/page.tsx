@@ -18,6 +18,8 @@ import {
 import { IpCell } from "@/components/domain/IpCell";
 import { EmptyState } from "@/components/ui/EmptyState";
 
+export const metadata = { title: "IAM" };
+
 export default async function IamPage() {
   const data = await fetchIam();
 
@@ -195,7 +197,7 @@ function CounterCell({
           ? "bg-sev-resolved"
           : "bg-fg-subtle";
   return (
-    <div className="border border-line-soft bg-surface-1 px-3 py-2.5">
+    <div className="rounded-md border border-line-soft bg-surface-1 px-3 py-2.5">
       <div className="truncate text-[11px] uppercase tracking-[0.08em] text-fg-subtle" title={label}>
         {label}
       </div>

@@ -25,7 +25,7 @@ export function PageSection({
     <section aria-labelledby={headingId} className={`${flush ? "" : "mt-6"} space-y-3 ${className ?? ""}`}>
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
         <div className="min-w-0">
-          <h2 id={headingId} className="font-display text-base font-semibold text-fg">
+          <h2 id={headingId} className="font-display text-lg font-semibold text-fg">
             {title}
           </h2>
           {description && <p className="mt-0.5 text-sm text-fg-muted">{description}</p>}

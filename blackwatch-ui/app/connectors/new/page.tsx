@@ -53,6 +53,8 @@ const CONNECTOR_OPTIONS: Array<{
   },
 ];
 
+export const metadata = { title: "Add connector" };
+
 export default async function NewConnectorPage({
   searchParams,
 }: {
@@ -96,7 +98,7 @@ function TypePicker() {
           key={opt.type}
           href={`/connectors/new?type=${opt.type}`}
           className={clsx(
-            "group flex flex-col gap-2 border border-line-soft bg-surface-1 px-4 py-4",
+            "group flex flex-col gap-2 rounded-md border border-line-soft bg-surface-1 px-4 py-4",
             "transition-colors hover:border-line hover:bg-surface-2",
           )}
         >

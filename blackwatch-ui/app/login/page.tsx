@@ -8,6 +8,8 @@ import { loginAction } from "./actions";
 
 type SearchParams = { next?: string; err?: string };
 
+export const metadata = { title: "Sign in" };
+
 export default async function LoginPage({
   searchParams,
 }: {

@@ -54,7 +54,7 @@ export function ProfilePreview({
   }
 
   return (
-    <div className="border border-line-soft bg-surface-1">
+    <div className="rounded-md border border-line-soft bg-surface-1">
       <div className="flex items-center justify-between border-b border-line-soft px-4 py-3">
         <div>
           <p className="text-sm text-fg">Live example</p>

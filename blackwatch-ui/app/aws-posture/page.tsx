@@ -16,6 +16,8 @@ import {
 import { SeverityCounterGrid } from "@/components/domain/SeverityCounterGrid";
 import { EmptyState as SharedEmptyState } from "@/components/ui/EmptyState";
 
+export const metadata = { title: "AWS posture" };
+
 export default async function AwsPosturePage() {
   const { count, findings, have_connector } = await fetchPostureFindings();
 

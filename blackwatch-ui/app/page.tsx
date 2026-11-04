@@ -18,6 +18,8 @@ import {
   severityBorderBg,
 } from "@/components/domain/SeverityBadge";
 
+export const metadata = { title: "Overview" };
+
 export default async function Home() {
   // Overview is the one required call. Connector and ingest health only enrich
   // the attention list, so a failure there must not take the page down.
@@ -169,7 +171,7 @@ function Kpi({
   return (
     <Link
       href={href}
-      className="group block border border-line-soft bg-surface-1 px-4 py-3 transition-colors hover:bg-surface-2"
+      className="group block rounded-md border border-line-soft bg-surface-1 px-4 py-3 transition-colors hover:bg-surface-2"
     >
       <div className="text-xs text-fg-muted">{label}</div>
       <div className="mt-2 flex items-baseline gap-2">

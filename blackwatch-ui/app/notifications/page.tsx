@@ -49,6 +49,8 @@ type SearchParams = { msg?: string };
 //
 // One primary teal CTA on the page: the Create button. Everything else is
 // muted so the eye lands on the action that unblocks first-run users.
+export const metadata = { title: "Notifications" };
+
 export default async function NotificationsPage({
   searchParams,
 }: {
@@ -348,7 +350,7 @@ function CoverageModuleRow({ module }: { module: NotificationCoverageModule }) {
         <p className="mb-2 text-[11px] text-fg-subtle">{module.blurb} <span className="font-mono text-[10px]">rollout: {module.content_rollout_stage}</span></p>
         <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-3">
           {module.events.map((event) => (
-            <Link key={event.event_kind} href={`/notifications/profiles/${encodeURIComponent(event.profile_id)}`} className="flex items-center justify-between gap-2 border border-line-soft bg-surface-1 px-2.5 py-2 hover:border-signal">
+            <Link key={event.event_kind} href={`/notifications/profiles/${encodeURIComponent(event.profile_id)}`} className="flex items-center justify-between gap-2 rounded-md border border-line-soft bg-surface-1 px-2.5 py-2 hover:border-signal">
               <span className="min-w-0 truncate text-xs text-fg" title={event.description}>{event.label}</span>
               <span className="flex shrink-0 items-center gap-1">
                 <CoverageStatePill state={event.state} />
@@ -465,7 +467,7 @@ function ActivityTable({ entries }: { entries: NotificationLogEntry[] }) {
 
 function AcksBanner({ acks }: { acks: NotificationAck[] }) {
   return (
-    <section className="mb-6 mt-3 border border-line-soft bg-surface-1">
+    <section className="mb-6 mt-3 rounded-md border border-line-soft bg-surface-1">
       <div className="flex items-baseline justify-between border-b border-line-soft px-4 py-2">
         <span className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
           {acks.length} active ack{acks.length === 1 ? "" : "s"} · paused notifications

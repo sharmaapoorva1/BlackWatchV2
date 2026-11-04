@@ -38,6 +38,8 @@ import { Input } from "@/components/ui/Input";
 import { NativeSelect } from "@/components/ui/NativeSelect";
 import { addAllowlistUserAction } from "./allowlist-actions";
 
+export const metadata = { title: "RDS" };
+
 export default async function RdsPage({
   searchParams,
 }: {

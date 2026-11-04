@@ -12,10 +12,10 @@ export default function Loading() {
       </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[0, 1, 2, 3].map((index) => (
-          <Skeleton key={index} className="h-20 border border-line-soft bg-surface-1" />
+          <Skeleton key={index} className="h-20 rounded-md border border-line-soft bg-surface-1" />
         ))}
       </div>
-      <div className="border border-line-soft bg-surface-1">
+      <div className="rounded-md border border-line-soft bg-surface-1">
         {[0, 1, 2, 3, 4, 5].map((index) => (
           <Skeleton key={index} className="h-11 rounded-none border-b border-line-soft bg-transparent last:border-0" />
         ))}

@@ -12,6 +12,8 @@ import { toConnectorRow } from "@/lib/connector-rows";
 
 type SearchParams = { msg?: string };
 
+export const metadata = { title: "Connectors" };
+
 export default async function ConnectorsPage({
   searchParams,
 }: {

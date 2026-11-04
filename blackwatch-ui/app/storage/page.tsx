@@ -21,6 +21,8 @@ const GROUP_META: Array<{ group: StorageGroup; label: string; href?: string }> =
   { group: "secrets", label: "Secrets Manager" },
 ];
 
+export const metadata = { title: "Storage" };
+
 export default async function StoragePage() {
   const summary = await fetchStorageSummary(24);
 

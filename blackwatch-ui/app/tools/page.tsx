@@ -24,6 +24,8 @@ const TOOLS = [
   },
 ];
 
+export const metadata = { title: "Tools" };
+
 export default function ToolsPage() {
   return (
     <>
@@ -36,7 +38,7 @@ export default function ToolsPage() {
           <Link
             key={t.href}
             href={t.href}
-            className="group flex flex-col gap-2 border border-line-soft bg-surface-1 px-4 py-4 transition-colors hover:border-line hover:bg-surface-2"
+            className="group flex flex-col gap-2 rounded-md border border-line-soft bg-surface-1 px-4 py-4 transition-colors hover:border-line hover:bg-surface-2"
           >
             <div className="flex items-center gap-2">
               <t.icon

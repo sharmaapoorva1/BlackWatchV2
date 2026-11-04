@@ -8,6 +8,8 @@ import { updatePerfAlertAction } from "../../actions";
 // PerfAlertForm renders the whole wizard shell (back link + title + stepper),
 // so this page is intentionally a bare passthrough — no PageHeader / BackLink
 // here or they'd double up.
+export const metadata = { title: "Edit performance alert" };
+
 export default async function EditPerfAlertPage({
   params,
 }: {

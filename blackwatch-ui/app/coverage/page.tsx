@@ -8,6 +8,8 @@ import { CoverageTable } from "@/components/domain/CoverageTable";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { TimestampCell } from "@/components/domain/TimestampCell";
 
+export const metadata = { title: "Coverage" };
+
 export default async function CoveragePage() {
   const data = await fetchCoverage();
 
@@ -53,7 +55,7 @@ function Metric({
   tone?: "neutral" | "ok" | "warn";
 }) {
   return (
-    <div className="border border-line-soft bg-surface-1 px-4 py-3">
+    <div className="rounded-md border border-line-soft bg-surface-1 px-4 py-3">
       <div className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">{label}</div>
       <div className={tone === "ok" ? "mt-1 text-xl text-sev-resolved" : tone === "warn" ? "mt-1 text-xl text-sev-high" : "mt-1 text-xl text-fg"}>{value}</div>
     </div>

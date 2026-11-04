@@ -37,6 +37,8 @@ async function lookup(host: string): Promise<DnsLookupResponse | null> {
 
 type SearchParams = { host?: string };
 
+export const metadata = { title: "DNS lookup" };
+
 export default async function DnsLookupPage({
   searchParams,
 }: {

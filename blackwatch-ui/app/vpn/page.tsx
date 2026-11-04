@@ -20,6 +20,8 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmSubmitButton } from "@/components/ui/ConfirmSubmitButton";
 import { deleteVpnServerAction } from "./actions";
 
+export const metadata = { title: "VPN" };
+
 export default async function VpnPage() {
   const { servers, auth } = await fetchVpn();
 

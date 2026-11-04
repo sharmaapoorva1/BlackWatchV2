@@ -374,7 +374,7 @@ function IndicatorPill({ indicator }: { indicator: IpIndicator }) {
       ? `https://${indicator.value}`
       : undefined;
   const content = (
-    <span className="inline-flex max-w-full items-center gap-2 border border-line-soft bg-surface-2 px-2 py-1 text-[10px] text-fg-muted transition-colors hover:border-signal/50 hover:text-fg">
+    <span className="inline-flex max-w-full items-center gap-2 rounded-md border border-line-soft bg-surface-2 px-2 py-1 text-[10px] text-fg-muted transition-colors hover:border-signal/50 hover:text-fg">
       <span className="max-w-64 truncate font-mono">{indicator.value}</span>
       {href && <ExternalLink size={9} className="shrink-0 text-fg-subtle" />}
     </span>

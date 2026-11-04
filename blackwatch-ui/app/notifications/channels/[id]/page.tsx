@@ -8,6 +8,8 @@ import { DataPanel } from "@/components/layout/DataPanel";
 import { BackLink } from "@/components/ui/BackLink";
 import { ChannelForm } from "@/components/domain/notifications/ChannelForm";
 
+export const metadata = { title: "Edit channel" };
+
 export default async function EditChannelPage({
   params,
 }: {

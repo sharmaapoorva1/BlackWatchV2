@@ -51,7 +51,7 @@ export function InvestigationIpIntelligence({ ip }: { ip: string }) {
         </div>
       )}
       {!result && !error && (
-        <div className="flex items-center gap-2 border border-line-soft bg-surface-1 px-4 py-4 text-xs text-fg-muted">
+        <div className="flex items-center gap-2 rounded-md border border-line-soft bg-surface-1 px-4 py-4 text-xs text-fg-muted">
           <Loader2 size={13} className="animate-spin" aria-hidden />
           Looking up provider intelligence for <span className="font-mono text-fg">{ip}</span>…
         </div>

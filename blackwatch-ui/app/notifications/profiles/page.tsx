@@ -7,6 +7,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { StatusPill } from "@/components/ui/StatusPill";
 
+export const metadata = { title: "Message studio" };
+
 export default async function NotificationProfilesPage() {
   const data = await fetchNotificationProfiles();
   const byModule = new Map(data.profiles.map((profile) => [profile.id, profile]));

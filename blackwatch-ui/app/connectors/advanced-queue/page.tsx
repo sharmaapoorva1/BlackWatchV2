@@ -5,6 +5,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { AdvancedQueueView } from "@/components/domain/connectors/AdvancedQueueView";
 
+export const metadata = { title: "Advanced queue" };
+
 export default async function AdvancedQueuePage() {
   let data: Awaited<ReturnType<typeof fetchConnectorOperations>> = {
     operations: [], active_operations: 0, max_concurrent_operations: 3, generated_at: new Date().toISOString(),

@@ -14,7 +14,7 @@ import { AppThemeProvider } from "@/components/providers/AppThemeProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "BlackWatch",
+  title: { default: "BlackWatch", template: "%s · BlackWatch" },
   description: "Security telemetry",
 };
 

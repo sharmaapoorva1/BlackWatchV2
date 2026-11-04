@@ -16,6 +16,8 @@ import { SeverityBadge } from "@/components/domain/SeverityBadge";
 import { TimestampCell } from "@/components/domain/TimestampCell";
 import { EmptyState } from "@/components/ui/EmptyState";
 
+export const metadata = { title: "Services" };
+
 export default async function ServicesPage() {
   const { agents, grouped, counts, archived, archive_threshold_days } =
     await fetchServices();

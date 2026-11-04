@@ -21,6 +21,8 @@ type SearchParams = {
 //
 // The "blank=1" flag exists so the "start from blank" link still takes the
 // user past the preset picker, even with no other params set.
+export const metadata = { title: "New notification rule" };
+
 export default async function NewRulePage({
   searchParams,
 }: {

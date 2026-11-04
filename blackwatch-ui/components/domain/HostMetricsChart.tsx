@@ -280,7 +280,7 @@ function MetricTooltip({
   if (!p) return null;
   const fmt = (v: number | null) => (v === null ? "—" : `${v.toFixed(1)}%`);
   return (
-    <div className="border border-line-soft bg-surface-1 px-3 py-2 font-mono text-xs shadow-lg">
+    <div className="rounded-md border border-line-soft bg-surface-1 px-3 py-2 font-mono text-xs shadow-lg">
       <div className="mb-1.5 text-[10px] uppercase tracking-[0.08em] text-fg-subtle">
         {formatTooltipStamp(p.ts, tz)}
       </div>

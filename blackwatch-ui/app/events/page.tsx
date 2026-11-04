@@ -25,6 +25,8 @@ type SearchParams = {
   action?: string;
 };
 
+export const metadata = { title: "Events" };
+
 export default async function EventsPage({
   searchParams,
 }: {

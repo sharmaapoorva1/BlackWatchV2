@@ -35,6 +35,8 @@ const CONTENT_FIELDS: Array<{
   { key: "runbook_url", label: "Runbook link", hint: "Optional URL to the team’s response guide." },
 ];
 
+export const metadata = { title: "Message profile" };
+
 export default async function NotificationProfilePage({
   params,
   searchParams,
@@ -79,7 +81,7 @@ export default async function NotificationProfilePage({
 
           <DataPanel className="p-5" scrollX={false}>
             <SectionTitle title="When this alert should be sent" subtitle="Turn this alert on, choose urgency, and decide where it should arrive." />
-            <div className="mt-5 flex items-center justify-between border border-line-soft bg-surface-2 px-3 py-3">
+            <div className="mt-5 flex items-center justify-between rounded-md border border-line-soft bg-surface-2 px-3 py-3">
               <div>
                 <p className="text-sm text-fg">Enable this alert</p>
                 <p className="mt-0.5 text-xs text-fg-subtle">BlackWatch will route matching events through the shared delivery worker.</p>
@@ -91,7 +93,7 @@ export default async function NotificationProfilePage({
               <ChoiceGroup title="Urgency" hint="Only selected severities will use this profile.">
                 <div className="flex flex-wrap gap-1.5">
                   {SEVERITIES.map((severity) => (
-                    <label key={severity} className="inline-flex cursor-pointer items-center gap-2 border border-line bg-surface-1 px-2.5 py-2 text-xs text-fg-muted transition-colors hover:bg-surface-2 has-[:checked]:border-signal has-[:checked]:bg-signal/10 has-[:checked]:text-fg">
+                    <label key={severity} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-line bg-surface-1 px-2.5 py-2 text-xs text-fg-muted transition-colors hover:bg-surface-2 has-[:checked]:border-signal has-[:checked]:bg-signal/10 has-[:checked]:text-fg">
                       <Checkbox name="severity" value={severity} defaultChecked={profile.severities.includes(severity)} />
                       {severity}
                     </label>
@@ -102,7 +104,7 @@ export default async function NotificationProfilePage({
                 {channelsData.channels.length ? (
                   <div className="flex flex-wrap gap-1.5">
                     {channelsData.channels.map((channel) => (
-                      <label key={channel.name} className="inline-flex cursor-pointer items-center gap-2 border border-line bg-surface-1 px-2.5 py-2 text-xs text-fg-muted transition-colors hover:bg-surface-2 has-[:checked]:border-signal has-[:checked]:bg-signal/10 has-[:checked]:text-fg">
+                      <label key={channel.name} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-line bg-surface-1 px-2.5 py-2 text-xs text-fg-muted transition-colors hover:bg-surface-2 has-[:checked]:border-signal has-[:checked]:bg-signal/10 has-[:checked]:text-fg">
                         <Checkbox name="channel" value={channel.name} defaultChecked={profile.channels.includes(channel.name)} />
                         <span>{channel.name}</span>
                         <span className="font-mono text-[10px] text-fg-subtle">{channel.type}</span>
@@ -192,7 +194,7 @@ function ChoiceGroup({ title, hint, children }: { title: string; hint: string; c
 
 function StatusNote({ profile }: { profile: NotificationProfile }) {
   return (
-    <div className="flex items-center gap-2 border border-line-soft bg-surface-1 px-3 py-2 text-xs text-fg-muted">
+    <div className="flex items-center gap-2 rounded-md border border-line-soft bg-surface-1 px-3 py-2 text-xs text-fg-muted">
       {profile.enabled ? <Check size={13} className="text-sev-resolved" /> : <AlertTriangle size={13} className="text-sev-medium" />}
       {profile.enabled ? "enabled" : profile.source === "default" ? "not configured" : "saved but off"}
     </div>

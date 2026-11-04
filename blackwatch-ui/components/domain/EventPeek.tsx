@@ -190,7 +190,7 @@ function PeekBody({ event, onNavigate }: { event: EventEnvelope; onNavigate: () 
           <h3 className="mb-1.5 text-xs font-medium text-fg-muted">Rules matched</h3>
           <ul className="flex flex-wrap gap-1.5">
             {rules.map((rule) => (
-              <li key={rule} className="border border-line-soft bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg-muted">{rule}</li>
+              <li key={rule} className="rounded border border-line-soft bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg-muted">{rule}</li>
             ))}
           </ul>
         </section>
@@ -201,7 +201,7 @@ function PeekBody({ event, onNavigate }: { event: EventEnvelope; onNavigate: () 
           <h3 className="mb-1.5 text-xs font-medium text-fg-muted">Tags</h3>
           <ul className="flex flex-wrap gap-1.5">
             {tags.map((tag) => (
-              <li key={tag} className="border border-line-soft bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg-muted">{tag}</li>
+              <li key={tag} className="rounded border border-line-soft bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg-muted">{tag}</li>
             ))}
           </ul>
         </section>
@@ -295,7 +295,7 @@ function SilenceAction({ fingerprint, action }: { fingerprint: string | null; ac
             setHours(Number(event.target.value));
             setStatus("idle");
           }}
-          className="min-h-11 border border-line bg-surface-2 px-2 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70 sm:min-h-8"
+          className="min-h-11 rounded-md border border-line bg-surface-2 px-2 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70 sm:min-h-8"
         >
           {SILENCE_HOURS.map((value) => (
             <option key={value} value={value}>{value === 1 ? "1 hour" : `${value} hours`}</option>

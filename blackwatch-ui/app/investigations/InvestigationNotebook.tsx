@@ -210,7 +210,7 @@ export function InvestigationNotebook({
       {message && (
         <div
           role="status"
-          className="border border-line-soft bg-surface-1 px-3 py-2 text-xs text-fg-muted"
+          className="rounded-md border border-line-soft bg-surface-1 px-3 py-2 text-xs text-fg-muted"
         >
           {message}
         </div>
@@ -414,7 +414,7 @@ function EvidenceChain({
                         {module.count} linked {module.count === 1 ? "entry" : "entries"}
                       </div>
                     </div>
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center border border-line-soft bg-surface-1 font-mono text-xs text-signal">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line-soft bg-surface-1 font-mono text-xs text-signal">
                       {index + 1}
                     </span>
                   </div>
