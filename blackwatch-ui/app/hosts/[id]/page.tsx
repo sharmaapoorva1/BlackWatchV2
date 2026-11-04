@@ -19,6 +19,8 @@ import type {
 } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DetailLayout } from "@/components/layout/DetailLayout";
+import { StickyHeader } from "@/components/layout/StickyHeader";
+import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { Section, AutoGrid } from "@/components/layout/Section";
 import { Subsection } from "@/components/layout/Subsection";
 import type { NavGroup } from "@/components/layout/SectionNav";
@@ -57,33 +59,21 @@ export default async function HostDetailPage({
 
   return (
     <>
-      <PageHeader
-        title={host ? hostLabel({ ...host, instance_id: id }) : id}
-        subtitle={
-          host
-            ? (
-              <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
-                <code className="font-mono text-xs text-fg-subtle">{id}</code>
-                {host.hostname && host.hostname !== hostLabel({ ...host, instance_id: id }) && (
-                  <span className="text-fg-muted">{host.hostname}</span>
-                )}
-                {host.extra?.tags?.env && <span className="border border-line-soft px-2 py-0.5 text-[10px] uppercase tracking-wider text-fg-muted">{host.extra.tags.env}</span>}
-                {host.extra?.tags?.role && <span className="text-xs text-fg-muted">{host.extra.tags.role}</span>}
-                {host.region && <span className="text-xs text-fg-subtle">{host.region}</span>}
-                {host.account && <span className="font-mono text-[11px] text-fg-subtle">Account {host.account}</span>}
-              </span>
-            )
-            : "no hostname reported"
-        }
-        breadcrumbs={[{ label: "Hosts", href: "/hosts" }, { label: host ? hostLabel({ ...host, instance_id: id }) : id }]}
-      />
-
-      {!host && (
-        <DataPanel className="px-6 py-12 text-center text-sm text-fg-muted">
-          No data for instance{" "}
-          <code className="font-mono text-fg">{id}</code> yet. Has the agent
-          ever reported?
-        </DataPanel>
+      {host ? (
+        <HostHeaderBar id={id} data={data} />
+      ) : (
+        <>
+          <PageHeader
+            title={id}
+            subtitle="no hostname reported"
+            breadcrumbs={[{ label: "Hosts", href: "/hosts" }, { label: id }]}
+          />
+          <DataPanel className="px-6 py-12 text-center text-sm text-fg-muted">
+            No data for instance{" "}
+            <code className="font-mono text-fg">{id}</code> yet. Has the agent
+            ever reported?
+          </DataPanel>
+        </>
       )}
 
       {host && <HostBody data={data} />}
@@ -92,7 +82,7 @@ export default async function HostDetailPage({
 }
 
 // =========================================================================
-// right rail: who this page is about, kept in view while the sections scroll
+// header: who this page is about. Pinned at the top while the sections scroll.
 // =========================================================================
 
 /** Addresses the host is bound to, from its listening sockets. The agent does
@@ -103,114 +93,99 @@ function boundAddresses(ports: NonNullable<HostSnapshots["ports"]>): string[] {
     ["0.0.0.0", "::", "*", "[::]", "::1", "[::1]"].includes(address) ||
     address.startsWith("127.") ||
     address.startsWith("169.254.") ||
-    address.toLowerCase().startsWith("fe80");
+    address.toLowerCase().startsWith("fe80") ||
+    address.toLowerCase().startsWith("::ffff:127.");
   return [...new Set(ports.map((port) => port.address.replace(/%.*$/, "")).filter((address) => address && !skip(address)))];
 }
 
-function HostIdentityRail({
-  id,
-  host,
-  ageSeconds,
-  stale,
-  healthState,
-  addresses,
-}: {
-  id: string;
-  host: HostRecord;
-  ageSeconds: number | null;
-  stale: boolean;
-  healthState?: string;
-  addresses: string[];
-}) {
+function HeaderFact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5 text-xs">
+      <span className="text-fg-subtle">{label}</span>
+      {children}
+    </span>
+  );
+}
+
+function HostHeaderBar({ id, data }: { id: string; data: HostDetailResponse }) {
+  const { host, snapshots, age_seconds, stale, health_state } = data;
+  if (!host) return null;
   const extra = host.extra ?? {};
-  const state = healthState ?? (host.active && !stale ? "healthy" : "silent");
+  const name = hostLabel({ ...host, instance_id: id });
+  const state = health_state ?? (host.active && !stale ? "healthy" : "silent");
   const tone =
     state === "healthy"
       ? { dot: "bg-sev-resolved", text: "text-sev-resolved" }
       : ["delivery_delayed", "processing_delayed", "collector_degraded"].includes(state)
         ? { dot: "bg-sev-medium", text: "text-sev-medium" }
         : { dot: "bg-sev-critical", text: "text-sev-critical" };
-  const name = hostLabel({ ...host, instance_id: id });
-  const tags = Object.entries(extra.tags ?? {});
+  const addresses = boundAddresses(snapshots.ports ?? []);
+  const tags = extra.tags ?? {};
 
   return (
-    <div className="rounded-md border border-line bg-surface-1 p-4">
-      <p className="break-words text-base font-semibold text-fg">{name}</p>
-      <p className={clsx("mt-1 inline-flex items-center gap-1.5 text-xs", tone.text)}>
-        <span aria-hidden className={clsx("h-1.5 w-1.5 rounded-full", tone.dot)} />
-        {state.replaceAll("_", " ")}
-        <span className="text-fg-subtle">
-          · {ageSeconds == null ? "no report yet" : `reported ${formatAge(ageSeconds)} ago`}
+    <StickyHeader>
+      <Breadcrumbs items={[{ label: "Hosts", href: "/hosts" }, { label: name }]} />
+      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
+        <h1 className="break-words font-display text-xl font-bold tracking-tight text-fg sm:text-2xl">{name}</h1>
+        <span className={clsx("inline-flex items-center gap-1.5 text-xs", tone.text)}>
+          <span aria-hidden className={clsx("h-1.5 w-1.5 rounded-full", tone.dot)} />
+          {state.replaceAll("_", " ")}
+          <span className="text-fg-subtle">
+            · {age_seconds == null ? "no report yet" : `reported ${formatAge(age_seconds)} ago`}
+          </span>
         </span>
-      </p>
-
-      <dl className="mt-4 space-y-3">
-        <RailRow label="Instance ID">
-          <span className="flex items-center gap-1">
-            <code className="min-w-0 break-all font-mono text-xs text-fg">{id}</code>
+      </div>
+      <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-5 gap-y-1">
+        <HeaderFact label="Instance">
+          <span className="flex items-center">
+            <code className="font-mono text-fg">{id}</code>
             <CopyButton value={id} label="Copy instance ID" />
           </span>
-        </RailRow>
+        </HeaderFact>
         {host.hostname && host.hostname !== name && (
-          <RailRow label="Hostname">
-            <code className="break-all font-mono text-xs text-fg">{host.hostname}</code>
-          </RailRow>
+          <HeaderFact label="Host">
+            <code className="break-all font-mono text-fg-muted">{host.hostname}</code>
+          </HeaderFact>
         )}
-        <RailRow label="Addresses" hint="from listening sockets">
-          {addresses.length > 0 ? (
-            <ul className="space-y-0.5">
-              {addresses.slice(0, 4).map((address) => (
-                <li key={address} className="flex items-center gap-1">
-                  <IpCell value={address} className="text-xs text-fg" />
-                </li>
+        {addresses.length > 0 && (
+          <HeaderFact label={addresses.length === 1 ? "Address" : "Addresses"}>
+            <span className="flex flex-wrap items-center gap-x-3">
+              {addresses.slice(0, 3).map((address) => (
+                <IpCell key={address} value={address} className="text-xs text-fg" />
               ))}
-              {addresses.length > 4 && <li className="text-xs text-fg-subtle">+{addresses.length - 4} more</li>}
-            </ul>
-          ) : (
-            <span className="text-xs text-fg-subtle">not reported</span>
-          )}
-        </RailRow>
-        {tags.length > 0 && (
-          <RailRow label="Tags">
-            <span className="flex flex-wrap gap-1">
-              {tags.map(([key, value]) => (
-                <code key={key} className="rounded border border-line-soft bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg-muted">
-                  {key}={value}
-                </code>
-              ))}
+              {addresses.length > 3 && <span className="text-fg-subtle">+{addresses.length - 3}</span>}
             </span>
-          </RailRow>
+          </HeaderFact>
         )}
-        {(host.region || host.account) && (
-          <RailRow label="Region / account">
-            <span className="break-all font-mono text-xs text-fg-muted">
-              {[host.region, host.account].filter(Boolean).join(" · ")}
+        {(tags.env || tags.role) && (
+          <HeaderFact label="Tags">
+            <span className="flex items-center gap-1.5">
+              {tags.env && <code className="rounded border border-line-soft bg-surface-2 px-1.5 py-0.5 font-mono text-fg-muted">env={tags.env}</code>}
+              {tags.role && <code className="rounded border border-line-soft bg-surface-2 px-1.5 py-0.5 font-mono text-fg-muted">role={tags.role}</code>}
             </span>
-          </RailRow>
+          </HeaderFact>
+        )}
+        {host.region && (
+          <HeaderFact label="Region">
+            <span className="font-mono text-fg-muted">{host.region}</span>
+          </HeaderFact>
+        )}
+        {host.account && (
+          <HeaderFact label="Account">
+            <span className="font-mono text-fg-muted">{host.account}</span>
+          </HeaderFact>
         )}
         {(extra.agent_version || extra.uptime_seconds != null) && (
-          <RailRow label="Agent / uptime">
-            <span className="font-mono text-xs text-fg-muted">
+          <HeaderFact label="Agent">
+            <span className="font-mono text-fg-muted">
               {[extra.agent_version ? `v${extra.agent_version}` : null, extra.uptime_seconds != null ? `up ${humanAge(extra.uptime_seconds)}` : null]
                 .filter(Boolean)
                 .join(" · ")}
             </span>
-          </RailRow>
+          </HeaderFact>
         )}
-      </dl>
-    </div>
-  );
-}
-
-function RailRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs text-fg-subtle">
-        {label}
-        {hint && <span className="ml-1 text-fg-disabled">· {hint}</span>}
-      </dt>
-      <dd className="mt-0.5">{children}</dd>
-    </div>
+      </div>
+    </StickyHeader>
   );
 }
 
@@ -356,19 +331,7 @@ function HostBody({ data }: { data: HostDetailResponse }) {
   ];
 
   return (
-    <DetailLayout
-      nav={nav}
-      aside={
-        <HostIdentityRail
-          id={host.instance_id}
-          host={host}
-          ageSeconds={age_seconds}
-          stale={stale}
-          healthState={health_state}
-          addresses={boundAddresses(ports)}
-        />
-      }
-    >
+    <DetailLayout nav={nav}>
       <Section id="overview" title="Overview" description="Health, what needs attention, and resource trends.">
         <AutoGrid min="26rem" gap="lg">
           <StatusSection

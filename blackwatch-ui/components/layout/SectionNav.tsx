@@ -36,6 +36,7 @@ export function SectionNav({ groups, label = "On this page" }: { groups: NavGrou
     const targets = allIds.map((id) => document.getElementById(id)).filter((el): el is HTMLElement => el !== null);
     if (targets.length === 0) return;
     const visible = new Map<string, number>();
+    const headerHeight = Math.round(parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sticky-header-h")) || 0);
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -46,7 +47,8 @@ export function SectionNav({ groups, label = "On this page" }: { groups: NavGrou
         const [topmost] = [...visible.entries()].sort((a, b) => a[1] - b[1])[0];
         setActiveId(topmost);
       },
-      { root, rootMargin: "0px 0px -65% 0px", threshold: 0 },
+      // The pinned header covers the top of the scroll area, so start observing below it.
+      { root, rootMargin: `-${headerHeight}px 0px -65% 0px`, threshold: 0 },
     );
     targets.forEach((target) => observer.observe(target));
     return () => observer.disconnect();

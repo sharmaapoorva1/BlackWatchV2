@@ -623,7 +623,11 @@ Long pages use `components/layout/DetailLayout`:
   it is a `Button`; if it navigates the page, it belongs in the sidebar.
 - `lib/layout-hierarchy.test.ts` guards these rules.
 
-`DetailLayout` also takes an optional `aside`: a summary rail on the right that
-sticks beside the sticky contents from `xl` up (the host page uses it for name,
-health, instance ID, addresses, tags, region and agent). Below `xl` it is
-hidden and the page header carries the basics.
+Pin who the page is about with `components/layout/StickyHeader` (host page:
+name, health, instance ID, addresses, tags, region, account, agent). From `md`
+up it stays at the top of the scroll area; on phones it scrolls away. It
+publishes its own height as `--sticky-header-h`, and `DetailLayout`'s contents,
+the `Section` and `Subsection` anchor offsets, and the scroll-spy all use that
+variable, so the contents stay pinned directly under the header and anchor jumps
+never hide a heading under it, even when the header wraps to two lines. Only the
+sections scroll.

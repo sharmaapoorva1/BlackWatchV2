@@ -58,17 +58,31 @@ test("the host page uses the layout and no longer has a floating bar or underlin
   assert.match(page, /id: "host-packages"[\s\S]{0,200}defaultOpen: false/);
 });
 
-test("the host page keeps its identity in a sticky right rail beside the sticky contents", () => {
+test("the host page pins its identity header at the top and the contents beneath it", () => {
+  const sticky = read("components/layout/StickyHeader.tsx");
+  assert.match(sticky, /md:sticky md:top-0/);
+  assert.match(sticky, /--sticky-header-h/);
+  assert.match(sticky, /ResizeObserver/);
+  // The pinned header publishes its height and cleans up on unmount.
+  assert.match(sticky, /removeProperty\("--sticky-header-h"\)/);
+
   const layout = read("components/layout/DetailLayout.tsx");
-  assert.match(layout, /xl:grid-cols-\[13rem_minmax\(0,1fr\)_17rem\]/);
-  assert.match(layout, /xl:sticky xl:top-4/);
-  assert.match(layout, /lg:sticky lg:top-4/);
-  // Below xl there is no room: the rail is hidden and the page header carries the basics.
-  assert.match(layout, /hidden min-w-0 xl:sticky[^"]*xl:block/);
+  assert.match(layout, /lg:sticky lg:top-\[calc\(var\(--sticky-header-h,0px\)\+1rem\)\]/);
+
+  // Anchor jumps and scroll-spy account for the header's height.
+  assert.match(read("components/layout/Section.tsx"), /scroll-mt-\[calc\(var\(--sticky-header-h,0px\)\+1rem\)\]/);
+  assert.match(read("components/layout/Subsection.tsx"), /scroll-mt-\[calc\(var\(--sticky-header-h,0px\)\+1rem\)\]/);
+  assert.match(read("components/layout/SectionNav.tsx"), /--sticky-header-h/);
+
   const page = read("app/hosts/[id]/page.tsx");
-  assert.match(page, /aside=\{/);
-  assert.match(page, /<HostIdentityRail/);
-  for (const field of ["Instance ID", "Hostname", "Addresses", "Region / account"]) {
+  assert.match(page, /<StickyHeader>/);
+  assert.match(page, /<HostHeaderBar/);
+  assert.match(page, /<h1 /);
+  for (const field of ["Instance", "Host", "Region", "Account", "Agent"]) {
     assert.match(page, new RegExp(`label="${field}"`));
   }
+  assert.match(page, /"Address" : "Addresses"/);
+  // The earlier right-hand rail is gone.
+  assert.doesNotMatch(page, /HostIdentityRail/);
+  assert.doesNotMatch(layout, /aside\?:/);
 });

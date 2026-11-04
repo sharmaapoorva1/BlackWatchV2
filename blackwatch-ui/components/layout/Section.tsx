@@ -29,7 +29,7 @@ export function Section({
   className?: string;
 }) {
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className={cn("scroll-mt-4", className)}>
+    <section id={id} aria-labelledby={`${id}-title`} className={cn("scroll-mt-[calc(var(--sticky-header-h,0px)+1rem)]", className)}>
       <header className="mb-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-b border-line pb-3">
         <div className="min-w-0 max-w-3xl">
           <h2 id={`${id}-title`} className="font-display text-lg font-semibold text-fg">

@@ -47,7 +47,7 @@ export function Subsection({
   }, [id]);
 
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="min-w-0 scroll-mt-4">
+    <section id={id} aria-labelledby={`${id}-title`} className="min-w-0 scroll-mt-[calc(var(--sticky-header-h,0px)+1rem)]">
       <h3 id={`${id}-title`} className="m-0">
         <button
           type="button"

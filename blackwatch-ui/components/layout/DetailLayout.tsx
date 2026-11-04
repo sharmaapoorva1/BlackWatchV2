@@ -1,50 +1,26 @@
 import { SectionNav, type NavGroup } from "./SectionNav";
 
 /**
- * Shell for a long detail page. Up to three columns, arranged by one grid:
+ * Shell for a long detail page: a table of contents on the left, the sections
+ * on the right. One grid does all the arranging.
  *
- *   [ contents ]  [ sections … scroll … ]  [ summary ]
+ * Pair it with `StickyHeader` for the full effect: the header stays pinned at
+ * the top, the contents stay pinned beneath it on the left, and only the
+ * sections scroll. The contents' offset and height follow the header's real
+ * height through the `--sticky-header-h` variable, so nothing overlaps even if
+ * the header wraps. Without a StickyHeader the variable is unset (0) and the
+ * contents simply stick near the top.
  *
- * - Left: a table of contents (`nav`). Sticky on wide screens; a plain
- *   disclosure above the content on narrow ones.
- * - Middle: the sections. This is the only part that scrolls past.
- * - Right (optional `aside`): a summary that stays in view while you read, such
- *   as who or what this page is about. It only appears from `xl` up, where
- *   there is room; below that the page header already carries the basics, so
- *   nothing is duplicated or floating over the content.
- *
- * Both rails are `sticky` inside the page's scroll area, so they stay put
- * together while the middle column moves.
+ * Below `lg` the contents become a plain "On this page" disclosure above the
+ * sections; nothing floats over the content.
  */
-export function DetailLayout({
-  nav,
-  aside,
-  children,
-}: {
-  nav: NavGroup[];
-  aside?: React.ReactNode;
-  children: React.ReactNode;
-}) {
+export function DetailLayout({ nav, children }: { nav: NavGroup[]; children: React.ReactNode }) {
   return (
-    <div
-      className={
-        aside
-          ? "grid min-w-0 gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[13rem_minmax(0,1fr)_17rem]"
-          : "grid min-w-0 gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10"
-      }
-    >
-      <aside className="min-w-0 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-7rem)] lg:self-start lg:overflow-y-auto">
+    <div className="grid min-w-0 gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10">
+      <aside className="min-w-0 lg:sticky lg:top-[calc(var(--sticky-header-h,0px)+1rem)] lg:max-h-[calc(100dvh-var(--sticky-header-h,0px)-6rem)] lg:self-start lg:overflow-y-auto">
         <SectionNav groups={nav} />
       </aside>
       <div className="flex min-w-0 flex-col gap-10">{children}</div>
-      {aside && (
-        <aside
-          aria-label="Summary"
-          className="hidden min-w-0 xl:sticky xl:top-4 xl:block xl:max-h-[calc(100dvh-7rem)] xl:self-start xl:overflow-y-auto"
-        >
-          {aside}
-        </aside>
-      )}
     </div>
   );
 }
