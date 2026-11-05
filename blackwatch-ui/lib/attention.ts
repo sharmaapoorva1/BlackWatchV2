@@ -2,6 +2,7 @@ import type {
   AgentIngressDiagnostics,
   ConnectorsListResponse,
   OverviewResponse,
+  ServiceCounts,
 } from "./types";
 
 export type AttentionLevel = "critical" | "high" | "medium";
@@ -18,6 +19,8 @@ export interface AttentionInput {
   overview?: Pick<OverviewResponse, "hosts" | "posture" | "notable"> | null;
   connectors?: Pick<ConnectorsListResponse, "connectors"> | null;
   ingress?: Pick<AgentIngressDiagnostics, "metrics"> | null;
+  /** Probe-target totals across every VPC. */
+  services?: Pick<ServiceCounts, "down" | "degraded" | "total"> | null;
 }
 
 const LEVEL_WEIGHT: Record<AttentionLevel, number> = { critical: 0, high: 1, medium: 2 };
@@ -27,6 +30,7 @@ const LEVEL_WEIGHT: Record<AttentionLevel, number> = { critical: 0, high: 1, med
 // recent high events would keep it permanently red.
 const SYSTEM_ITEM_IDS = new Set([
   "hosts-stale",
+  "services-down",
   "connectors-failing",
   "connectors-stale",
   "ingest-quarantined",
@@ -48,7 +52,7 @@ function plural(count: number, singular: string, pluralForm = `${singular}s`): s
  */
 export function buildAttentionItems(input: AttentionInput): AttentionItem[] {
   const items: AttentionItem[] = [];
-  const { overview, connectors, ingress } = input;
+  const { overview, connectors, ingress, services } = input;
 
   if (overview) {
     const bySeverity = overview.posture.by_severity;
@@ -71,10 +75,12 @@ export function buildAttentionItems(input: AttentionInput): AttentionItem[] {
       });
     }
     if (overview.notable.length > 0) {
+      // The API returns the 10 most recent, so 10 means "at least 10".
+      const n = overview.notable.length;
       items.push({
         id: "notable-events",
         level: "high",
-        title: `${plural(overview.notable.length, "high or critical event")} in the recent window`,
+        title: `${n >= 10 ? "10+" : n} recent high or critical ${n === 1 ? "event" : "events"}`,
         detail: "Triage the latest detections.",
         href: "/events?severity=high",
       });
@@ -88,6 +94,19 @@ export function buildAttentionItems(input: AttentionInput): AttentionItem[] {
         href: "/hosts",
       });
     }
+  }
+
+  if (services && services.down + services.degraded > 0) {
+    items.push({
+      id: "services-down",
+      level: services.down > 0 ? "high" : "medium",
+      title:
+        services.down > 0
+          ? `${plural(services.down, "service")} down${services.degraded > 0 ? `, ${services.degraded} degraded` : ""}`
+          : `${plural(services.degraded, "service")} degraded`,
+      detail: `${services.total} probed services in total.`,
+      href: "/services",
+    });
   }
 
   if (connectors) {

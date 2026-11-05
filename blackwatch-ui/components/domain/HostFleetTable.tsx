@@ -1,29 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { DataPanel } from "@/components/layout/DataPanel";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { NativeSelect } from "@/components/ui/NativeSelect";
 import { DataTable, type ColumnDef } from "@/components/ui/DataTable";
 import type { HostSummary } from "@/lib/types";
-
-type FleetGroup = "healthy" | "attention" | "silent";
-
-function hostState(host: HostSummary): string {
-  const reported = host.health_state ?? (host.stale || !host.active ? "silent" : "healthy");
-  return host.stale && reported === "healthy" ? "silent" : reported;
-}
-
-function hostGroup(host: HostSummary): FleetGroup {
-  const state = hostState(host);
-  if (state === "healthy") return "healthy";
-  if (state === "silent" || !host.active || host.stale) return "silent";
-  return "attention";
-}
+import { hostGroup, hostState, type FleetGroup } from "@/lib/host-health";
 
 function hostSearchText(host: HostSummary): string {
   return [
@@ -86,21 +74,22 @@ function SurfaceCount({ value, label }: { value: number; label: string }) {
   );
 }
 
-export function HostFleetTable({ servers }: { servers: HostSummary[] }) {
-  const [query, setQuery] = useState("");
-  const [health, setHealth] = useState("");
-  const [environment, setEnvironment] = useState("");
+export function HostFleetTable({
+  servers,
+  initial,
+}: {
+  servers: HostSummary[];
+  /** Starting filters, usually from the URL (`?health=attention&env=prod`). */
+  initial?: { health?: string; environment?: string; query?: string };
+}) {
+  const [query, setQuery] = useState(initial?.query ?? "");
+  const [health, setHealth] = useState(initial?.health ?? "");
+  const [environment, setEnvironment] = useState(initial?.environment ?? "");
 
   const environments = useMemo(
     () => [...new Set(servers.map((host) => host.tags?.env).filter((value): value is string => Boolean(value)))].sort(),
     [servers],
   );
-
-  const counts = useMemo(() => {
-    const result: Record<FleetGroup, number> = { healthy: 0, attention: 0, silent: 0 };
-    for (const host of servers) result[hostGroup(host)] += 1;
-    return result;
-  }, [servers]);
 
   const rows = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
@@ -198,86 +187,54 @@ export function HostFleetTable({ servers }: { servers: HostSummary[] }) {
   );
 
   return (
-    <section aria-labelledby="host-fleet-title" className="space-y-3">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h2 id="host-fleet-title" className="font-display text-base font-semibold text-fg">Fleet</h2>
-          <p className="mt-1 text-sm text-fg-muted">Hosts needing attention are listed first. Open a host to investigate its collected evidence.</p>
-        </div>
-        <span className="font-mono text-xs text-fg-subtle">{rows.length} of {servers.length} hosts</span>
+    <div className="space-y-3">
+      <div role="search" aria-label="Filter host fleet" className="flex flex-wrap items-end gap-3">
+        <Field label="Find a host" compact className="w-full sm:w-72">
+          <Input
+            autoComplete="off"
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Name, hostname, ID, tag…"
+            type="search"
+            value={query}
+          />
+        </Field>
+        <Field label="Health" compact className="w-full sm:w-44">
+          <NativeSelect onChange={(event) => setHealth(event.target.value)} value={health}>
+            <option value="">Any health</option>
+            <option value="attention">Needs attention</option>
+            <option value="silent">Silent</option>
+            <option value="healthy">Healthy</option>
+          </NativeSelect>
+        </Field>
+        <Field label="Environment" compact className="w-full sm:w-44">
+          <NativeSelect onChange={(event) => setEnvironment(event.target.value)} value={environment}>
+            <option value="">All environments</option>
+            {environments.map((value) => <option key={value} value={value}>{value}</option>)}
+          </NativeSelect>
+        </Field>
+        {hasFilters && (
+          <Button type="button" variant="secondary" size="sm" onClick={() => { setQuery(""); setHealth(""); setEnvironment(""); }}>
+            Clear filters
+          </Button>
+        )}
+        <p aria-live="polite" className="ml-auto font-mono text-xs text-fg-subtle">
+          {rows.length} of {servers.length} hosts
+        </p>
       </div>
 
-      <DataPanel scrollX>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-line-soft px-4 py-3 text-xs">
-          <span className="mr-1 text-fg-muted">Fleet health</span>
-          {([
-            ["healthy", "healthy", "text-sev-resolved"],
-            ["attention", "needs attention", "text-sev-medium"],
-            ["silent", "silent", "text-sev-critical"],
-          ] as const).map(([group, label, tone]) => (
-            <button
-              key={group}
-              type="button"
-              aria-pressed={health === group}
-              onClick={() => setHealth((current) => current === group ? "" : group)}
-              className={`min-h-11 rounded-sm px-2 text-left transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal sm:min-h-9 ${tone} ${health === group ? "bg-surface-2 underline underline-offset-4" : ""}`}
-            >
-              <span className="font-mono tabular-nums">{counts[group]}</span> {label}
-            </button>
-          ))}
-        </div>
-
-        <div role="search" aria-label="Filter host fleet" className="grid gap-3 border-b border-line-soft p-3 sm:grid-cols-2 lg:grid-cols-[minmax(14rem,1fr)_10rem_10rem_auto] lg:items-end">
-          <label className="min-w-0 space-y-1.5">
-            <span className="text-[10px] uppercase tracking-wider text-fg-subtle">Find a host</span>
-            <span className="relative block">
-              <Search size={14} aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-subtle" />
-              <Input
-                aria-label="Search hosts"
-                autoComplete="off"
-                className="pl-8"
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Name, hostname, ID, tag…"
-                type="search"
-                value={query}
-              />
-            </span>
-          </label>
-          <label className="space-y-1.5">
-            <span className="text-[10px] uppercase tracking-wider text-fg-subtle">Health</span>
-            <NativeSelect aria-label="Filter by agent health" className="w-full" onChange={(event) => setHealth(event.target.value)} value={health}>
-              <option value="">Any health</option>
-              <option value="attention">Needs attention</option>
-              <option value="silent">Silent</option>
-              <option value="healthy">Healthy</option>
-            </NativeSelect>
-          </label>
-          <label className="space-y-1.5">
-            <span className="text-[10px] uppercase tracking-wider text-fg-subtle">Environment</span>
-            <NativeSelect aria-label="Filter by environment" className="w-full" onChange={(event) => setEnvironment(event.target.value)} value={environment}>
-              <option value="">All environments</option>
-              {environments.map((value) => <option key={value} value={value}>{value}</option>)}
-            </NativeSelect>
-          </label>
-          {hasFilters && (
-            <button type="button" onClick={() => { setQuery(""); setHealth(""); setEnvironment(""); }} className="min-h-11 px-2 text-xs text-fg-muted underline-offset-4 hover:text-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal sm:min-h-8">
-              Clear filters
-            </button>
-          )}
-        </div>
-
-        {rows.length === 0 ? (
+      {rows.length === 0 ? (
+        <DataPanel>
           <EmptyState>{servers.length === 0 ? "No hosts are reporting. Install and configure the BlackWatch host agent to begin." : "No hosts match these filters."}</EmptyState>
-        ) : (
-          <DataTable
-            tableId="host-fleet-v2"
-            ariaLabel="BlackWatch host fleet"
-            columns={columns}
-            data={rows}
-            getRowId={(host) => host.instance_id}
-          />
-        )}
-      </DataPanel>
-    </section>
+        </DataPanel>
+      ) : (
+        <DataTable
+          tableId="host-fleet-v2"
+          ariaLabel="BlackWatch host fleet"
+          columns={columns}
+          data={rows}
+          getRowId={(host) => host.instance_id}
+        />
+      )}
+    </div>
   );
 }

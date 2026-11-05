@@ -631,3 +631,25 @@ the `Section` and `Subsection` anchor offsets, and the scroll-spy all use that
 variable, so the contents stay pinned directly under the header and anchor jumps
 never hide a heading under it, even when the header wraps to two lines. Only the
 sections scroll.
+
+### Overview page
+
+Four `Section`s in the order an operator works: **Needs attention** (ranked
+rows, each a link to the fixing view), **System health** (six `StatCard`s from
+`lib/overview.ts`: hosts, services, connectors, agent ingestion, posture,
+24h volume), **Detections** (triage table beside the severity breakdown) and
+**Latest activity**. Each card states the number, whether it is good (a word
+plus colour), why, and where to go next. A signal that fails to load shows "—",
+never "healthy". Counts: `notable` is the 10 most recent high/critical events,
+and `severity_counts` is all-time, and the page labels them that way.
+
+### Hosts list
+
+**Fleet health** (healthy / needs attention / silent / agent ingestion cards from
+`lib/host-health.ts`) → **Fleet** (the table, trouble first) → **Recent host
+activity** → **Collection diagnostics** (collapsed). Each card links to
+`/hosts?health=…#fleet`; the page reads the URL and seeds the table's filters
+(and remounts it when they change), so every number is one click from the hosts
+behind it. The needs-attention card says why ("2 delivery delayed, 1 collector
+degraded"). Health grouping lives in one place, `lib/host-health.ts`, shared by
+the cards and the table.

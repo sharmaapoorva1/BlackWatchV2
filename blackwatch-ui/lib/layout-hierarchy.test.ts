@@ -86,3 +86,39 @@ test("the host page pins its identity header at the top and the contents beneath
   assert.doesNotMatch(page, /HostIdentityRail/);
   assert.doesNotMatch(layout, /aside\?:/);
 });
+
+test("the Overview follows attention, health, detections, activity with h1/h2/h3 levels", () => {
+  const page = read("app/page.tsx");
+  const order = ['id="attention"', 'id="health"', 'id="detections"', 'id="activity"'].map((needle) => page.indexOf(needle));
+  assert.ok(order.every((index) => index > 0), "all four sections present");
+  assert.deepEqual([...order].sort((a, b) => a - b), order, "sections appear in working order");
+  assert.match(page, /<PageHeader/);
+  assert.match(page, /<Section /);
+  assert.match(page, /SectionLabel as="h3"/);
+  assert.match(page, /<StatCard/);
+  assert.match(page, /<AutoGrid/);
+  // The old tile strip and per-page spacing hacks are gone.
+  assert.doesNotMatch(page, /function Kpi|PostureCell|mt-6 space-y/);
+  // The strip no longer carries its own heading: the section supplies the h2.
+  assert.doesNotMatch(read("components/domain/AttentionStrip.tsx"), /<h2/);
+});
+
+test("the Hosts list: fleet-health cards filter a slim fleet table, then activity and diagnostics", () => {
+  const page = read("app/hosts/page.tsx");
+  const order = ['id="health"', 'id="fleet"', 'id="activity"', 'id="diagnostics"'].map((needle) => page.indexOf(needle));
+  assert.ok(order.every((index) => index > 0));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.match(page, /searchParams/);
+  assert.match(page, /parseFleetGroup\(params\.health\)/);
+  // A card click changes the URL, so the table remounts with the new filters.
+  assert.match(page, /key=\{`\$\{initial\.health\}\|/);
+  assert.match(page, /<StatCard/);
+  assert.match(page, /<Subsection[\s\S]{0,200}defaultOpen=\{false\}/);
+
+  const table = read("components/domain/HostFleetTable.tsx");
+  assert.match(table, /initial\?:/);
+  assert.match(table, /from "@\/lib\/host-health"/);
+  assert.match(table, /<Field label="Find a host" compact/);
+  assert.doesNotMatch(table, /<h2/);
+  assert.doesNotMatch(table, /Fleet health/);
+});
