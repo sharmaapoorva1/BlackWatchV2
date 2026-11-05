@@ -1,27 +1,24 @@
 import Link from "next/link";
-import clsx from "clsx";
 
 import { fetchIam } from "@/lib/api";
-import type { EventEnvelope, IamCounts } from "@/lib/types";
+import type { EventEnvelope } from "@/lib/types";
+import { buildIamCards } from "@/lib/iam-view";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { IamEventsTable, IamPostureEventsTable } from "@/components/domain/IamTables";
 import { toIamPostureRow, toIamRow } from "@/lib/iam-rows";
-import { SectionLabel } from "@/components/layout/SectionLabel";
+import { AutoGrid, Section } from "@/components/layout/Section";
+import { Subsection } from "@/components/layout/Subsection";
+import { StatCard } from "@/components/domain/OverviewParts";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { RefreshButton } from "@/components/layout/RefreshButton";
-import { TimestampCell } from "@/components/domain/TimestampCell";
-import {
-  SeverityBadge,
-  severityBorderBg,
-} from "@/components/domain/SeverityBadge";
-import { IpCell } from "@/components/domain/IpCell";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 export const metadata = { title: "IAM" };
 
 export default async function IamPage() {
   const data = await fetchIam();
+  const cards = buildIamCards(data.counts);
 
   return (
     <>
@@ -33,190 +30,89 @@ export default async function IamPage() {
         actions={<RefreshButton connectorTypes={["aws_cloudtrail_sqs"]} />}
       />
 
-      <CountersStrip counts={data.counts} />
+      <div className="flex min-w-0 flex-col gap-10">
+        <Section id="health" title="Needs attention" description="Last 24 hours. Select a card to open the events behind it.">
+          <AutoGrid min="15rem">
+            {cards.map((card) => (
+              <StatCard key={card.id} card={card} />
+            ))}
+          </AutoGrid>
+        </Section>
 
-      <EventsSection
-        title="console + sso logins"
-        subtitle="AWS console sign-ins (IAM + root) and federated SAML / WebIdentity logins"
-        events={data.logins}
-        showOutcome
-        showSourceIp
-        showLoginKind
-        emptyHint="No console or federated logins captured in the recent window."
-      />
+        <Section id="access" title="Access and configuration" description="Who signed in, and what changed in identity, keys and secrets.">
+          <EventsBlock
+            id="iam-logins"
+            title="Console and SSO logins"
+            subtitle="AWS console sign-ins (IAM and root) and federated SAML or WebIdentity logins"
+            events={data.logins}
+            showOutcome
+            showSourceIp
+            showLoginKind
+            emptyHint="No console or federated logins captured in the recent window."
+          />
+          <EventsBlock
+            id="iam-changes"
+            title="IAM changes"
+            subtitle="users, roles, groups, policies, access keys, MFA, login profiles, permission boundaries"
+            events={data.iam_changes}
+            showTarget
+            emptyHint="No IAM changes in the recent window."
+          />
+          <EventsBlock
+            id="iam-kms"
+            title="KMS and secrets"
+            subtitle="key create, enable or disable, key policy, grants, rotation, scheduled deletion"
+            events={data.kms_changes}
+            showTarget
+            emptyHint="No KMS changes in the recent window."
+          />
+        </Section>
 
-      <EventsSection
-        title="iam changes"
-        subtitle="users · roles · groups · policies · access keys · MFA · login profiles · permission boundaries"
-        events={data.iam_changes}
-        showTarget
-        emptyHint="No IAM changes in the recent window."
-      />
+        <Section id="network" title="Network and exposure" description="Changes to network rules, topology, and what is reachable from outside.">
+          <EventsBlock
+            id="iam-exposure"
+            title="Storage and compute exposure"
+            subtitle="S3 ACL, S3 policy, block public access, public snapshot, public AMI, IMDSv1 enabled"
+            events={data.storage_exposure}
+            showTarget
+            showExposureDetail
+            emptyHint="No storage or compute exposure changes. Nothing was made public."
+            emptyTone="ok"
+          />
+          <EventsBlock
+            id="iam-sg"
+            title="Security group changes"
+            subtitle="ingress, egress, create, delete, instance attach"
+            events={data.sg_changes}
+            showTarget
+            showSgDetail
+            emptyHint="No security group changes in the recent window."
+          />
+          <EventsBlock
+            id="iam-topology"
+            title="Network topology"
+            subtitle="VPC, internet gateway, NAT, route, NACL, peering: the shape of the network, not its rules"
+            events={data.network_topology}
+            showTarget
+            emptyHint="No topology changes. VPCs, gateways, routes and peerings are stable."
+            emptyTone="ok"
+          />
+        </Section>
 
-      <EventsSection
-        title="security group changes"
-        subtitle="ingress / egress / create / delete / instance attach"
-        events={data.sg_changes}
-        showTarget
-        showSgDetail
-        emptyHint="No SG changes in the recent window."
-      />
-
-      <EventsSection
-        title="network topology"
-        subtitle="vpc · igw · nat · route · nacl · peering — the SHAPE of the network, not its rules"
-        events={data.network_topology}
-        showTarget
-        emptyHint="No topology changes — VPCs, gateways, routes, and peerings are stable."
-        emptyTone="ok"
-      />
-
-      <EventsSection
-        title="storage / compute exposure"
-        subtitle="S3 ACL · S3 policy · BPA · snapshot public · AMI public · IMDSv1 enabled"
-        events={data.storage_exposure}
-        showTarget
-        showExposureDetail
-        emptyHint="No storage / compute exposure changes — nothing was made public."
-        emptyTone="ok"
-      />
-
-      <EventsSection
-        title="kms / secrets"
-        subtitle="key create · enable / disable · key policy · grants · rotation · scheduled deletion"
-        events={data.kms_changes}
-        showTarget
-        emptyHint="No KMS changes in the recent window."
-      />
-
-      <PostureFindingsSection events={data.posture_findings_new} />
-
-      <EventsSection
-        title="cloudtrail tamper · audit"
-        subtitle="anyone touching the audit trail itself · should always be empty"
-        events={data.ct_tamper}
-        showTarget
-        emptyHint="Clean — nobody has stopped logging or modified a trail."
-        emptyTone="ok"
-      />
+        <Section id="audit" title="Audit integrity and posture" description="The audit trail itself, and new posture findings.">
+          <EventsBlock
+            id="iam-tamper"
+            title="CloudTrail tamper"
+            subtitle="anyone touching the audit trail itself; should always be empty"
+            events={data.ct_tamper}
+            showTarget
+            emptyHint="Clean. Nobody has stopped logging or modified a trail."
+            emptyTone="ok"
+          />
+          <PostureFindingsBlock events={data.posture_findings_new} />
+        </Section>
+      </div>
     </>
-  );
-}
-
-// =========================================================================
-// counters strip — 10 cells, wraps as 2 rows of 5
-// =========================================================================
-
-function CountersStrip({ counts }: { counts: IamCounts }) {
-  return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
-      <CounterCell
-        label="Logins · ok"
-        value={counts.logins_ok}
-        accent="neutral"
-      />
-      <CounterCell
-        label="Logins · failed"
-        value={counts.logins_failed}
-        accent={
-          counts.logins_failed >= 5
-            ? "critical"
-            : counts.logins_failed > 0
-              ? "medium"
-              : "ok"
-        }
-      />
-      <CounterCell
-        label="Logins · root"
-        value={counts.logins_root}
-        accent={counts.logins_root > 0 ? "critical" : "ok"}
-      />
-      <CounterCell
-        label="Logins · sso"
-        value={counts.logins_sso}
-        accent="neutral"
-      />
-      <CounterCell
-        label="MFA disabled"
-        value={counts.mfa_disabled}
-        accent={counts.mfa_disabled > 0 ? "critical" : "ok"}
-      />
-      <CounterCell
-        label="IAM changes"
-        value={counts.iam_changes}
-        accent={counts.iam_changes > 0 ? "neutral" : "ok"}
-      />
-      <CounterCell
-        label="SG changes"
-        value={counts.sg_changes}
-        accent={counts.sg_changes > 0 ? "neutral" : "ok"}
-      />
-      <CounterCell
-        label="Network topology"
-        value={counts.network_topology}
-        accent={counts.network_topology > 0 ? "medium" : "ok"}
-      />
-      <CounterCell
-        label="Storage exposure"
-        value={counts.storage_exposure}
-        accent={
-          counts.storage_exposure > 0 ? "critical" : "ok"
-        }
-      />
-      <CounterCell
-        label="KMS changes"
-        value={counts.kms_changes}
-        accent={counts.kms_changes > 0 ? "medium" : "ok"}
-      />
-      <CounterCell
-        label="CT tamper"
-        value={counts.ct_tamper}
-        accent={counts.ct_tamper > 0 ? "critical" : "ok"}
-      />
-    </div>
-  );
-}
-
-type Accent = "ok" | "neutral" | "medium" | "critical";
-
-function CounterCell({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: number;
-  accent: Accent;
-}) {
-  const dot =
-    accent === "critical"
-      ? "bg-sev-critical"
-      : accent === "medium"
-        ? "bg-sev-medium"
-        : accent === "ok"
-          ? "bg-sev-resolved"
-          : "bg-fg-subtle";
-  return (
-    <div className="rounded-md border border-line-soft bg-surface-1 px-3 py-2.5">
-      <div className="truncate text-[11px] uppercase tracking-[0.08em] text-fg-subtle" title={label}>
-        {label}
-      </div>
-      <div className="mt-1.5 flex items-baseline gap-2">
-        <span
-          aria-hidden
-          className={clsx("h-1.5 w-1.5 translate-y-[-2px] rounded-full", dot)}
-        />
-        <span
-          className={clsx(
-            "font-mono text-2xl tabular-nums",
-            value === 0 ? "text-fg-disabled" : "text-fg",
-          )}
-        >
-          {value}
-        </span>
-        <span className="font-mono text-[10px] text-fg-subtle">/24h</span>
-      </div>
-    </div>
   );
 }
 
@@ -224,7 +120,8 @@ function CounterCell({
 // reusable section
 // =========================================================================
 
-interface EventsSectionProps {
+interface EventsBlockProps {
+  id: string;
   title: string;
   subtitle?: string;
   events: EventEnvelope[];
@@ -238,7 +135,9 @@ interface EventsSectionProps {
   emptyTone?: "neutral" | "ok";
 }
 
-function EventsSection({
+/** One event stream as a collapsible h3. Streams with events start open. */
+function EventsBlock({
+  id,
   title,
   subtitle,
   events,
@@ -250,22 +149,9 @@ function EventsSection({
   showLoginKind,
   emptyHint,
   emptyTone = "neutral",
-}: EventsSectionProps) {
+}: EventsBlockProps) {
   return (
-    <section className="mt-6 space-y-2">
-      <div className="flex items-baseline justify-between">
-        <SectionLabel>
-          {title}
-          {events.length > 0 && (
-            <span className="ml-2 normal-case tracking-normal text-fg-subtle">
-              · {events.length}
-            </span>
-          )}
-        </SectionLabel>
-        {subtitle && (
-          <span className="text-[11px] text-fg-subtle">{subtitle}</span>
-        )}
-      </div>
+    <Subsection id={id} title={title} count={events.length} summary={subtitle} defaultOpen={events.length > 0}>
       <DataPanel className="overflow-hidden">
         {events.length === 0 ? (
           <EmptyState tone={emptyTone}>{emptyHint ?? "Nothing here."}</EmptyState>
@@ -283,42 +169,34 @@ function EventsSection({
           />
         )}
       </DataPanel>
-    </section>
+    </Subsection>
   );
 }
 
 // =========================================================================
-// posture findings section — links to /aws-posture for the full list
+// posture findings: links to /aws-posture for the full list
 // =========================================================================
 
-function PostureFindingsSection({ events }: { events: EventEnvelope[] }) {
+function PostureFindingsBlock({ events }: { events: EventEnvelope[] }) {
   return (
-    <section className="mt-6 space-y-2">
-      <div className="flex items-baseline justify-between">
-        <SectionLabel>
-          posture findings · new
-          {events.length > 0 && (
-            <span className="ml-2 normal-case tracking-normal text-fg-subtle">
-              · {events.length}
-            </span>
-          )}
-        </SectionLabel>
-        <Link
-          href="/aws-posture"
-          className="text-[11px] text-fg-subtle hover:text-fg"
-        >
-          full posture →
+    <Subsection
+      id="iam-posture"
+      title="New posture findings"
+      count={events.length}
+      summary={
+        <Link href="/aws-posture" className="hover:text-fg">
+          full posture
         </Link>
-      </div>
+      }
+      defaultOpen={events.length > 0}
+    >
       <DataPanel className="overflow-hidden">
         {events.length === 0 ? (
-          <EmptyState tone="ok">
-            No new posture findings in the recent window.
-          </EmptyState>
+          <EmptyState tone="ok">No new posture findings in the recent window.</EmptyState>
         ) : (
           <IamPostureEventsTable rows={events.map(toIamPostureRow)} />
         )}
       </DataPanel>
-    </section>
+    </Subsection>
   );
 }

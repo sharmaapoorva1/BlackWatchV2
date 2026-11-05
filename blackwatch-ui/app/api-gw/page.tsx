@@ -1,5 +1,3 @@
-import clsx from "clsx";
-
 import {
   fetchApiGwSummary,
   fetchApiGwApis,
@@ -7,20 +5,14 @@ import {
   fetchApiGwAlerts,
   fetchApiGwFailures,
 } from "@/lib/api";
-import type {
-  ApiGwAlert,
-  ApiGwApi,
-  ApiGwSource,
-  ApiGwFailure,
-} from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { AlertsTable, ApisTable, FailuresTable, SourcesTable } from "@/components/domain/ApiGwTables";
-import { SectionLabel } from "@/components/layout/SectionLabel";
+import { AutoGrid, Section } from "@/components/layout/Section";
+import { StatCard } from "@/components/domain/OverviewParts";
+import { buildApiGwCards } from "@/lib/apigw-view";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { RefreshButton } from "@/components/layout/RefreshButton";
-import { TimestampCell } from "@/components/domain/TimestampCell";
-import { IpCell } from "@/components/domain/IpCell";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 export const metadata = { title: "API Gateway" };
@@ -33,6 +25,8 @@ export default async function ApiGwPage() {
     fetchApiGwAlerts(24),
     fetchApiGwFailures(24),
   ]);
+
+  const cards = buildApiGwCards(summary, alerts.count, alerts.hours, failures.count, failures.hours);
 
   return (
     <>
@@ -68,101 +62,62 @@ export default async function ApiGwPage() {
         actions={<RefreshButton connectorTypes={["aws_api_gw_sqs"]} />}
       />
 
-      {/* -------- Active APIs (top) --------------------------------------- */}
-      <section className="space-y-2">
-        <div className="flex items-baseline justify-between">
-          <SectionLabel>active APIs</SectionLabel>
-          <span className="text-[11px] text-fg-subtle">
-            one row per API name seen in the log stream ·{" "}
-            <span className="font-mono text-fg-muted">{apis.count}</span>
-          </span>
-        </div>
-        <DataPanel className="overflow-hidden">
-          {apis.apis.length === 0 ? (
-            <EmptyState>
-              No APIs ingested yet. Configure a Gateway stage&apos;s access
-              log to point at a log group under <code>/aws/gateway/*</code>{" "}
-              and hook it into the BW forwarder.
-            </EmptyState>
-          ) : (
-            <ApisTable apis={apis.apis} />
-          )}
-        </DataPanel>
-      </section>
+      <div className="flex min-w-0 flex-col gap-10">
+        <Section id="health" title="Traffic health" description="Alerts and errors first. Select a card to jump to the details.">
+          <AutoGrid min="15rem">
+            {cards.map((card) => (
+              <StatCard key={card.id} card={card} />
+            ))}
+          </AutoGrid>
+        </Section>
 
-      {/* -------- Alerts --------------------------------------------------- */}
-      <section className="mt-6 space-y-2">
-        <div className="flex items-baseline justify-between">
-          <SectionLabel>alerts</SectionLabel>
-          <span className="text-[11px] text-fg-subtle">
-            new source · auth burst · scanner UA · 5xx burst · last {alerts.hours}h ·{" "}
-            <span
-              className={clsx(
-                "font-mono",
-                alerts.count > 0 ? "text-sev-high" : "text-fg-muted",
-              )}
-            >
-              {alerts.count}
-            </span>
-          </span>
-        </div>
-        <DataPanel className="overflow-hidden">
-          {alerts.alerts.length === 0 ? (
-            <EmptyState>
-              No credential-attack or new-source alerts. That&apos;s good — or
-              the forwarder isn&apos;t running yet.
-            </EmptyState>
-          ) : (
-            <AlertsTable alerts={alerts.alerts} />
-          )}
-        </DataPanel>
-      </section>
+        <Section
+          id="alerts"
+          title="Alerts"
+          description={`New source, auth burst, scanner user agent and 5xx burst, last ${alerts.hours}h.`}
+        >
+          <DataPanel className="overflow-hidden">
+            {alerts.alerts.length === 0 ? (
+              <EmptyState tone="ok">No credential-attack or new-source alerts. That is good, or the forwarder is not running yet.</EmptyState>
+            ) : (
+              <AlertsTable alerts={alerts.alerts} />
+            )}
+          </DataPanel>
+        </Section>
 
-      {/* -------- Source IPs ----------------------------------------------- */}
-      <section className="mt-6 space-y-2">
-        <div className="flex items-baseline justify-between">
-          <SectionLabel>source IPs</SectionLabel>
-          <span className="text-[11px] text-fg-subtle">
-            real client IPs · sorted by last seen ·{" "}
-            <span className="font-mono text-fg-muted">{sources.count}</span>
-          </span>
-        </div>
-        <DataPanel className="overflow-hidden">
-          {sources.sources.length === 0 ? (
-            <EmptyState>
-              No API activity yet. Source IPs will populate as the forwarder
-              Lambda drains logs into BW.
-            </EmptyState>
-          ) : (
-            <SourcesTable sources={sources.sources} />
-          )}
-        </DataPanel>
-      </section>
+        <Section id="failures" title="Failures" description={`Auth (4xx) and server (5xx) failures, last ${failures.hours}h.`}>
+          <DataPanel className="overflow-hidden">
+            {failures.failures.length === 0 ? (
+              <EmptyState tone="ok">No failures in this window.</EmptyState>
+            ) : (
+              <FailuresTable failures={failures.failures} />
+            )}
+          </DataPanel>
+        </Section>
 
-      {/* -------- Recent failures ----------------------------------------- */}
-      <section className="mt-6 space-y-2">
-        <div className="flex items-baseline justify-between">
-          <SectionLabel>failures (4xx auth + 5xx)</SectionLabel>
-          <span className="text-[11px] text-fg-subtle">
-            last {failures.hours}h ·{" "}
-            <span
-              className={clsx(
-                "font-mono",
-                failures.count > 0 ? "text-sev-medium" : "text-fg-muted",
-              )}
-            >
-              {failures.count}
-            </span>
-          </span>
-        </div>
-        <DataPanel className="overflow-hidden">
-          {failures.failures.length === 0 ? (
-            <EmptyState>No failures. 🎉</EmptyState>
-          ) : (
-            <FailuresTable failures={failures.failures} />
-          )}
-        </DataPanel>
-      </section>
+        <Section id="apis" title="Active APIs" description={`One row per API name seen in the log stream (${apis.count}).`}>
+          <DataPanel className="overflow-hidden">
+            {apis.apis.length === 0 ? (
+              <EmptyState>
+                No APIs ingested yet. Point a Gateway stage&apos;s access log at a log group under <code>/aws/gateway/*</code> and hook it into
+                the BW forwarder.
+              </EmptyState>
+            ) : (
+              <ApisTable apis={apis.apis} />
+            )}
+          </DataPanel>
+        </Section>
+
+        <Section id="sources" title="Source IPs" description={`Real client IPs, most recently seen first (${sources.count}).`}>
+          <DataPanel className="overflow-hidden">
+            {sources.sources.length === 0 ? (
+              <EmptyState>No API activity yet. Source IPs appear as the forwarder drains logs into BW.</EmptyState>
+            ) : (
+              <SourcesTable sources={sources.sources} />
+            )}
+          </DataPanel>
+        </Section>
+      </div>
     </>
   );
 }

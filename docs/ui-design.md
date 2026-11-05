@@ -696,3 +696,27 @@ old header folded degraded into "down").
 - Sub-components (`InvestigationBrief`, `EvidenceChain`, `ActivityGraph`, `EvidenceExplorer`, `InvestigationActions`, `InvestigationIpIntelligence`) render bodies only; the page supplies headings.
 - "Review evidence" on a chain row expands the Evidence detail subsection, then scrolls to it.
 - Notes use `Field` + `Textarea`.
+
+## VPN
+
+`/vpn` follows the same pattern: `health` (StatCards: servers active, clients connected, certificates expiring within 30 days, failed logins), `servers` (one collapsible h3 `Subsection` per server holding connected clients and certificates; servers that are down or have expiring certs start open), `auth` (recent attempts). Banding, sorting and card logic live in `lib/vpn-view.ts` (unit-tested). Stale servers get a "Remove stale server" button inside their block.
+
+## API Gateway
+
+`/api-gw` leads with `health` (StatCards: alerts, 5xx, 4xx, unique sources), then `alerts`, `failures`, `apis`, `sources`, ordered by what needs action first. Card logic is in `lib/apigw-view.ts` (unit-tested); cards link to the section anchors.
+
+## RDS
+
+`/rds` leads with `health` (StatCards: credential alerts, auth failures, active sessions, proxy source IPs), then `alerts`, `auth`, `connected` (live sessions open, history collapsed), `sources`, `databases` and the `allowlist` manager (collapsed). Card logic is in `lib/rds-view.ts` (unit-tested).
+
+## IAM
+
+`/iam` leads with `health` ("Needs attention" StatCards: root logins, failed logins, MFA disabled, storage exposure, CloudTrail tamper, config changes), then three sections of collapsible event streams: `access` (logins, IAM, KMS), `network` (exposure, security groups, topology), `audit` (tamper, new posture findings). Streams with events start open. Card logic is in `lib/iam-view.ts` (unit-tested); cards link straight to a stream, which opens it.
+
+## Storage and S3 buckets
+
+`/storage`: `health` (public buckets, critical events, S3 access signals), `domains` (one StatCard per storage service, toned by worst severity), `s3-security`, `critical`. `/buckets`: `health` (public, unencrypted, no versioning, total) then `buckets`. All card logic is in `lib/storage-view.ts` (unit-tested). `StorageGroupCard` is no longer used by the page.
+
+## UEBA
+
+`/ueba` keeps its two views as URL tabs (`?tab=anomalies|baselines`, parsed by `parseUebaTab`) so only one dataset loads. Each view has a `summary` StatCard section (anomalies: count, principals, most common dimension; baselines: rows, principals, dimensions) and one h2 section holding the table. Logic is in `lib/ueba-view.ts` (unit-tested).

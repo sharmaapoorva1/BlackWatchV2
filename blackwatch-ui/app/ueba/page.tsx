@@ -3,7 +3,10 @@ import clsx from "clsx";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
-import { SectionLabel } from "@/components/layout/SectionLabel";
+import { AutoGrid, Section } from "@/components/layout/Section";
+import { StatCard } from "@/components/domain/OverviewParts";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { buildAnomalyCards, buildBaselineCards, parseUebaTab } from "@/lib/ueba-view";
 import { Input } from "@/components/ui/Input";
 import { ActiveFilters } from "@/components/ui/ActiveFilters";
 import { Field } from "@/components/ui/Field";
@@ -22,13 +25,15 @@ type SearchParams = {
 
 export const metadata = { title: "UEBA" };
 
+const BASELINE_LIMIT = 500;
+
 export default async function UebaPage({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const tab = params.tab === "baselines" ? "baselines" : "anomalies";
+  const tab = parseUebaTab(params.tab);
 
   const [anomalies, baselines] = await Promise.all([
     tab === "anomalies"
@@ -42,45 +47,46 @@ export default async function UebaPage({
           principal_type: params.principal_type,
           principal_id: params.principal_id,
           dimension: params.dimension,
-          limit: 500,
+          limit: BASELINE_LIMIT,
         }).catch(() => ({ count: 0, baselines: [] }))
       : Promise.resolve({ count: 0, baselines: [] }),
   ]);
 
+  const anomalyRows = anomalies.anomalies.map(toUebaAnomalyRow);
+  const cards = tab === "anomalies" ? buildAnomalyCards(anomalyRows) : buildBaselineCards(baselines.baselines, BASELINE_LIMIT);
+
   return (
     <>
-      <PageHeader
-        title="UEBA"
-        subtitle="Per-principal baselines and first-seen anomalies."
-      />
+      <PageHeader title="UEBA" subtitle="Per-principal baselines and first-seen anomalies." />
 
-      <div className="mb-4 flex gap-1 border-b border-line-soft text-sm">
-        <TabLink
-          href="/ueba?tab=anomalies"
-          active={tab === "anomalies"}
-          label="Recent anomalies"
-        />
-        <TabLink
-          href="/ueba?tab=baselines"
-          active={tab === "baselines"}
-          label="Baseline explorer"
-        />
-      </div>
+      <nav aria-label="UEBA views" className="mb-6 flex gap-1 border-b border-line-soft text-sm">
+        <TabLink href="/ueba?tab=anomalies" active={tab === "anomalies"} label="Recent anomalies" />
+        <TabLink href="/ueba?tab=baselines" active={tab === "baselines"} label="Baseline explorer" />
+      </nav>
 
-      {tab === "anomalies" ? (
-        <DataPanel className="overflow-hidden">
-          {anomalies.anomalies.length === 0 ? (
-            <div className="px-6 py-10 text-center text-sm text-fg-muted">
-              No first-seen anomalies yet. Principals need to be past the
-              warm-up window (default 7 days) for anomalies to fire.
-            </div>
-          ) : (
-            <UebaAnomalyTable rows={anomalies.anomalies.map(toUebaAnomalyRow)} />
-          )}
-        </DataPanel>
-      ) : (
-        <>
-          <div className="mb-4 space-y-3">
+      <div className="flex min-w-0 flex-col gap-10">
+        <Section id="summary" title="Summary" description={tab === "anomalies" ? "What changed in recent behavior." : "What is being tracked."}>
+          <AutoGrid min="15rem">
+            {cards.map((card) => (
+              <StatCard key={card.id} card={card} />
+            ))}
+          </AutoGrid>
+        </Section>
+
+        {tab === "anomalies" ? (
+          <Section id="anomalies" title="Recent anomalies" description="First-seen behavior per principal, newest first.">
+            <DataPanel className="overflow-hidden">
+              {anomalyRows.length === 0 ? (
+                <EmptyState tone="ok">
+                  No first-seen anomalies yet. Principals need to be past the warm-up window (default 7 days) for anomalies to fire.
+                </EmptyState>
+              ) : (
+                <UebaAnomalyTable rows={anomalyRows} />
+              )}
+            </DataPanel>
+          </Section>
+        ) : (
+          <Section id="baselines" title="Baseline explorer" description="What each principal normally does. Filter by principal or dimension.">
             <FilterBar action="/ueba" label="Filter baselines" clearHref="/ueba?tab=baselines" applyLabel="Filter">
               <input type="hidden" name="tab" value="baselines" />
               <Field label="Principal type" compact className="w-full sm:w-40">
@@ -104,12 +110,12 @@ export default async function UebaPage({
               labels={{ principal_type: "Principal type", principal_id: "Principal ID", dimension: "Dimension" }}
               hidden={["tab"]}
             />
-          </div>
-          <DataPanel className="overflow-hidden">
-            <BaselineTable rows={baselines.baselines} />
-          </DataPanel>
-        </>
-      )}
+            <DataPanel className="overflow-hidden">
+              <BaselineTable rows={baselines.baselines} />
+            </DataPanel>
+          </Section>
+        )}
+      </div>
     </>
   );
 }

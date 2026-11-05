@@ -179,3 +179,63 @@ test("Investigations: list has start, status cards and filterable cases; detail 
   assert.doesNotMatch(notebook, /SectionLabel|<h2/);
   assert.doesNotMatch(read("app/investigations/InvestigationIpIntelligence.tsx"), /SectionLabel/);
 });
+
+test("the VPN page: health cards, collapsible servers, auth attempts", () => {
+  const page = read("app/vpn/page.tsx");
+  const order = ['id="health"', 'id="servers" title="Servers" description', 'id="auth"'].map((needle) => page.indexOf(needle));
+  assert.ok(order.every((index) => index > 0));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.match(page, /<StatCard/);
+  assert.match(page, /<Subsection[\s\S]{0,300}defaultOpen=\{/);
+  assert.doesNotMatch(page, /<SectionLabel>\{/);
+});
+
+test("the API Gateway page: health cards, then alerts, failures, APIs, sources", () => {
+  const page = read("app/api-gw/page.tsx");
+  const order = ['id="health"', 'id="alerts"', 'id="failures"', 'id="apis"', 'id="sources"'].map((needle) => page.indexOf(needle));
+  assert.ok(order.every((index) => index > 0));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.match(page, /<StatCard/);
+  assert.doesNotMatch(page, /SectionLabel|mt-6 space-y/);
+});
+
+test("the RDS page: health cards, alerts, auth failures, sessions, sources, databases, allowlist", () => {
+  const page = read("app/rds/page.tsx");
+  const order = ['id="health"', 'id="alerts"', 'id="auth"', 'id="connected"', 'id="sources"', 'id="databases"', 'id="allowlist"'].map((needle) => page.indexOf(needle));
+  assert.ok(order.every((index) => index > 0));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.match(page, /<StatCard/);
+  assert.match(page, /id="sessions-history"[\s\S]{0,200}defaultOpen=\{false\}/);
+  assert.doesNotMatch(page, /SectionLabel|<details|mt-6 space-y/);
+});
+
+test("the IAM page: attention cards, then access, network and audit sections of collapsible streams", () => {
+  const page = read("app/iam/page.tsx");
+  const order = ['id="health"', 'id="access"', 'id="network"', 'id="audit"'].map((needle) => page.indexOf(needle));
+  assert.ok(order.every((index) => index > 0));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.match(page, /<StatCard/);
+  assert.match(page, /defaultOpen=\{events\.length > 0\}/);
+  assert.doesNotMatch(page, /SectionLabel|CountersStrip|mt-6 space-y/);
+});
+
+test("Storage and S3 buckets: health cards then sections, no hand-rolled counters", () => {
+  const page = read("app/storage/page.tsx");
+  const order = ['id="health"', 'id="domains"', 'id="s3-security"', 'id="critical"'].map((needle) => page.indexOf(needle));
+  assert.ok(order.every((index) => index > 0));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.doesNotMatch(page, /SectionLabel|mt-6 space-y/);
+  const buckets = read("app/buckets/page.tsx");
+  assert.match(buckets, /buildBucketCards\(counts\)/);
+  assert.match(buckets, /<Section id="buckets"/);
+  assert.doesNotMatch(buckets, /CountCell|PageSection/);
+});
+
+test("the UEBA page: summary cards, then the anomalies or baselines section for the chosen tab", () => {
+  const page = read("app/ueba/page.tsx");
+  assert.match(page, /<Section id="summary"/);
+  assert.match(page, /<Section id="anomalies"/);
+  assert.match(page, /<Section id="baselines"/);
+  assert.match(page, /parseUebaTab\(params\.tab\)/);
+  assert.doesNotMatch(page, /SectionLabel|mb-4 space-y/);
+});

@@ -1,5 +1,3 @@
-import clsx from "clsx";
-
 import {
   fetchRdsSummary,
   fetchRdsLive,
@@ -27,11 +25,13 @@ import {
   SessionsTable,
   ShapeBAlertsTable,
 } from "@/components/domain/RdsTables";
-import { SectionLabel } from "@/components/layout/SectionLabel";
+import { AutoGrid, Section } from "@/components/layout/Section";
+import { Subsection } from "@/components/layout/Subsection";
+import { StatCard } from "@/components/domain/OverviewParts";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { allowlistSummary, buildRdsCards } from "@/lib/rds-view";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { RefreshButton } from "@/components/layout/RefreshButton";
-import { TimestampCell } from "@/components/domain/TimestampCell";
-import { IpCell } from "@/components/domain/IpCell";
 import { FlashToast } from "@/components/ui/FlashToast";
 import { PendingButton } from "@/components/ui/PendingButton";
 import { Input } from "@/components/ui/Input";
@@ -58,6 +58,15 @@ export default async function RdsPage({
     ]);
 
   const totalActive = summary.databases.reduce((n, d) => n + d.active, 0);
+  const cards = buildRdsCards({
+    databases: summary.databases.length,
+    active: totalActive,
+    authFailures: auth.count,
+    authHours: auth.hours,
+    alerts: shapeB.count,
+    alertHours: shapeB.hours,
+    sources: sources.count,
+  });
   const humans = allowlist.users.filter((u) => u.kind === "human");
   const services = allowlist.users.filter((u) => u.kind === "service");
 
@@ -90,180 +99,81 @@ export default async function RdsPage({
         actions={<RefreshButton connectorTypes={["aws_rds_sqs"]} />}
       />
 
-      {/* -------- Shape-B alerts (top, because they're the real signal) --- */}
-      <section className="space-y-2">
-        <div className="flex items-baseline justify-between">
-          <SectionLabel>shape-B alerts</SectionLabel>
-          <span className="text-[11px] text-fg-subtle">
-            new source · new user+ip · unknown user · last {shapeB.hours}h ·{" "}
-            <span
-              className={clsx(
-                "font-mono",
-                shapeB.count > 0 ? "text-sev-high" : "text-fg-muted",
-              )}
-            >
-              {shapeB.count}
-            </span>
-          </span>
-        </div>
-        <DataPanel className="overflow-hidden">
-          {shapeB.alerts.length === 0 ? (
-            <EmptyState>
-              No stolen-credential or new-source alerts. That&apos;s good —
-              or your allowlist is too permissive.
-            </EmptyState>
-          ) : (
-            <ShapeBAlertsTable alerts={shapeB.alerts} />
-          )}
-        </DataPanel>
-      </section>
+      <div className="flex min-w-0 flex-col gap-10">
+        <Section id="health" title="Database health" description="Credential alerts and failed logins first. Select a card to jump to the details.">
+          <AutoGrid min="15rem">
+            {cards.map((card) => (
+              <StatCard key={card.id} card={card} />
+            ))}
+          </AutoGrid>
+        </Section>
 
-      {/* -------- Proxy source IPs (real client IPs) ---------------------- */}
-      <section className="mt-6 space-y-2">
-        <div className="flex items-baseline justify-between">
-          <SectionLabel>proxy source IPs</SectionLabel>
-          <span className="text-[11px] text-fg-subtle">
-            real client IPs seen at the RDS Proxy ·{" "}
-            <span className="font-mono text-fg-muted">{sources.count}</span>
-          </span>
-        </div>
-        <DataPanel className="overflow-hidden">
-          {sources.sources.length === 0 ? (
-            <EmptyState>
-              No proxy connects observed yet. New IPs will appear here as
-              they connect (and fire rds.proxy.source.new the first time).
-            </EmptyState>
-          ) : (
-            <ProxySourcesTable sources={sources.sources} />
-          )}
-        </DataPanel>
-      </section>
-
-      {/* -------- Databases summary --------------------------------------- */}
-      <section className="mt-6 space-y-2">
-        <SectionLabel>databases</SectionLabel>
-        <DataPanel className="overflow-hidden">
-          {summary.databases.length === 0 ? (
-            <EmptyState>
-              Nothing here yet. Once the log-forwarder Lambda is subscribed
-              to your RDS log groups and the BW connector is enabled,
-              sessions + auth failures will flow into this page.
-            </EmptyState>
-          ) : (
-            <DatabasesTable databases={summary.databases} />
-          )}
-        </DataPanel>
-      </section>
-
-      {/* -------- Currently connected ------------------------------------- */}
-      <section className="mt-6 space-y-2">
-        <div className="flex items-baseline justify-between">
-          <SectionLabel>currently connected</SectionLabel>
-          <span className="text-[11px] text-fg-subtle">
-            <span className="font-mono text-fg-muted">{live.count}</span>{" "}
-            active
-          </span>
-        </div>
-        <DataPanel className="overflow-hidden">
-          {live.sessions.length === 0 ? (
-            <EmptyState>No active sessions right now.</EmptyState>
-          ) : (
-            <SessionsTable sessions={live.sessions} live />
-          )}
-        </DataPanel>
-      </section>
-
-      {/* -------- Session history (collapsed) ----------------------------- */}
-      <section className="mt-6 space-y-2">
-        <details className="group">
-          <summary className="flex cursor-pointer list-none items-baseline justify-between rounded-md border border-line-soft bg-surface-1 px-4 py-2.5 hover:bg-surface-2">
-            <span className="flex items-baseline gap-2">
-              <span
-                aria-hidden
-                className="text-fg-subtle transition-transform group-open:rotate-90"
-              >
-                ▸
-              </span>
-              <span className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-                session history
-              </span>
-              <span className="text-xs text-fg-muted">last 24h</span>
-            </span>
-            <span className="text-[11px] text-fg-subtle">
-              <span className="font-mono text-fg-muted">{history.count}</span>{" "}
-              sessions
-            </span>
-          </summary>
-          <DataPanel className="mt-2 overflow-hidden">
-            {history.sessions.length === 0 ? (
-              <EmptyState>No session history in the last 24h.</EmptyState>
+        <Section id="alerts" title="Credential alerts" description={`New source, new user+IP and unknown user, last ${shapeB.hours}h.`}>
+          <DataPanel className="overflow-hidden">
+            {shapeB.alerts.length === 0 ? (
+              <EmptyState tone="ok">No stolen-credential or new-source alerts. That is good, or your allowlist is too permissive.</EmptyState>
             ) : (
-              <SessionsTable sessions={history.sessions} />
+              <ShapeBAlertsTable alerts={shapeB.alerts} />
             )}
           </DataPanel>
-        </details>
-      </section>
+        </Section>
 
-      {/* -------- Auth failures ------------------------------------------- */}
-      <section className="mt-6 space-y-2">
-        <div className="flex items-baseline justify-between">
-          <SectionLabel>auth failures</SectionLabel>
-          <span className="text-[11px] text-fg-subtle">
-            last {auth.hours}h ·{" "}
-            <span
-              className={clsx(
-                "font-mono",
-                auth.count > 0 ? "text-sev-critical" : "text-fg-muted",
+        <Section id="auth" title="Auth failures" description={`Failed database logins, last ${auth.hours}h.`}>
+          <DataPanel className="overflow-hidden">
+            {auth.failures.length === 0 ? (
+              <EmptyState tone="ok">No auth failures in this window.</EmptyState>
+            ) : (
+              <AuthFailuresTable failures={auth.failures} />
+            )}
+          </DataPanel>
+        </Section>
+
+        <Section id="connected" title="Sessions" description="Who is connected now, and recent history.">
+          <Subsection id="sessions-live" title="Currently connected" count={live.count}>
+            <DataPanel className="overflow-hidden">
+              {live.sessions.length === 0 ? <EmptyState>No active sessions right now.</EmptyState> : <SessionsTable sessions={live.sessions} live />}
+            </DataPanel>
+          </Subsection>
+          <Subsection id="sessions-history" title="Session history" count={history.count} summary="last 24h" defaultOpen={false}>
+            <DataPanel className="overflow-hidden">
+              {history.sessions.length === 0 ? (
+                <EmptyState>No session history in the last 24h.</EmptyState>
+              ) : (
+                <SessionsTable sessions={history.sessions} />
               )}
-            >
-              {auth.count}
-            </span>
-          </span>
-        </div>
-        <DataPanel className="overflow-hidden">
-          {auth.failures.length === 0 ? (
-            <EmptyState>No auth failures. 🎉</EmptyState>
-          ) : (
-            <AuthFailuresTable failures={auth.failures} />
-          )}
-        </DataPanel>
-      </section>
+            </DataPanel>
+          </Subsection>
+        </Section>
 
-      {/* -------- User allowlist (collapsed) ------------------------------ */}
-      <section className="mt-6 space-y-2">
-        <details className="group">
-          <summary className="flex cursor-pointer list-none items-baseline justify-between rounded-md border border-line-soft bg-surface-1 px-4 py-2.5 hover:bg-surface-2">
-            <span className="flex items-baseline gap-2">
-              <span
-                aria-hidden
-                className="text-fg-subtle transition-transform group-open:rotate-90"
-              >
-                ▸
-              </span>
-              <span className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-                user allowlist
-              </span>
-              <span className="text-xs text-fg-muted">
-                users NOT on this list fire rds.user.unknown
-              </span>
-            </span>
-            <span className="text-[11px] text-fg-subtle">
-              <span className="font-mono text-fg-muted">{humans.length}</span>{" "}
-              humans ·{" "}
-              <span className="font-mono text-fg-muted">
-                {services.length}
-              </span>{" "}
-              services
-            </span>
-          </summary>
-          <div className="mt-2 space-y-4">
-            <AllowlistManager
-              humans={humans}
-              services={services}
-            />
-          </div>
-        </details>
-      </section>
+        <Section id="sources" title="Proxy source IPs" description={`Real client IPs seen at the RDS Proxy (${sources.count}).`}>
+          <DataPanel className="overflow-hidden">
+            {sources.sources.length === 0 ? (
+              <EmptyState>No proxy connects observed yet. New IPs appear as they connect (and fire rds.proxy.source.new the first time).</EmptyState>
+            ) : (
+              <ProxySourcesTable sources={sources.sources} />
+            )}
+          </DataPanel>
+        </Section>
+
+        <Section id="databases" title="Databases" description="Activity per database instance.">
+          <DataPanel className="overflow-hidden">
+            {summary.databases.length === 0 ? (
+              <EmptyState>
+                Nothing here yet. Once the log-forwarder Lambda is subscribed to your RDS log groups and the BW connector is enabled, sessions and auth
+                failures flow into this page.
+              </EmptyState>
+            ) : (
+              <DatabasesTable databases={summary.databases} />
+            )}
+          </DataPanel>
+        </Section>
+
+        <Section id="allowlist" title="User allowlist" description="Users not on this list fire rds.user.unknown.">
+          <Subsection id="allowlist-manage" title="Allowed users" summary={allowlistSummary(humans.length, services.length)} defaultOpen={false}>
+            <AllowlistManager humans={humans} services={services} />
+          </Subsection>
+        </Section>
+      </div>
     </>
   );
 }
@@ -353,14 +263,6 @@ function AllowlistTable({
         {heading} · {entries.length}
       </div>
       <AllowlistEntriesTable entries={entries} kind={heading.toLowerCase().replaceAll(" ", "-")} />
-    </div>
-  );
-}
-
-function EmptyState({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="px-6 py-10 text-center text-sm text-fg-muted">
-      {children}
     </div>
   );
 }
