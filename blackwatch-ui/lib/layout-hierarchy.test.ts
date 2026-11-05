@@ -60,14 +60,15 @@ test("the host page uses the layout and no longer has a floating bar or underlin
 
 test("the host page pins its identity header at the top and the contents beneath it", () => {
   const sticky = read("components/layout/StickyHeader.tsx");
-  assert.match(sticky, /md:sticky md:top-0/);
+  assert.match(sticky, /md:sticky md:top-\[calc\(var\(--main-pad-top,0px\)\*-1\)\]/);
+  assert.match(sticky, /md:-mt-\[var\(--main-pad-top,0px\)\]/);
   assert.match(sticky, /--sticky-header-h/);
   assert.match(sticky, /ResizeObserver/);
   // The pinned header publishes its height and cleans up on unmount.
   assert.match(sticky, /removeProperty\("--sticky-header-h"\)/);
 
   const layout = read("components/layout/DetailLayout.tsx");
-  assert.match(layout, /lg:sticky lg:top-\[calc\(var\(--sticky-header-h,0px\)\+1rem\)\]/);
+  assert.match(layout, /lg:sticky lg:top-\[max\(0px,calc\(var\(--sticky-header-h,0px\)\+1rem-var\(--main-pad-top,0px\)\)\)\]/);
 
   // Anchor jumps and scroll-spy account for the header's height.
   assert.match(read("components/layout/Section.tsx"), /scroll-mt-\[calc\(var\(--sticky-header-h,0px\)\+1rem\)\]/);
@@ -121,4 +122,60 @@ test("the Hosts list: fleet-health cards filter a slim fleet table, then activit
   assert.match(table, /<Field label="Find a host" compact/);
   assert.doesNotMatch(table, /<h2/);
   assert.doesNotMatch(table, /Fleet health/);
+});
+
+test("the Events page: one h2 feed with chips, filters, mix and table, and a pinned-header padding fix", () => {
+  const page = read("app/events/page.tsx");
+  assert.match(page, /<Section\s+id="feed"/);
+  for (const part of ["<SeverityChips", "<EventFilters", "<ActiveFilters", "<SavedFilters", "<SeverityMixBar", "<EventsDataTable"]) {
+    assert.ok(page.includes(part), `${part} should be on the page`);
+  }
+  assert.match(page, /limit: EVENT_FEED_LIMIT/);
+  // The severity select moved to chips; the form must still carry the chosen severity.
+  assert.match(page, /type="hidden" name="severity"/);
+  assert.match(page, /action=\{\s*filtered \?/);
+
+  // The scroll area's top padding is cancelled inside the pinned header (no strip above it).
+  assert.match(read("components/layout/AppShell.tsx"), /\[--main-pad-top:1rem\][^"]*md:\[--main-pad-top:1\.25rem\]/);
+});
+
+test("the Services page: health cards, attention list, VPC blocks, agents, archive; status filter from the URL", () => {
+  const page = read("app/services/page.tsx");
+  const order = ['id="health"', 'id="attention"', 'id="services"', 'id="agents"', 'id="archive"'].map((needle) => page.indexOf(needle));
+  assert.ok(order.every((index) => index > 0));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.match(page, /parseStatusFilter\(params\.status\)/);
+  assert.match(page, /filterGrouped\(grouped, status\)/);
+  assert.match(page, /<StatCard/);
+  // One collapsible block per VPC; problem VPCs open, healthy ones fold when there are many.
+  assert.match(page, /<Subsection[\s\S]{0,200}defaultOpen=\{vpcStartsOpen/);
+  // The archive stays collapsed.
+  assert.match(page, /id="services-archive"[\s\S]{0,300}defaultOpen=\{false\}/);
+  // No page-local heading markup or margin hacks.
+  assert.doesNotMatch(page, /SectionLabel|mt-6 space-y|<details/);
+});
+
+test("Investigations: list has start, status cards and filterable cases; detail has a pinned header and sidebar sections", () => {
+  const list = read("app/investigations/page.tsx");
+  const order = ['id="start"', 'id="summary"', 'id="cases"'].map((needle) => list.indexOf(needle));
+  assert.ok(order.every((index) => index > 0));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.match(list, /parseCaseGroup\(/);
+  assert.match(list, /filterCases\(/);
+  assert.match(list, /<StatCard/);
+  assert.doesNotMatch(list, /SectionLabel/);
+
+  const notebook = read("app/investigations/InvestigationNotebook.tsx");
+  assert.match(notebook, /<StickyHeader>/);
+  assert.match(notebook, /<DetailLayout nav=\{nav\}>/);
+  for (const id of ["summary", "intelligence", "evidence", "next-steps", "notes"]) {
+    assert.ok(notebook.includes(`<Section id="${id}"`), `section ${id}`);
+  }
+  for (const id of ["evidence-chain", "evidence-pulse", "evidence-detail"]) {
+    assert.ok(notebook.includes(`<Subsection id="${id}"`), `subsection ${id}`);
+  }
+  // Reviewing evidence opens the collapsed block before scrolling to it.
+  assert.match(notebook, /EXPAND_EVENT[\s\S]{0,120}evidence-detail/);
+  assert.doesNotMatch(notebook, /SectionLabel|<h2/);
+  assert.doesNotMatch(read("app/investigations/InvestigationIpIntelligence.tsx"), /SectionLabel/);
 });

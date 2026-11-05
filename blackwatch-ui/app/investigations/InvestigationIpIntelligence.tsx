@@ -7,7 +7,6 @@ import {
   IpLookupResult,
   type IpApiResponse,
 } from "@/components/domain/IpLookupResult";
-import { SectionLabel } from "@/components/layout/SectionLabel";
 import { investigationIpLookupHref } from "@/lib/investigation-flow";
 
 export function InvestigationIpIntelligence({ ip }: { ip: string }) {
@@ -43,8 +42,7 @@ export function InvestigationIpIntelligence({ ip }: { ip: string }) {
   if (!ip) return null;
 
   return (
-    <section className="space-y-2">
-      <SectionLabel>automatic IP intelligence</SectionLabel>
+    <div className="space-y-2">
       {error && (
         <div role="alert" className="border border-sev-critical/40 bg-sev-critical/5 px-4 py-3 text-xs text-sev-critical">
           {error}
@@ -57,6 +55,6 @@ export function InvestigationIpIntelligence({ ip }: { ip: string }) {
         </div>
       )}
       {result && <IpLookupResult query={ip} result={result} compact />}
-    </section>
+    </div>
   );
 }

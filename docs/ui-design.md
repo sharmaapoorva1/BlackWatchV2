@@ -653,3 +653,46 @@ activity** → **Collection diagnostics** (collapsed). Each card links to
 behind it. The needs-attention card says why ("2 delivery delayed, 1 collector
 degraded"). Health grouping lives in one place, `lib/host-health.ts`, shared by
 the cards and the table.
+
+### Events page
+
+One h2, **Event feed**, holding: severity chips (one click; the active one clears
+on a second click; counts are those of the events shown), search + category,
+module and action selects, active-filter chips and saved filters; then a
+severity-mix bar for the results; then the table. The page states plainly that
+the feed is the newest 200 (`EVENT_FEED_LIMIT` in `lib/events-view.ts`) and asks
+you to narrow filters to reach older events. The severity select was replaced by
+the chips; the form still carries the chosen severity in a hidden field.
+
+### Pinned header and the scroll area's padding
+
+The page's scroll area (`<main>`) has top padding, and a sticky element sticks
+inside that padding, which left a strip where scrolled content showed above the
+header. `<main>` now publishes its top padding as `--main-pad-top`;
+`StickyHeader` pulls itself up by that amount (`-mt`, `top: -pad`) and re-adds it
+as its own padding, and the contents sidebar subtracts it from its offset.
+
+### Services page
+
+**Service health** (up / down / degraded-or-unknown / probe agents, from
+`lib/services-view.ts`; each card links to `/services?status=…#services`) →
+**Needs attention** (down, degraded and unknown services, worst first, then the
+longest outage) → **Services by VPC** (one collapsible block per VPC with its
+count and "3 up · 1 down" summary; VPCs with problems start open, healthy ones
+fold when there are more than three) → **Probe agents** → **Archive**
+(collapsed). The status filter is read from the URL and applied on the server;
+the attention list is hidden while a filter is active so the page shows one
+thing at a time. Down and degraded are now counted separately everywhere (the
+old header folded degraded into "down").
+
+## Investigations
+
+**List (`/investigations`)** follows the same h1 → h2 pattern: `start` (IP form on `Field`), `summary` ("Case status" `StatCard`s: Active, Confirmed malicious, Concluded), `cases` (filter links with counts, then the table). Cards link to `/investigations?group=<g>#cases`. Grouping and ordering live in `lib/investigations-view.ts` (`caseGroup`, `filterCases`, `buildCaseCards`), unit-tested.
+
+**Detail (`/investigations/[id]`)** uses the pinned-header + sidebar layout:
+
+- `StickyHeader`: breadcrumb, h1 title, status select, time-window select, Run button, and a fact line (observable, priority, owner, window, evidence count, case id).
+- `DetailLayout` sections: Summary, IP intelligence, Evidence (subsections: chain, activity over time, evidence detail), What to check next, Notes.
+- Sub-components (`InvestigationBrief`, `EvidenceChain`, `ActivityGraph`, `EvidenceExplorer`, `InvestigationActions`, `InvestigationIpIntelligence`) render bodies only; the page supplies headings.
+- "Review evidence" on a chain row expands the Evidence detail subsection, then scrolls to it.
+- Notes use `Field` + `Textarea`.

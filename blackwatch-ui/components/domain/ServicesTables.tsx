@@ -215,7 +215,17 @@ export function ServicesTable({ services, vpc }: { services: ServiceTableRow[]; 
 // Archive (services down for a long time)
 // ---------------------------------------------------------------------------
 
-export function ArchivedServicesTable({ services }: { services: ServiceTableRow[] }) {
+/** Services across VPCs with their VPC and outage length: the archive, and the
+ *  "needs attention" triage list (pass a different `tableId`/`ariaLabel`). */
+export function ArchivedServicesTable({
+  services,
+  tableId = "services-archive-v2",
+  ariaLabel = "Archived services",
+}: {
+  services: ServiceTableRow[];
+  tableId?: string;
+  ariaLabel?: string;
+}) {
   const columns = useMemo<ColumnDef<ServiceTableRow, unknown>[]>(
     () => [
       {
@@ -276,8 +286,8 @@ export function ArchivedServicesTable({ services }: { services: ServiceTableRow[
 
   return (
     <DataTable
-      tableId="services-archive-v2"
-      ariaLabel="Archived services"
+      tableId={tableId}
+      ariaLabel={ariaLabel}
       columns={columns}
       data={services}
       getRowId={(s) => s.id}

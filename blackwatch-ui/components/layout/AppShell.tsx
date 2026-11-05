@@ -46,7 +46,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       />
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <SideNav mobileOpen={navOpen} onCloseMobile={() => setNavOpen(false)} />
-        <main id="main-content" tabIndex={-1} aria-label="Main content" className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-4 md:px-6 md:py-5">
+        <main id="main-content" tabIndex={-1} aria-label="Main content" className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 [--main-pad-top:1rem] sm:px-4 md:px-6 md:py-5 md:[--main-pad-top:1.25rem]">
           {/* Wide cap: data tables use the screen on large monitors instead of
               leaving empty gutters; forms and prose pages size themselves. */}
           <div className="mx-auto min-w-0 w-full max-w-[1760px]">

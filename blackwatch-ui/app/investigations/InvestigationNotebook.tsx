@@ -21,11 +21,17 @@ import { Button } from "@/components/ui/Button";
 import { NativeSelect } from "@/components/ui/NativeSelect";
 import { Textarea } from "@/components/ui/Textarea";
 import { DataPanel } from "@/components/layout/DataPanel";
-import { SectionLabel } from "@/components/layout/SectionLabel";
 import { TimestampCell } from "@/components/domain/TimestampCell";
 import { IpCell } from "@/components/domain/IpCell";
 import { SeverityBadge } from "@/components/domain/SeverityBadge";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
+import { Field } from "@/components/ui/Field";
+import { Section } from "@/components/layout/Section";
+import { Subsection, EXPAND_EVENT } from "@/components/layout/Subsection";
+import { DetailLayout } from "@/components/layout/DetailLayout";
+import { StickyHeader } from "@/components/layout/StickyHeader";
+import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
+import type { NavGroup } from "@/components/layout/SectionNav";
 import { DataTable, type ColumnDef } from "@/components/ui/DataTable";
 import { formatStatus } from "./InvestigationList";
 import { InvestigationIpIntelligence } from "./InvestigationIpIntelligence";
@@ -165,91 +171,147 @@ export function InvestigationNotebook({
     });
   }
 
+  const summary = useMemo(() => buildSummary(data.results), [data.results]);
+  const nav: NavGroup[] = [
+    { id: "summary", label: "Summary" },
+    ...(ip ? [{ id: "intelligence", label: "IP intelligence" }] : []),
+    {
+      id: "evidence",
+      label: "Evidence",
+      items: [
+        { id: "evidence-chain", label: "Evidence chain", count: summary.modules.length },
+        { id: "evidence-pulse", label: "Activity over time", count: data.results.length },
+        { id: "evidence-detail", label: "Evidence detail", count: data.results.length },
+      ],
+    },
+    { id: "next-steps", label: "What to check next" },
+    { id: "notes", label: "Notes", count: data.notes.length },
+  ];
+
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <Link
-            href="/investigations"
-            className="text-xs text-fg-muted hover:text-signal"
-          >
-            ← investigations
-          </Link>
-          <h1 className="mt-3 text-2xl font-medium tracking-tight text-fg">
+    <>
+      <StickyHeader>
+        <Breadcrumbs items={[{ label: "Investigations", href: "/investigations" }, { label: data.title }]} />
+        <div className="flex min-w-0 flex-wrap items-end justify-between gap-x-4 gap-y-2">
+          <h1 className="min-w-0 break-words font-display text-xl font-bold tracking-tight text-fg sm:text-2xl">
             {data.title}
           </h1>
-          <p className="mt-1 font-mono text-xs text-fg-subtle">{data.id}</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <Field label="Status" compact className="w-48">
+              <NativeSelect
+                value={data.status}
+                onChange={(event) => changeStatus(event.target.value as InvestigationStatus)}
+                disabled={busy}
+              >
+                {STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {formatStatus(status)}
+                  </option>
+                ))}
+              </NativeSelect>
+            </Field>
+            <Field label="Time window" compact className="w-40">
+              <NativeSelect value={String(windowDays)} onChange={(event) => changeWindow(Number(event.target.value))}>
+                <option value="1">Last 24 hours</option>
+                <option value="7">Last 7 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 90 days</option>
+                <option value="365">Last year</option>
+              </NativeSelect>
+            </Field>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={scan}
+              disabled={busy || scanning || data.status === "closed"}
+            >
+              {scanning ? "Scanning…" : "Run investigation"}
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <NativeSelect
-            value={data.status}
-            onChange={(event) =>
-              changeStatus(event.target.value as InvestigationStatus)
-            }
-            className="h-8 w-auto text-xs"
-            disabled={busy}
-            aria-label="Investigation status"
-          >
-            {STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {formatStatus(status)}
-              </option>
-            ))}
-          </NativeSelect>
-          <Button
-            type="button"
-            variant="primary"
-            onClick={scan}
-            disabled={busy || scanning || data.status === "closed"}
-          >
-            {scanning ? "Scanning…" : "Run investigation"}
-          </Button>
+        <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-5 gap-y-1 text-xs">
+          {ip && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-fg-subtle">Observable</span>
+              <IpCell value={ip} className="text-xs text-fg" />
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-fg-subtle">Priority</span>
+            <span className="text-fg">{data.priority}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-fg-subtle">Owner</span>
+            <span className="text-fg-muted">{data.owner}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-fg-subtle">Window</span>
+            <span className="text-fg-muted">
+              {new Date(data.time_start).toLocaleDateString()} to {new Date(data.time_end).toLocaleDateString()}
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-fg-subtle">Evidence</span>
+            <span className="font-mono text-fg">{data.results.length}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-fg-subtle">Case</span>
+            <code className="font-mono text-fg-muted">{data.id}</code>
+          </span>
+          {scanning && (
+            <span role="status" className="inline-flex items-center gap-1.5 text-signal">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-signal" aria-hidden="true" />
+              Collecting evidence…
+            </span>
+          )}
         </div>
-      </header>
+      </StickyHeader>
 
-      {message && (
-        <div
-          role="status"
-          className="rounded-md border border-line-soft bg-surface-1 px-3 py-2 text-xs text-fg-muted"
-        >
-          {message}
-        </div>
-      )}
-      {data.scan?.status === "failed" && (
-        <div
-          role="alert"
-          className="border border-red-500/40 bg-red-500/5 px-3 py-2 text-xs text-red-300"
-        >
-          Scan failed: {data.scan.error ?? "unknown error"}
-        </div>
-      )}
+      <DetailLayout nav={nav}>
+        {message && (
+          <div role="status" className="rounded-md border border-line-soft bg-surface-1 px-3 py-2 text-xs text-fg-muted">
+            {message}
+          </div>
+        )}
+        {data.scan?.status === "failed" && (
+          <div role="alert" className="rounded-md border border-sev-critical/40 bg-sev-critical/5 px-3 py-2 text-xs text-sev-critical">
+            Scan failed: {data.scan.error ?? "unknown error"}
+          </div>
+        )}
 
-      <div className="space-y-5">
-        <InvestigationBrief
-            ip={ip}
-            results={data.results}
-            scanning={scanning}
-        />
-        <InvestigationIpIntelligence ip={ip} />
-        <EvidenceChain
-          results={data.results}
-          onReviewEvidence={(moduleName) => {
-            setView("module");
-            setFocusedModule(moduleName);
-            const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-            window.requestAnimationFrame(() => {
-              document.getElementById("evidence")?.scrollIntoView({
-                behavior: reduceMotion ? "auto" : "smooth",
-                block: "start",
-              });
-              window.setTimeout(() => document.getElementById("evidence-heading")?.focus(), reduceMotion ? 0 : 250);
-            });
-          }}
-        />
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <main className="min-w-0 space-y-5">
-            <InvestigationActions results={data.results} ip={ip} />
+        <Section id="summary" title="Summary" description="What the evidence says so far.">
+          <InvestigationBrief ip={ip} results={data.results} scanning={scanning} />
+        </Section>
+
+        {ip && (
+          <Section id="intelligence" title="IP intelligence" description="Provider and local-feed context for the observable.">
+            <InvestigationIpIntelligence ip={ip} />
+          </Section>
+        )}
+
+        <Section id="evidence" title="Evidence" description="Where this observable appears and when. Correlation, not causation.">
+          <Subsection id="evidence-chain" title="Evidence chain" count={summary.modules.length} summary="where it appears across modules">
+            <EvidenceChain
+              results={data.results}
+              onReviewEvidence={(moduleName) => {
+                setView("module");
+                setFocusedModule(moduleName);
+                window.dispatchEvent(new CustomEvent<string>(EXPAND_EVENT, { detail: "evidence-detail" }));
+                const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+                window.requestAnimationFrame(() => {
+                  document.getElementById("evidence-detail")?.scrollIntoView({
+                    behavior: reduceMotion ? "auto" : "smooth",
+                    block: "start",
+                  });
+                });
+              }}
+            />
+          </Subsection>
+          <Subsection id="evidence-pulse" title="Activity over time" count={data.results.length} summary="when the linked evidence appeared">
             <ActivityGraph results={data.results} />
+          </Subsection>
+          <Subsection id="evidence-detail" title="Evidence detail" count={data.results.length} summary="open the underlying records to verify a link">
             <EvidenceExplorer
               results={data.results}
               view={view}
@@ -257,71 +319,43 @@ export function InvestigationNotebook({
               focusedModule={focusedModule}
               setFocusedModule={setFocusedModule}
             />
-          </main>
+          </Subsection>
+        </Section>
 
-          <aside className="space-y-4">
-          <DataPanel className="space-y-3 p-4">
-            <SectionLabel>case scope</SectionLabel>
-            <IpCell value={ip} className="text-sm text-fg" />
-            <label
-              className="block text-[10px] uppercase tracking-[0.12em] text-fg-subtle"
-              htmlFor="investigation-window"
-            >
-              timeline
-            </label>
-            <NativeSelect
-              id="investigation-window"
-              value={String(windowDays)}
-              onChange={(event) => changeWindow(Number(event.target.value))}
-              className="h-9 text-xs"
-            >
-              <option value="1">Last 24 hours</option>
-              <option value="7">Last 7 days</option>
-              <option value="30">Last 30 days</option>
-              <option value="90">Last 90 days</option>
-              <option value="365">Last year</option>
-            </NativeSelect>
-            <div className="text-xs text-fg-muted">
-              {new Date(data.time_start).toLocaleString()} → {" "}
-              {new Date(data.time_end).toLocaleString()}
-            </div>
-          </DataPanel>
+        <Section id="next-steps" title="What to check next" description="Investigation steps, not automated remediation.">
+          <InvestigationActions results={data.results} ip={ip} />
+        </Section>
 
+        <Section id="notes" title="Notes" description="Record what you checked and why. Notes are part of the case record.">
           <DataPanel className="space-y-3 p-4">
-            <SectionLabel>analyst notes</SectionLabel>
-            <Textarea
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              rows={4}
-              maxLength={10000}
-              placeholder="Record what you checked and why…"
-              className="text-xs"
-            />
-            <Button
-              type="button"
-              size="sm"
-              onClick={addNote}
-              disabled={busy || !note.trim()}
-            >
+            <Field label="Add a note">
+              <Textarea
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                rows={4}
+                maxLength={10000}
+                placeholder="What did you check, and what did you conclude?"
+              />
+            </Field>
+            <Button type="button" size="sm" onClick={addNote} disabled={busy || !note.trim()}>
               Add note
             </Button>
-            <div className="space-y-3">
+          </DataPanel>
+          {data.notes.length > 0 && (
+            <ul className="space-y-3">
               {data.notes.map((item) => (
-                <div key={item.id} className="border-t border-line-soft pt-2">
-                  <div className="text-[10px] text-fg-subtle">
+                <li key={item.id} className="rounded-md border border-line-soft bg-surface-1 p-4">
+                  <div className="text-xs text-fg-subtle">
                     {item.author} · <TimestampCell value={item.created_at} />
                   </div>
-                  <p className="mt-1 whitespace-pre-wrap break-words text-xs text-fg-muted">
-                    {item.body}
-                  </p>
-                </div>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-fg-muted">{item.body}</p>
+                </li>
               ))}
-            </div>
-          </DataPanel>
-          </aside>
-        </div>
-      </div>
-    </div>
+            </ul>
+          )}
+        </Section>
+      </DetailLayout>
+    </>
   );
 }
 
@@ -337,22 +371,11 @@ function InvestigationBrief({
   const summary = useMemo(() => buildSummary(results), [results]);
   return (
       <DataPanel className="overflow-hidden">
-        <div className="border-b border-line-soft bg-surface-1 px-5 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <ScanSearch size={15} className="text-signal" aria-hidden="true" />
-              <SectionLabel>investigator&apos;s read</SectionLabel>
-            </div>
-            <span className="font-mono text-[10px] text-fg-subtle">
-              {ip || "observable pending"}
-            </span>
-          </div>
-        </div>
         <div className="space-y-5 px-5 py-5">
           <div>
-            <h2 className="max-w-3xl text-xl font-medium leading-snug text-fg">
+            <h3 className="max-w-3xl text-lg font-medium leading-snug text-fg">
               {summary.headline}
-            </h2>
+            </h3>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-fg-muted">
               {summary.narrative}
             </p>
@@ -384,18 +407,7 @@ function EvidenceChain({
   const summary = useMemo(() => buildSummary(results), [results]);
 
   return (
-    <section className="space-y-2">
-        <div className="flex items-baseline justify-between gap-3">
-          <div>
-            <SectionLabel>evidence chain</SectionLabel>
-            <p className="mt-1 text-xs text-fg-subtle">
-              Where this observable appears across BlackWatch read models.
-            </p>
-          </div>
-          <span className="hidden text-[10px] uppercase tracking-[0.12em] text-fg-disabled sm:block">
-            correlation, not causation
-          </span>
-        </div>
+    <>
         {summary.modules.length === 0 ? (
           <DataPanel className="px-5 py-8 text-center text-sm text-fg-muted">
             Run the investigation to build the evidence chain.
@@ -430,7 +442,7 @@ function EvidenceChain({
                       size="sm" variant="ghost"
                       type="button"
                       onClick={() => onReviewEvidence(module.name)}
-                      aria-controls="evidence"
+                      aria-controls="evidence-detail"
                       className="mt-3 inline-flex items-center gap-1 text-left text-xs text-signal hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal"
                     >
                       review evidence <ArrowRight size={12} aria-hidden="true" />
@@ -446,7 +458,7 @@ function EvidenceChain({
             </div>
           </DataPanel>
         )}
-      </section>
+    </>
   );
 }
 
@@ -459,13 +471,7 @@ function InvestigationActions({
 }) {
   const actions = useMemo(() => buildActions(results, ip), [ip, results]);
   return (
-      <section className="space-y-2">
-        <div>
-          <SectionLabel>what to check next</SectionLabel>
-          <p className="mt-1 text-xs text-fg-subtle">
-            These are investigation steps, not automated remediation.
-          </p>
-        </div>
+      <>
         <div className="grid gap-2 md:grid-cols-2">
           {actions.map((action) => (
             <DataPanel key={action.title} className="flex gap-3 p-4">
@@ -477,7 +483,7 @@ function InvestigationActions({
             </DataPanel>
           ))}
         </div>
-      </section>
+      </>
   );
 }
 
@@ -507,28 +513,15 @@ function EvidenceExplorer({
   }, [sorted]);
 
   return (
-    <section id="evidence" className="scroll-mt-6 space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 id="evidence-heading" tabIndex={-1} className="scroll-mt-6 text-[11px] uppercase tracking-[0.08em] text-fg-subtle focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal">
-            evidence detail
-          </h2>
-          <p className="mt-1 text-xs text-fg-subtle">
-            Open the underlying records when you need to verify a link.
-          </p>
-        </div>
-        <label className="flex items-center gap-2 text-[10px] uppercase tracking-[0.12em] text-fg-subtle">
-          view
-          <NativeSelect
-            value={view}
-            onChange={(event) => setView(event.target.value as EvidenceView)}
-            className="h-8 w-auto text-xs normal-case tracking-normal"
-          >
+    <section className="space-y-3">
+      <div className="flex justify-end">
+        <Field label="View" compact className="w-44">
+          <NativeSelect value={view} onChange={(event) => setView(event.target.value as EvidenceView)}>
             <option value="module">By module</option>
             <option value="timeline">Timeline</option>
             <option value="table">Evidence table</option>
           </NativeSelect>
-        </label>
+        </Field>
       </div>
       <DataPanel className="overflow-hidden">
         {results.length === 0 ? (
@@ -689,13 +682,6 @@ function ActivityGraph({ results }: { results: InvestigationResult[] }) {
 
   return (
     <DataPanel className="p-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <SectionLabel>activity pulse</SectionLabel>
-          <p className="mt-1 text-xs text-fg-subtle">When the linked evidence appeared.</p>
-        </div>
-        <span className="font-mono text-xs text-fg-muted">{results.length} matches</span>
-      </div>
       {points.length === 0 ? (
         <p className="text-xs text-fg-muted">Activity will appear after the first scan.</p>
       ) : (

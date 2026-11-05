@@ -39,7 +39,7 @@ export function StickyHeader({ children, className }: { children: React.ReactNod
     <div
       ref={ref}
       className={cn(
-        "z-20 -mx-3 mb-4 border-b border-line bg-canvas px-3 pb-3 sm:-mx-4 sm:px-4 md:sticky md:top-0 md:-mx-6 md:px-6",
+        "z-20 -mx-3 mb-4 border-b border-line bg-canvas px-3 pb-3 sm:-mx-4 sm:px-4 md:sticky md:top-[calc(var(--main-pad-top,0px)*-1)] md:-mx-6 md:-mt-[var(--main-pad-top,0px)] md:px-6 md:pt-[var(--main-pad-top,0px)]",
         className,
       )}
     >

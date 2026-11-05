@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { ArrowRight, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { investigationDetailHref } from "@/lib/investigation-flow";
 
@@ -49,28 +50,25 @@ export function InvestigationStartForm({
   }
 
   return (
-    <form onSubmit={submit} className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-start">
-      <div className="min-w-0 sm:w-64">
-        <label htmlFor="investigation-ip" className="sr-only">
-          IP address to investigate
-        </label>
+    <form onSubmit={submit} className="flex w-full flex-col gap-3 sm:flex-row sm:items-start" noValidate>
+      <Field
+        label="IP address"
+        hint="IPv4 or IPv6. BlackWatch searches events and read models for it."
+        error={error ?? undefined}
+        className="w-full sm:w-80"
+      >
         <Input
-          id="investigation-ip"
           name="ip"
           value={ip}
           onChange={(event) => setIp(event.target.value)}
-          placeholder="IP address to investigate"
+          placeholder="203.0.113.9"
           mono
           disabled={busy}
-          aria-describedby={error ? "investigation-ip-error" : undefined}
+          required
+          autoComplete="off"
         />
-        {error && (
-          <p id="investigation-ip-error" className="mt-1 text-[11px] text-sev-critical">
-            {error}
-          </p>
-        )}
-      </div>
-      <Button type="submit" variant="primary" size="sm" disabled={busy}>
+      </Field>
+      <Button type="submit" variant="primary" disabled={busy} className="sm:mt-[1.625rem]">
         {busy ? <Loader2 size={13} className="animate-spin" aria-hidden /> : <ArrowRight size={13} aria-hidden />}
         {busy ? "Starting…" : "Investigate IP"}
       </Button>

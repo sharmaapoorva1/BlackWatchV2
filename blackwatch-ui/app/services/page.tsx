@@ -1,205 +1,164 @@
-import clsx from "clsx";
+import Link from "next/link";
 
 import { fetchServices } from "@/lib/api";
-import type {
-  ProbeAgent,
-  ServiceCounts,
-  ServiceTarget,
-} from "@/lib/types";
+import { sumServiceCounts } from "@/lib/overview";
+import { toServiceRow } from "@/lib/service-rows";
+import {
+  buildServiceCards,
+  filterGrouped,
+  needsAttention,
+  parseStatusFilter,
+  vpcStartsOpen,
+  vpcSummary,
+} from "@/lib/services-view";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
-import { ArchivedServicesTable, ProbeAgentsTable, ServicesTable } from "@/components/domain/ServicesTables";
-import { toServiceRow } from "@/lib/service-rows";
-import { SectionLabel } from "@/components/layout/SectionLabel";
+import { AutoGrid, Section } from "@/components/layout/Section";
+import { Subsection } from "@/components/layout/Subsection";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
-import { SeverityBadge } from "@/components/domain/SeverityBadge";
-import { TimestampCell } from "@/components/domain/TimestampCell";
+import { ArchivedServicesTable, ProbeAgentsTable, ServicesTable } from "@/components/domain/ServicesTables";
+import { StatCard } from "@/components/domain/OverviewParts";
+import { ActiveFilters } from "@/components/ui/ActiveFilters";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 export const metadata = { title: "Services" };
 
-export default async function ServicesPage() {
-  const { agents, grouped, counts, archived, archive_threshold_days } =
-    await fetchServices();
-  const vpcs = Object.keys(grouped).sort();
+type SearchParams = { status?: string };
+
+/**
+ * Services, in the order an operator works:
+ *   1. Service health   : up / down / degraded cards (each filters the list below)
+ *   2. Needs attention  : down, degraded and unknown services, worst first
+ *   3. Services by VPC  : every probed service, one collapsible block per VPC
+ *   4. Probe agents     : are the probes themselves reporting?
+ *   5. Archive          : services down for a long time (collapsed)
+ * h1 page, h2 section, h3 VPC / archive block.
+ */
+export default async function ServicesPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const params = await searchParams;
+  const status = parseStatusFilter(params.status);
+  const { agents, grouped, counts, archived, archive_threshold_days } = await fetchServices();
+
   // One timestamp for every "down for" label so they agree with each other.
   const now = Date.now();
-  const totalLive = vpcs.reduce((acc, vpc) => acc + grouped[vpc].length, 0);
-  const totalDown = vpcs.reduce(
-    (acc, vpc) => acc + (counts[vpc]?.down ?? 0) + (counts[vpc]?.degraded ?? 0),
-    0,
-  );
+  const totals = sumServiceCounts(counts);
+  const cards = buildServiceCards(counts, agents);
+  const attention = needsAttention(grouped);
+  const shown = filterGrouped(grouped, status);
+  const vpcs = Object.keys(shown).sort();
+  const live = totals.total - totals.disabled;
+  const problems = totals.down + totals.degraded + totals.unknown;
 
   return (
     <>
       <AutoRefresh intervalMs={15_000} />
       <PageHeader
         title="Services"
-        subtitle={`${totalLive} live · ${totalDown} down · ${archived.length} archived · ${vpcs.length} VPC${vpcs.length === 1 ? "" : "s"}`}
+        subtitle={
+          live <= 0
+            ? "No probe targets configured yet."
+            : `${live} live · ${totals.down > 0 ? `${totals.down} down` : "none down"}${problems - totals.down > 0 ? ` · ${problems - totals.down} degraded or unknown` : ""} · ${archived.length} archived · ${Object.keys(grouped).length} ${Object.keys(grouped).length === 1 ? "VPC" : "VPCs"}`
+        }
       />
 
-      <section className="space-y-2">
-        <SectionLabel>per-VPC probe agents</SectionLabel>
-        <DataPanel className="overflow-hidden">
-          {agents.length === 0 ? (
-            <EmptyState>
-              No probe agents have reported yet. Either install one in a VPC,
-              or add an <code className="text-fg">aws_ecs_health</code>{" "}
-              connector for AWS-side reading.
-            </EmptyState>
+      <div className="flex min-w-0 flex-col gap-10">
+        <Section id="health" title="Service health" description="Select a card to filter the services below.">
+          <AutoGrid min="15rem">
+            {cards.map((card) => (
+              <StatCard key={card.id} card={card} />
+            ))}
+          </AutoGrid>
+        </Section>
+
+        {!status && (
+          <Section
+            id="attention"
+            title="Needs attention"
+            description="Down, degraded and unknown services. Worst first, then the longest outage."
+          >
+            <DataPanel className="overflow-hidden">
+              {attention.length === 0 ? (
+                <EmptyState tone="ok">Every probed service is up.</EmptyState>
+              ) : (
+                <ArchivedServicesTable
+                  services={attention.map((service) => toServiceRow(service, now))}
+                  tableId="services-attention-v2"
+                  ariaLabel="Services needing attention"
+                />
+              )}
+            </DataPanel>
+          </Section>
+        )}
+
+        <Section
+          id="services"
+          title={status ? `Services: ${status}` : "Services by VPC"}
+          description={status ? "Filtered by status. Clear the filter to see every service." : "Every probed service, grouped by VPC."}
+          actions={
+            status ? (
+              <Button asChild variant="secondary" size="sm">
+                <Link href="/services#services">Clear filter</Link>
+              </Button>
+            ) : undefined
+          }
+        >
+          {status && <ActiveFilters basePath="/services" params={{ status }} labels={{ status: "Status" }} />}
+          {vpcs.length === 0 ? (
+            <DataPanel>
+              <EmptyState>
+                {status
+                  ? `No services are ${status}.`
+                  : "No probe targets configured yet. Add some via the FastAPI /ui/services/targets page (Next.js port pending)."}
+              </EmptyState>
+            </DataPanel>
           ) : (
-            <ProbeAgentsTable agents={agents} />
+            vpcs.map((vpc) => (
+              <Subsection
+                key={vpc}
+                id={`vpc-${vpc}`}
+                title={vpc}
+                count={shown[vpc].length}
+                summary={vpcSummary(counts[vpc])}
+                defaultOpen={vpcStartsOpen(counts[vpc], vpcs.length)}
+              >
+                <DataPanel className="overflow-hidden">
+                  <ServicesTable services={shown[vpc].map((service) => toServiceRow(service, now))} vpc={vpc} />
+                </DataPanel>
+              </Subsection>
+            ))
           )}
-        </DataPanel>
-      </section>
+        </Section>
 
-      {vpcs.length === 0 ? (
-        <DataPanel className="mt-6 px-6 py-12 text-center">
-          <p className="text-sm text-fg-muted">
-            No probe targets configured yet. Add some via the FastAPI{" "}
-            <code className="text-fg">/ui/services/targets</code> page (Next.js
-            port pending).
-          </p>
-        </DataPanel>
-      ) : (
-        <div className="mt-6 space-y-6">
-          {vpcs.map((vpc) => (
-            <VpcPanel
-              key={vpc}
-              vpc={vpc}
-              services={grouped[vpc]}
-              counts={counts[vpc]}
-              now={now}
-            />
-          ))}
-        </div>
-      )}
+        <Section id="agents" title="Probe agents" description="One agent per VPC runs the probes. If it stops, that VPC's results go stale.">
+          <DataPanel className="overflow-hidden">
+            {agents.length === 0 ? (
+              <EmptyState>
+                No probe agents have reported yet. Install one in a VPC, or add an{" "}
+                <code className="text-fg">aws_ecs_health</code> connector for AWS-side reading.
+              </EmptyState>
+            ) : (
+              <ProbeAgentsTable agents={agents} />
+            )}
+          </DataPanel>
+        </Section>
 
-      {archived.length > 0 && (
-        <ArchivePanel
-          archived={archived}
-          thresholdDays={archive_threshold_days}
-          now={now}
-        />
-      )}
+        {archived.length > 0 && (
+          <Section id="archive" title="Archive" description="Services that stopped responding long ago, kept out of the way.">
+            <Subsection
+              id="services-archive"
+              title="Archived services"
+              count={archived.length}
+              summary={`down for ${archive_threshold_days} day${archive_threshold_days === 1 ? "" : "s"} or more`}
+              defaultOpen={false}
+            >
+              <DataPanel className="overflow-hidden">
+                <ArchivedServicesTable services={archived.map((service) => toServiceRow(service, now))} />
+              </DataPanel>
+            </Subsection>
+          </Section>
+        )}
+      </div>
     </>
   );
 }
-
-// =========================================================================
-// agents
-// =========================================================================
-
-// =========================================================================
-// VPC panel (one per VPC, each contains a services table)
-// =========================================================================
-
-function VpcPanel({
-  vpc,
-  services,
-  counts,
-  now,
-}: {
-  vpc: string;
-  services: ServiceTarget[];
-  counts: ServiceCounts | undefined;
-  now: number;
-}) {
-  return (
-    <section className="space-y-2">
-      <div className="flex items-baseline justify-between">
-        <SectionLabel>{vpc}</SectionLabel>
-        <CountsLine counts={counts} />
-      </div>
-      <DataPanel className="overflow-hidden">
-        <ServicesTable services={services.map((s) => toServiceRow(s, now))} vpc={vpc} />
-      </DataPanel>
-    </section>
-  );
-}
-
-function CountsLine({ counts }: { counts: ServiceCounts | undefined }) {
-  if (!counts) {
-    return <span className="text-[11px] text-fg-subtle">—</span>;
-  }
-  const bad = counts.down + counts.degraded;
-  return (
-    <span className="text-[11px] text-fg-subtle">
-      <span className="font-mono text-fg-muted">{counts.total}</span> total
-      {bad > 0 && (
-        <>
-          {" · "}
-          <span className="font-mono text-sev-critical">{bad}</span> down
-        </>
-      )}
-      {counts.up > 0 && (
-        <>
-          {" · "}
-          <span className="font-mono text-sev-resolved">{counts.up}</span> up
-        </>
-      )}
-      {counts.unknown > 0 && (
-        <>
-          {" · "}
-          <span className="font-mono">{counts.unknown}</span> unknown
-        </>
-      )}
-      {counts.disabled > 0 && (
-        <>
-          {" · "}
-          <span className="font-mono text-fg-disabled">{counts.disabled}</span>{" "}
-          disabled
-        </>
-      )}
-    </span>
-  );
-}
-
-// =========================================================================
-// archive panel — one collapsible table for services down >= threshold,
-// rendered below all VPC panels regardless of which VPC they belong to.
-// =========================================================================
-
-function ArchivePanel({
-  archived,
-  thresholdDays,
-  now,
-}: {
-  archived: ServiceTarget[];
-  thresholdDays: number;
-  now: number;
-}) {
-  return (
-    <section className="mt-6 space-y-2">
-      <details className="group">
-        <summary className="flex cursor-pointer list-none items-baseline justify-between rounded-md border border-line-soft bg-surface-1 px-4 py-2.5 hover:bg-surface-2">
-          <span className="flex items-baseline gap-2">
-            <span
-              aria-hidden
-              className="text-fg-subtle transition-transform group-open:rotate-90"
-            >
-              ▸
-            </span>
-            <span className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-              archive
-            </span>
-            <span className="text-xs text-fg-muted">
-              services down for ≥ {thresholdDays} day{thresholdDays === 1 ? "" : "s"}
-            </span>
-          </span>
-          <span className="text-[11px] text-fg-subtle">
-            <span className="font-mono text-fg-muted">{archived.length}</span>{" "}
-            archived
-          </span>
-        </summary>
-        <DataPanel className="mt-2 overflow-hidden">
-          <ArchivedServicesTable services={archived.map((s) => toServiceRow(s, now))} />
-        </DataPanel>
-      </details>
-    </section>
-  );
-}
-
-// =========================================================================
-// empty state
-// =========================================================================
