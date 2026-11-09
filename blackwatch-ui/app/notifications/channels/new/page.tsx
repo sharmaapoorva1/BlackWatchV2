@@ -9,8 +9,8 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Section } from "@/components/layout/Section";
 import { DataPanel } from "@/components/layout/DataPanel";
-import { BackLink } from "@/components/ui/BackLink";
 import { PickerCard } from "@/components/ui/PickerCard";
 import { ChannelForm } from "@/components/domain/notifications/ChannelForm";
 import { CHANNEL_TYPES, type ChannelType } from "@/lib/types";
@@ -75,19 +75,22 @@ export default async function NewChannelPage({
 
   return (
     <>
-      <BackLink href="/notifications" label="back to notifications" />
-
       <PageHeader
+        breadcrumbs={[{ label: "Notifications", href: "/notifications" }, { label: "Add channel" }]}
         title={chosen ? `Add ${labelFor(chosen)} channel` : "Add channel"}
         subtitle={chosen ? "Fill in the URL / key. Save. Test." : "Pick a channel type."}
       />
 
       {chosen ? (
-        <DataPanel className="overflow-hidden">
-          <ChannelForm type={chosen} />
-        </DataPanel>
+        <Section id="settings" title="Channel settings" description="Save, then use Test on the channel to confirm delivery.">
+          <DataPanel className="overflow-hidden">
+            <ChannelForm type={chosen} />
+          </DataPanel>
+        </Section>
       ) : (
-        <TypePicker />
+        <Section id="type" title="Channel type" description="Where should alerts be delivered?">
+          <TypePicker />
+        </Section>
       )}
     </>
   );

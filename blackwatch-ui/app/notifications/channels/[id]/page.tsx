@@ -4,8 +4,8 @@ import { fetchNotificationChannel } from "@/lib/api";
 import type { ChannelType } from "@/lib/types";
 import { CHANNEL_TYPES } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Section } from "@/components/layout/Section";
 import { DataPanel } from "@/components/layout/DataPanel";
-import { BackLink } from "@/components/ui/BackLink";
 import { ChannelForm } from "@/components/domain/notifications/ChannelForm";
 
 export const metadata = { title: "Edit channel" };
@@ -24,22 +24,22 @@ export default async function EditChannelPage({
 
   return (
     <>
-      <BackLink href="/notifications" label="back to notifications" />
+      <PageHeader breadcrumbs={[{ label: "Notifications", href: "/notifications" }, { label: channel.name }]} title={`Edit · ${channel.name}`} subtitle={channel.id} />
 
-      <PageHeader title={`Edit · ${channel.name}`} subtitle={channel.id} />
-
+      <Section id="settings" title="Channel settings" description="Changes apply to the next notification sent.">
       <DataPanel className="overflow-hidden">
         {knownType ? (
           <ChannelForm type={knownType} existing={channel} />
         ) : (
           <div className="p-4 text-xs text-fg-muted">
             Unknown channel type: <code className="text-fg">{channel.type}</code>
-            <pre className="mt-2 overflow-auto bg-surface-2 p-3 text-[11px]">
+            <pre className="mt-2 overflow-auto bg-surface-2 p-3 text-xs">
               {JSON.stringify(channel.config, null, 2)}
             </pre>
           </div>
         )}
       </DataPanel>
+      </Section>
     </>
   );
 }

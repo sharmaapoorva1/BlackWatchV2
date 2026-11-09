@@ -2,7 +2,7 @@
 
 import { Fragment, ReactNode, useEffect, useId, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
-import Link from "next/link";
+import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { Button } from "./Button";
 import { LiveRegion } from "./LiveRegion";
 import { cn } from "@/lib/utils";
@@ -81,20 +81,21 @@ export function Wizard({
   return (
     <div className="mx-auto max-w-[960px]">
       <LiveRegion message={announcement} />
-      <div className="mb-4">
-        <Link href={backHref} className="inline-flex min-h-11 items-center gap-1.5 text-xs text-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70 sm:min-h-8">
-          <ArrowLeft size={12} /> {backLabel}
-        </Link>
-      </div>
+      <Breadcrumbs
+        items={[
+          { label: backLabel.replace(/^back to /i, ""), href: backHref },
+          { label: title },
+        ]}
+      />
 
-      <div className="mb-8">
-        <h1 className="font-display text-2xl font-bold">{title}</h1>
+      <div className="mb-6">
+        <h1 className="font-display text-2xl font-bold tracking-tight">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
       </div>
 
       <WizardStepper steps={steps} current={current} completed={completed} onJump={onJump} canJump={canJump} />
 
-      <div ref={panelRef} className="overflow-hidden rounded-md border border-line p-4 sm:p-8">
+      <div ref={panelRef} className="overflow-hidden rounded-md border border-line-soft bg-surface-1 p-4 sm:p-8">
         {children}
       </div>
 

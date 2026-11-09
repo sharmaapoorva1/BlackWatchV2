@@ -703,7 +703,7 @@ function ScopeStep({
       <div className="mt-5">
         {scope === "instance" && (
           <>
-            <p className="mb-1.5 text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+            <p className="mb-1.5 text-xs font-medium text-fg-muted">
               Instance
             </p>
             <NativeSelect
@@ -720,7 +720,7 @@ function ScopeStep({
               ))}
             </NativeSelect>
             {instances.length === 0 && (
-              <p className="mt-2 text-[11px] text-fg-subtle">
+              <p className="mt-2 text-xs text-fg-subtle">
                 No instances reporting. Install the EC2 agent first.
               </p>
             )}
@@ -730,21 +730,21 @@ function ScopeStep({
         {scope === "instances" && (
           <>
             <div className="mb-2 flex items-baseline justify-between">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+              <p className="text-xs font-medium text-fg-muted">
                 Instances ({instanceIds.length} selected)
               </p>
               {instances.length > 0 && (
                 <Button size="sm" variant="ghost"
                   type="button"
                   onClick={() => onInstanceIdsSetAll(!allSelected)}
-                  className="text-[11px] text-signal hover:underline"
+                  className="text-xs text-signal hover:underline"
                 >
                   {allSelected ? "Clear all" : "Select all"}
                 </Button>
               )}
             </div>
             {instances.length === 0 ? (
-              <p className="text-[11px] text-fg-subtle">
+              <p className="text-xs text-fg-subtle">
                 No instances reporting. Install the EC2 agent first.
               </p>
             ) : (
@@ -761,7 +761,7 @@ function ScopeStep({
                       <span className="flex items-center gap-2">
                         <span>{hostLabel(i)}</span>
                         {i.tags?.env && (
-                          <code className="font-mono text-[10px] text-fg-subtle">
+                          <code className="font-mono text-xs text-fg-subtle">
                             env={i.tags.env}
                           </code>
                         )}
@@ -781,7 +781,7 @@ function ScopeStep({
 
         {scope === "tag" && (
           <>
-            <p className="mb-1.5 text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+            <p className="mb-1.5 text-xs font-medium text-fg-muted">
               Tag pair
             </p>
             <NativeSelect
@@ -798,7 +798,7 @@ function ScopeStep({
               ))}
             </NativeSelect>
             {tagPairs.length === 0 && (
-              <p className="mt-2 text-[11px] text-fg-subtle">
+              <p className="mt-2 text-xs text-fg-subtle">
                 No tags discovered. Set{" "}
                 <code>BLACKWATCH_TAGS=env=prod,role=api</code> on the agent
                 (systemd env var) and reinstall.
@@ -863,7 +863,7 @@ function ChannelStep({
               title={
                 <span className="flex items-center gap-2">
                   <span>{c.name}</span>
-                  <code className="border border-line-soft px-1 py-px font-mono text-[9px] uppercase tracking-wider text-fg-subtle">
+                  <code className="border border-line-soft px-1 py-px font-mono text-xs text-fg-subtle">
                     {c.type}
                   </code>
                 </span>
@@ -873,7 +873,7 @@ function ChannelStep({
         </div>
       )}
       {disabledCount > 0 && (
-        <p className="mt-3 text-[11px] text-fg-subtle">
+        <p className="mt-3 text-xs text-fg-subtle">
           {disabledCount} disabled channel
           {disabledCount === 1 ? "" : "s"} hidden.
         </p>
@@ -926,16 +926,16 @@ function MessageStep({
         onValueChange={onValueChange}
       />
 
-      <p className="mt-2 text-[11px] leading-snug text-fg-subtle">
+      <p className="mt-2 text-xs leading-snug text-fg-subtle">
         Bad Jinja syntax falls back to the default line — templates never break
         delivery.
       </p>
 
       <div className="mt-6 border-t border-line-soft pt-5">
-        <p className="mb-2 text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+        <p className="mb-2 text-xs font-medium text-fg-muted">
           Test-send this alert
         </p>
-        <p className="mb-2.5 text-[11px] text-fg-subtle">
+        <p className="mb-2.5 text-xs text-fg-subtle">
           Fires the exact rendered message through your picked channel
           {selectedChannels.length === 1 ? "" : "s"} with sample host data.
           Nothing gets saved — this is just a smoke check.
@@ -951,7 +951,7 @@ function MessageStep({
       </div>
 
       <div className="mt-6 border-t border-line-soft pt-5">
-        <p className="mb-1.5 text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+        <p className="mb-1.5 text-xs font-medium text-fg-muted">
           Name
         </p>
         <Input
@@ -961,7 +961,7 @@ function MessageStep({
           onChange={(e) => onName(e.target.value)}
           className="w-full"
         />
-        <p className="mt-2 text-[11px] text-fg-subtle">
+        <p className="mt-2 text-xs text-fg-subtle">
           Saved as: <span className="font-mono text-fg">{effectiveName}</span>
         </p>
       </div>
@@ -1081,10 +1081,10 @@ function ReviewStep({
 
       {selectedChannels.length > 0 && (
         <div className="mt-6 border-t border-line-soft pt-5">
-          <p className="mb-1 text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+          <p className="mb-1 text-xs font-medium text-fg-muted">
             One-shot test
           </p>
-          <p className="mb-2.5 text-[11px] text-fg-subtle">
+          <p className="mb-2.5 text-xs text-fg-subtle">
             Fires the alert with sample data through every picked channel right
             now — same call the wizard uses in the Message step.
           </p>

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import clsx from "clsx";
-import { ArrowLeft, Cloud, Server, Database, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Cloud, Server, Database, ShieldCheck, ShieldAlert } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
+import { Section } from "@/components/layout/Section";
 import { ConnectorForm } from "@/components/domain/connectors/ConnectorForm";
 import type { ConnectorType } from "@/lib/types";
 
@@ -65,26 +66,22 @@ export default async function NewConnectorPage({
 
   return (
     <>
-      <div className="mb-4">
-        <Link
-          href="/connectors"
-          className="inline-flex items-center gap-1.5 text-xs text-fg-muted transition-colors hover:text-fg"
-        >
-          <ArrowLeft size={12} /> back to connectors
-        </Link>
-      </div>
-
       <PageHeader
+        breadcrumbs={[{ label: "Connectors", href: "/connectors" }, { label: "Add connector" }]}
         title={chosen ? labelFor(chosen) : "Add connector"}
         subtitle={chosen ? "Configure, save, test, then enable." : "Pick a connector type."}
       />
 
       {!chosen ? (
-        <TypePicker />
+        <Section id="type" title="Connector type" description="What should BlackWatch collect from?">
+          <TypePicker />
+        </Section>
       ) : (
-        <DataPanel className="overflow-hidden">
-          <ConnectorForm type={chosen} />
-        </DataPanel>
+        <Section id="settings" title="Connector settings" description="Configure, save, test, then enable.">
+          <DataPanel className="overflow-hidden">
+            <ConnectorForm type={chosen} />
+          </DataPanel>
+        </Section>
       )}
     </>
   );
@@ -109,7 +106,7 @@ function TypePicker() {
               className="text-fg-subtle group-hover:text-signal"
             />
             <span className="text-sm text-fg">{opt.title}</span>
-            <code className="ml-auto font-mono text-[10px] text-fg-subtle">
+            <code className="ml-auto font-mono text-xs text-fg-subtle">
               {opt.type}
             </code>
           </div>

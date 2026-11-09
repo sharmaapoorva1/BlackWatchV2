@@ -720,3 +720,51 @@ old header folded degraded into "down").
 ## UEBA
 
 `/ueba` keeps its two views as URL tabs (`?tab=anomalies|baselines`, parsed by `parseUebaTab`) so only one dataset loads. Each view has a `summary` StatCard section (anomalies: count, principals, most common dimension; baselines: rows, principals, dimensions) and one h2 section holding the table. Logic is in `lib/ueba-view.ts` (unit-tested).
+
+## AWS posture
+
+`/aws-posture`: `health` (a StatCard per severity bucket, each filtering with `?severity=`; low includes informational) then `findings` (one collapsible h3 per resource type, hottest first, hot types open). The finding detail page (`/aws-posture/[id]`) has `summary` (metadata cells) and `evidence` (key/values, raw JSON collapsed). Logic is in `lib/posture-view.ts` (unit-tested).
+
+## File integrity (FIM)
+
+`/fim`: `health` ("Coverage" StatCards: hosts not reporting, no real-time watching, no actor attribution, scan errors, recent changes), `hosts`, `activity`. `/fim/[id]`: `coverage` (five StatCards for the agent), `changes`, `paths` (stray baselines in a collapsed h3), `configuration` (how-to collapsed). Logic is in `lib/fim-view.ts` (unit-tested).
+
+## Notifications
+
+`/notifications`: `health` ("Delivery health" StatCards: failed deliveries 24h, channels failing, high/critical coverage gaps, paused by ack), `paused` (only when acks exist), `channels`, `routes` (one collapsible h3 per module), `metrics`, `coverage`, `activity`, `how-it-works`. Primary "Create alert" is in the page header. `/notifications/log` is an `entries` section; Notification Studio lists modules as collapsible h3s that start open when they have enabled alerts. Logic is in `lib/notifications-view.ts` (unit-tested). Route-group open/closed state is no longer remembered between visits.
+
+## Connectors
+
+`/connectors`: `health` (Needs attention / Healthy / Disabled StatCards, each filtering with `?health=`), `connectors` (filter links with counts, failing first). The edit page wraps the form in a `settings` section and the advanced queue in `operations`. Logic is in `lib/connectors-view.ts` (unit-tested); it prefers the server `health_state` and derives one otherwise.
+
+## Rules
+
+`/rules`: `health` (enabled, disabled, suppress rules, muted filters; a mute with no filters is flagged as broad), `catalog` (the existing client table), `muted` (table plus a collapsible "Mute an event" form on `Field`). Logic is in `lib/rules-view.ts` (unit-tested). The rule table keeps its own search and filters.
+
+## Settings
+
+`/settings`: `preferences` (table page size, stored in the browser), `account` (change password), `reference` (where config lives; operator notes collapsed). No health cards: nothing here has a state to triage.
+
+## Event detail
+
+`/events/[id]`: `summary` (severity, time, module, actor, target, outcome, matched rules), `intel` (only when present), `payload` (envelope open, raw record collapsed).
+
+## Tools
+
+`/tools` is one `lookups` section of tool cards. The IP and DNS lookup pages use breadcrumbs (no back link), a `lookup` section holding the filter bar, and a `result` section shown once a value was looked up.
+
+## Coverage and audit log
+
+`/coverage`: `health` (needs attention, stale, healthy, disabled cards, from `lib/coverage-view.ts`) over a `collectors` table. `/audit`: an `entries` section holding the filters and table.
+
+## Notification forms
+
+The channel (new/edit), rule (new/edit) and create-alert chooser pages use Notifications breadcrumbs and one `Section` around the form or picker instead of back links. The alert wizard, performance-alert form and Notification Studio profile editor keep their own shells and were not changed.
+
+## Wizards
+
+`Wizard` (`components/ui/WizardShell.tsx`) now renders the same breadcrumb as `PageHeader` (Notifications > title) instead of a back link, and its step panel uses the shared surface (`border-line-soft bg-surface-1`). The alert and performance-alert wizards use the shared text sizes (12px minimum, no uppercase micro-labels). Steps, validation, saving and focus handling are unchanged.
+
+## Remaining flows
+
+`/connectors/new` uses a Connectors breadcrumb and a `type` or `settings` section. The notification log uses a breadcrumb. The Notification Studio profile editor (`/notifications/profiles/[id]`) has a `PageHeader` with the status as its action, `delivery`, `message` (all fields on `Field`), a collapsible `advanced` template, and a sticky `test` section beside the preview. The login page is intentionally standalone.

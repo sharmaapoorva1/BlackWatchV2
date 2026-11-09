@@ -30,12 +30,12 @@ import { NotificationModel } from "@/components/domain/notifications/Notificatio
 import { DataPanel } from "@/components/layout/DataPanel";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { Button } from "@/components/ui/Button";
-import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { FlashToast } from "@/components/ui/FlashToast";
-import { StatusDot, type Severity } from "@/components/ui/StatusDot";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { TimestampCell } from "@/components/domain/TimestampCell";
-import { SeverityBadge } from "@/components/domain/SeverityBadge";
+import { StatCard } from "@/components/domain/OverviewParts";
+import { AutoGrid, Section } from "@/components/layout/Section";
+import { Subsection } from "@/components/layout/Subsection";
+import { buildNotificationCards, countSince, coverageTotals, groupRoutes } from "@/lib/notifications-view";
 
 import { clearAckAction } from "./actions";
 
@@ -66,105 +66,126 @@ export default async function NotificationsPage({
       fetchPerfAlerts(),
     ]);
   const channelsAvailable = channelsData.channels.length > 0;
-  const sent24h = countSince(logData.entries, "sent", 24 * 3600 * 1000);
-  const failed24h = countSince(logData.entries, "failed", 24 * 3600 * 1000);
+  const now = Date.now();
+  const sent24h = countSince(logData.entries, "sent", 24 * 3600 * 1000, now);
+  const failed24h = countSince(logData.entries, "failed", 24 * 3600 * 1000, now);
+  const cards = buildNotificationCards({
+    channels: channelsData.channels,
+    log: logData.entries,
+    acks: acksData.acks,
+    coverage: routesData.coverage,
+    now,
+  });
 
   return (
     <>
       <AutoRefresh intervalMs={30000} />
       <PageHeader
         title="Notifications"
-        subtitle={`${routesData.routes.length} route${
-          routesData.routes.length === 1 ? "" : "s"
-        } · ${sent24h} sent (24h) · ${failed24h} failed`}
-      />
-
-      <NotificationModel
-        routeCount={routesData.routes.length}
-        channelCount={channelsData.channels.length}
+        subtitle={`${routesData.routes.length} route${routesData.routes.length === 1 ? "" : "s"} · ${sent24h} sent (24h) · ${failed24h} failed`}
+        actions={
+          <Button asChild variant="primary" size="sm">
+            <Link href="/notifications/create">
+              <Plus size={12} /> Create alert
+            </Link>
+          </Button>
+        }
       />
 
       {msg && <FlashToast message={msg} />}
 
-      {acksData.acks.length > 0 && <AcksBanner acks={acksData.acks} />}
-      {!channelsAvailable && <ChannelsFirstHint />}
+      <div className="flex min-w-0 flex-col gap-10">
+        <Section id="health" title="Delivery health" description="Are alerts reaching people? Failures first.">
+          {!channelsAvailable && <ChannelsFirstHint />}
+          <AutoGrid min="15rem">
+            {cards.map((card) => (
+              <StatCard key={card.id} card={card} />
+            ))}
+          </AutoGrid>
+        </Section>
 
-      <CoveragePanel coverage={routesData.coverage} />
+        {acksData.acks.length > 0 && (
+          <Section id="paused" title="Paused notifications" description="Acknowledged alerts stay quiet until the time shown.">
+            <AcksList acks={acksData.acks} />
+          </Section>
+        )}
 
-      {/* CHANNELS */}
-      <SectionHeader
-        id="channels"
-        label="Channels"
-        action={{ href: "/notifications/channels/new", label: "add channel" }}
-      />
-      <ChannelsTable channels={channelsData.channels} />
-
-      {/* ALERT ROUTES */}
-      <div id="routes" className="mt-8 mb-2 flex scroll-mt-4 items-baseline justify-between">
-        <SectionHeaderLabel>Alert routes</SectionHeaderLabel>
-        <Button asChild variant="primary" size="sm">
-          <Link href="/notifications/create">
-            <Plus size={12} /> Create alert
-          </Link>
-        </Button>
-      </div>
-      <RoutesTable routes={routesData.routes} channelsAvailable={channelsAvailable} />
-
-      {/* METRIC ROUTES */}
-      <SectionHeader
-        label="Metric routes"
-        action={{ href: "/notifications/perf-alerts/new", label: "add metric" }}
-      />
-      <MetricRoutesPanel rules={perfData.rules} instances={perfData.instances} />
-
-      {/* ACTIVITY */}
-      <div className="mt-8 mb-2 flex items-baseline justify-between">
-        <SectionHeaderLabel>Recent activity · last 50</SectionHeaderLabel>
-        <Link
-          href="/notifications/log"
-          className="text-[11px] text-fg-subtle hover:text-fg"
+        <Section
+          id="channels"
+          title="Channels"
+          description="Where alerts are delivered: Slack, email, webhook, PagerDuty and so on."
+          actions={
+            <Button asChild variant="secondary" size="sm">
+              <Link href="/notifications/channels/new">
+                <Plus size={12} /> Add channel
+              </Link>
+            </Button>
+          }
         >
-          full log →
-        </Link>
+          <ChannelsTable channels={channelsData.channels} />
+        </Section>
+
+        <Section
+          id="routes"
+          title="Alert routes"
+          description="When something happens, send it to a channel. Grouped by module."
+          actions={
+            <Button asChild variant="secondary" size="sm">
+              <Link href="/notifications/create">
+                <Plus size={12} /> Create alert
+              </Link>
+            </Button>
+          }
+        >
+          <RoutesTable routes={routesData.routes} channelsAvailable={channelsAvailable} />
+        </Section>
+
+        <Section
+          id="metrics"
+          title="Metric routes"
+          description="Alerts on host metrics such as CPU, memory and disk."
+          actions={
+            <Button asChild variant="secondary" size="sm">
+              <Link href="/notifications/perf-alerts/new">
+                <Plus size={12} /> Add metric
+              </Link>
+            </Button>
+          }
+        >
+          <MetricRoutesPanel rules={perfData.rules} instances={perfData.instances} />
+        </Section>
+
+        <Section
+          id="coverage"
+          title="Notification coverage"
+          description="Read-only view of every supported event kind. This does not enable or change notifications."
+          actions={
+            <Button asChild variant="secondary" size="sm">
+              <Link href="/notifications/profiles">Open Notification Studio</Link>
+            </Button>
+          }
+        >
+          <CoveragePanel coverage={routesData.coverage} />
+        </Section>
+
+        <Section
+          id="activity"
+          title="Recent activity"
+          description="The last 50 notifications."
+          actions={
+            <Button asChild variant="secondary" size="sm">
+              <Link href="/notifications/log">Full log</Link>
+            </Button>
+          }
+        >
+          <ActivityTable entries={logData.entries.slice(0, 50)} />
+        </Section>
+
+        <Section id="how-it-works" title="How alerts work" description="When something happens, send it to a place, worded a certain way.">
+          <NotificationModel routeCount={routesData.routes.length} channelCount={channelsData.channels.length} />
+        </Section>
       </div>
-      <ActivityTable entries={logData.entries.slice(0, 50)} />
     </>
-  );
-}
-
-// =========================================================================
-// SECTION HEADERS
-// =========================================================================
-
-function SectionHeader({
-  id,
-  label,
-  action,
-}: {
-  id?: string;
-  label: string;
-  action?: { href: string; label: string };
-}) {
-  return (
-    <div id={id} className="mt-8 mb-2 flex scroll-mt-4 items-end justify-between gap-3">
-      <SectionHeaderLabel>{label}</SectionHeaderLabel>
-      {action && (
-        <Button asChild variant="ghost" size="sm">
-          <Link href={action.href}>
-            <Plus size={12} /> {action.label}
-          </Link>
-        </Button>
-      )}
-    </div>
-  );
-}
-
-function SectionHeaderLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="flex items-center gap-2 text-sm font-medium tracking-wide text-fg">
-      <span className="h-1.5 w-1.5 rounded-full bg-signal" aria-hidden="true" />
-      {children}
-    </h2>
   );
 }
 
@@ -233,85 +254,56 @@ function RoutesTable({
       </DataPanel>
     );
   }
-  // Group by raw module key (source.module value, or "__custom__" bucket).
-  // Preserve first-seen order — backend already sorts catalog order → severity.
-  const groups: { key: string; label: string; routes: Route[] }[] = [];
-  const seen = new Map<string, number>();
-  for (const r of routes) {
-    const k = r.module || "__custom__";
-    let idx = seen.get(k);
-    if (idx === undefined) {
-      idx = groups.length;
-      seen.set(k, idx);
-      groups.push({
-        key: k,
-        label: k === "__custom__" ? "Custom / advanced" : k,
-        routes: [],
-      });
-    }
-    groups[idx].routes.push(r);
-  }
+  const groups = groupRoutes(routes);
 
   return (
     <>
       {groups.map((g) => (
-        <CollapsibleSection
+        <Subsection
           key={g.key}
-          storageKey={`bw.notif.routeGroup.${g.key}`}
+          id={`routes-${g.key}`}
           title={g.label}
           count={g.routes.length}
+          defaultOpen={groups.length <= 3}
         >
           <NotificationRoutesTable
             routes={g.routes.map(toRouteRow)}
             tableId={`notifications-alert-routes-v2-${g.key}`}
             ariaLabel={`Alert routes for ${g.label}`}
           />
-        </CollapsibleSection>
+        </Subsection>
       ))}
     </>
   );
 }
-
 
 // =========================================================================
 // NOTIFICATION COVERAGE — read-only visibility into every supported event
 // =========================================================================
 
 function CoveragePanel({ coverage }: { coverage: NotificationCoverageModule[] }) {
-  const totalEvents = coverage.reduce((sum, module) => sum + module.event_count, 0);
-  const configured = coverage.reduce((sum, module) => sum + module.counts.configured, 0);
-  const fallback = coverage.reduce((sum, module) => sum + module.counts.fallback, 0);
-  const muted = coverage.reduce((sum, module) => sum + module.counts.muted, 0);
-  const unconfigured = coverage.reduce((sum, module) => sum + module.counts.unconfigured, 0);
-  const gaps = coverage.reduce((sum, module) => sum + module.gap_count, 0);
-  const contentGaps = coverage.reduce((sum, module) => sum + module.content_gap_count, 0);
+  const t = coverageTotals(coverage);
 
   return (
-    <section className="mt-6">
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-3">
-        <div>
-          <SectionHeaderLabel>Notification coverage</SectionHeaderLabel>
-          <p className="mt-1 text-xs text-fg-subtle">Read-only view of every supported event kind. This does not enable or change notifications.</p>
-        </div>
-        <Link href="/notifications/profiles" className="text-[11px] text-signal hover:underline">Open Notification Studio →</Link>
+    <DataPanel className="overflow-hidden">
+      <div className="grid grid-cols-2 gap-px border-b border-line-soft bg-line-soft sm:grid-cols-6">
+        <CoverageSummary label="Configured" value={t.configured} tone="configured" />
+        <CoverageSummary label="Fallback" value={t.fallback} tone="fallback" />
+        <CoverageSummary label="Muted" value={t.muted} tone="muted" />
+        <CoverageSummary label="Unconfigured" value={t.unconfigured} tone="unconfigured" />
+        <CoverageSummary label="High / critical gaps" value={t.gaps} tone={t.gaps ? "gap" : "configured"} />
+        <CoverageSummary label="Content gaps" value={t.contentGaps} tone={t.contentGaps ? "gap" : "configured"} />
       </div>
-      <DataPanel className="overflow-hidden">
-        <div className="grid grid-cols-2 gap-px border-b border-line-soft bg-line-soft sm:grid-cols-6">
-          <CoverageSummary label="Configured" value={configured} tone="configured" />
-          <CoverageSummary label="Fallback" value={fallback} tone="fallback" />
-          <CoverageSummary label="Muted" value={muted} tone="muted" />
-          <CoverageSummary label="Unconfigured" value={unconfigured} tone="unconfigured" />
-          <CoverageSummary label="High / critical gaps" value={gaps} tone={gaps ? "gap" : "configured"} />
-          <CoverageSummary label="Content gaps" value={contentGaps} tone={contentGaps ? "gap" : "configured"} />
-        </div>
-        <div className="border-b border-line-soft px-4 py-2 text-[11px] text-fg-subtle">
-          {coverage.length} modules · {totalEvents} event kinds · content gaps are not-yet-rolled-out message contracts · fallback means a legacy module route covers the event
-        </div>
-        <div className="divide-y divide-line-soft">
-          {coverage.map((module) => <CoverageModuleRow key={module.key} module={module} />)}
-        </div>
-      </DataPanel>
-    </section>
+      <div className="border-b border-line-soft px-4 py-2 text-xs text-fg-subtle">
+        {coverage.length} modules · {t.events} event kinds · content gaps are not-yet-rolled-out message contracts · fallback means a legacy module route
+        covers the event
+      </div>
+      <div className="divide-y divide-line-soft">
+        {coverage.map((module) => (
+          <CoverageModuleRow key={module.key} module={module} />
+        ))}
+      </div>
+    </DataPanel>
   );
 }
 
@@ -465,14 +457,9 @@ function ActivityTable({ entries }: { entries: NotificationLogEntry[] }) {
 // ACKS BANNER
 // =========================================================================
 
-function AcksBanner({ acks }: { acks: NotificationAck[] }) {
+function AcksList({ acks }: { acks: NotificationAck[] }) {
   return (
-    <section className="mb-6 mt-3 rounded-md border border-line-soft bg-surface-1">
-      <div className="flex items-baseline justify-between border-b border-line-soft px-4 py-2">
-        <span className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
-          {acks.length} active ack{acks.length === 1 ? "" : "s"} · paused notifications
-        </span>
-      </div>
+    <DataPanel>
       <div className="divide-y divide-line-soft">
         {acks.map((a) => (
           <div
@@ -497,7 +484,7 @@ function AcksBanner({ acks }: { acks: NotificationAck[] }) {
           </div>
         ))}
       </div>
-    </section>
+    </DataPanel>
   );
 }
 
@@ -507,7 +494,7 @@ function AcksBanner({ acks }: { acks: NotificationAck[] }) {
 
 function ChannelsFirstHint() {
   return (
-    <div className="mt-3 border border-sev-medium/30 bg-sev-medium/5 px-4 py-3 text-sm text-fg-muted">
+    <div className="rounded-md border border-sev-medium/30 bg-sev-medium/5 px-4 py-3 text-sm text-fg-muted">
       <span className="text-sev-medium">▸</span> Start by adding a channel — Slack,
       email, webhook, PagerDuty, etc.{" "}
       <Link href="/notifications/channels/new" className="text-signal hover:underline">
@@ -516,31 +503,4 @@ function ChannelsFirstHint() {
       then create alerts below.
     </div>
   );
-}
-
-function EnabledPill({ enabled }: { enabled: boolean }) {
-  return <StatusPill label={enabled ? "enabled" : "disabled"} severity={enabled ? "resolved" : "neutral"} />;
-}
-
-function ChannelStatusPill({
-  status,
-  error,
-}: {
-  status: string | null;
-  error: string | null;
-}) {
-  const sev: Severity = status === "ok" ? "resolved" : status ? "critical" : "neutral";
-  const label = status ?? "never";
-  return <StatusPill label={label} severity={sev} title={error ?? undefined} />;
-}
-
-function countSince(
-  entries: NotificationLogEntry[],
-  status: string,
-  windowMs: number,
-): number {
-  const cutoff = Date.now() - windowMs;
-  return entries.filter(
-    (e) => e.status === status && new Date(e.ts).getTime() >= cutoff,
-  ).length;
 }

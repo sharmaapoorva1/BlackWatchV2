@@ -1,7 +1,7 @@
 import { fetchNotificationChannels } from "@/lib/api";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Section } from "@/components/layout/Section";
 import { DataPanel } from "@/components/layout/DataPanel";
-import { BackLink } from "@/components/ui/BackLink";
 import { RuleForm, type RulePrefill } from "@/components/domain/notifications/RuleForm";
 import { RulePresets } from "@/components/domain/notifications/RulePresets";
 
@@ -43,12 +43,14 @@ export default async function NewRulePage({
   if (!hasAnyParam) {
     return (
       <>
-        <BackLink href="/notifications" label="back to notifications" />
         <PageHeader
+          breadcrumbs={[{ label: "Notifications", href: "/notifications" }, { label: "Add a rule" }]}
           title="Add a rule"
-          subtitle="Pick a recipe — or build a custom one. You can edit it after."
+          subtitle="Pick a recipe, or build a custom one. You can edit it after."
         />
-        <RulePresets />
+        <Section id="recipes" title="Recipes" description="Start from a common rule, or from blank.">
+          <RulePresets />
+        </Section>
       </>
     );
   }
@@ -63,14 +65,16 @@ export default async function NewRulePage({
 
   return (
     <>
-      <BackLink href="/notifications" label="back to notifications" />
       <PageHeader
+        breadcrumbs={[{ label: "Notifications", href: "/notifications" }, { label: "New rule" }]}
         title="New rule"
         subtitle="Tweak the recipe and pick which channels should receive it."
       />
-      <DataPanel className="overflow-hidden">
-        <RuleForm channels={channels} prefill={prefill} />
-      </DataPanel>
+      <Section id="rule" title="Rule" description="What to match, and where to send it.">
+        <DataPanel className="overflow-hidden">
+          <RuleForm channels={channels} prefill={prefill} />
+        </DataPanel>
+      </Section>
     </>
   );
 }

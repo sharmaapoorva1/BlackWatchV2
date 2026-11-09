@@ -4,6 +4,7 @@ import { fetchConnector } from "@/lib/api";
 import type { ConnectorType } from "@/lib/types";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
+import { Section } from "@/components/layout/Section";
 import { ConnectorForm } from "@/components/domain/connectors/ConnectorForm";
 
 const KNOWN: ConnectorType[] = [
@@ -39,6 +40,7 @@ export default async function EditConnectorPage({
         breadcrumbs={[{ label: "Connectors", href: "/connectors" }, { label: connector.name }]}
       />
 
+      <Section id="settings" title="Connector settings" description="Changes apply on the next scheduled run.">
       <DataPanel className="overflow-hidden">
         {knownType ? (
           <ConnectorForm type={knownType} existing={connector} />
@@ -47,12 +49,13 @@ export default async function EditConnectorPage({
             Unknown connector type:{" "}
             <code className="text-fg">{connector.type}</code>. No edit form
             available. Raw config:
-            <pre className="mt-2 overflow-auto bg-surface-2 p-3 text-[11px] text-fg-muted">
+            <pre className="mt-2 overflow-auto bg-surface-2 p-3 text-xs text-fg-muted">
               {JSON.stringify(connector.config, null, 2)}
             </pre>
           </div>
         )}
       </DataPanel>
+      </Section>
     </>
   );
 }

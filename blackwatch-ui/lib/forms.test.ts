@@ -88,3 +88,13 @@ test("list pages use the shared FilterBar with visible labels and active-filter 
     assert.match(read(file), /<FilterBar/, `${file} should use FilterBar`);
   }
 });
+
+test("the wizard shell uses breadcrumbs and the shared panel surface", () => {
+  const shell = read("components/ui/WizardShell.tsx");
+  assert.match(shell, /<Breadcrumbs/);
+  assert.match(shell, /bg-surface-1/);
+  assert.doesNotMatch(shell, /<Link /);
+  for (const file of ["app/notifications/AlertWizard.tsx", "components/domain/notifications/PerfAlertForm.tsx"]) {
+    assert.doesNotMatch(read(file), /text-\[(9|10|11)px\]|uppercase tracking/, `${file} should use the shared text sizes`);
+  }
+});

@@ -4,7 +4,7 @@ import { fetchNotificationRoutes, fetchNotificationRules, fetchNotificationChann
 import { AlertWizard } from "../../../AlertWizard";
 import { RuleForm } from "@/components/domain/notifications/RuleForm";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { BackLink } from "@/components/ui/BackLink";
+import { Section } from "@/components/layout/Section";
 
 // Route the edit page based on rule kind:
 //   - "simple"  (module + severity) → AlertWizard (5-step form)
@@ -43,12 +43,14 @@ export default async function EditAlertPage({
 
   return (
     <>
-      <BackLink href="/notifications" label="back to notifications" />
       <PageHeader
+        breadcrumbs={[{ label: "Notifications", href: "/notifications" }, { label: rule.name }]}
         title={`Edit rule: ${rule.name}`}
-        subtitle="Custom rule (action / category / advanced match). Edit fields below."
+        subtitle="Custom rule (action / category / advanced match)."
       />
-      <RuleForm existing={rule} channels={channels} />
+      <Section id="rule" title="Rule" description="What to match, and where to send it.">
+        <RuleForm existing={rule} channels={channels} />
+      </Section>
     </>
   );
 }

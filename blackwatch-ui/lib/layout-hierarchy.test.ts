@@ -239,3 +239,127 @@ test("the UEBA page: summary cards, then the anomalies or baselines section for 
   assert.match(page, /parseUebaTab\(params\.tab\)/);
   assert.doesNotMatch(page, /SectionLabel|mb-4 space-y/);
 });
+
+test("AWS posture: severity cards filter the findings, one collapsible block per resource type; detail page has summary and evidence", () => {
+  const page = read("app/aws-posture/page.tsx");
+  assert.ok(page.indexOf('id="health"') > 0 && page.indexOf('id="health"') < page.indexOf('id="findings"'));
+  assert.match(page, /parseSeverityFilter\(params\.severity\)/);
+  assert.match(page, /filterFindings\(findings, severity\)/);
+  assert.match(page, /<Subsection[\s\S]{0,300}defaultOpen=\{groupStartsOpen/);
+  assert.doesNotMatch(page, /SectionLabel|SeverityCounterGrid|mt-6 space-y/);
+  const detail = read("app/aws-posture/[id]/page.tsx");
+  assert.match(detail, /<Section id="summary"/);
+  assert.match(detail, /<Section id="evidence"/);
+  assert.doesNotMatch(detail, /SectionLabel/);
+});
+
+test("FIM: coverage cards, hosts, activity; per-host page leads with coverage and collapses configuration", () => {
+  const page = read("app/fim/page.tsx");
+  const order = ['id="health"', 'id="hosts"', 'id="activity"'].map((needle) => page.indexOf(needle));
+  assert.ok(order.every((index) => index > 0));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.doesNotMatch(page, /PageSection|SectionLabel/);
+  const host = read("app/fim/[id]/page.tsx");
+  const hostOrder = ['id="coverage"', 'id="changes"', 'id="paths"', 'id="configuration"'].map((needle) => host.indexOf(needle));
+  assert.ok(hostOrder.every((index) => index > 0));
+  assert.deepEqual([...hostOrder].sort((a, b) => a - b), hostOrder);
+  assert.match(host, /id="configuration-howto"[^>]*defaultOpen=\{false\}/);
+  assert.doesNotMatch(host, /SectionLabel|mt-6 space-y/);
+});
+
+test("Notifications: delivery-health cards, then channels, routes, metrics, coverage, activity; log and studio use the same sections", () => {
+  const page = read("app/notifications/page.tsx");
+  const order = ['id="health"', 'id="channels"', 'id="routes"', 'id="metrics"', 'id="coverage"', 'id="activity"'].map((needle) => page.indexOf(needle));
+  assert.ok(order.every((index) => index > 0));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.match(page, /buildNotificationCards\(/);
+  assert.doesNotMatch(page, /SectionHeader|CollapsibleSection|AcksBanner/);
+  assert.match(read("app/notifications/log/page.tsx"), /<Section id="entries"/);
+  const studio = read("app/notifications/profiles/page.tsx");
+  assert.match(studio, /<Section\s+id="modules"/);
+  assert.match(studio, /<Subsection/);
+});
+
+test("Connectors: health cards filter the list; edit and queue pages use sections", () => {
+  const page = read("app/connectors/page.tsx");
+  assert.ok(page.indexOf('id="health"') > 0 && page.indexOf('id="health"') < page.indexOf('id="connectors"'));
+  assert.match(page, /parseConnectorGroup\(health\)/);
+  assert.match(page, /filterConnectors\(/);
+  assert.match(page, /<StatCard/);
+  assert.match(read("app/connectors/[id]/page.tsx"), /<Section id="settings"/);
+  assert.match(read("app/connectors/advanced-queue/page.tsx"), /<Section id="operations"/);
+});
+
+test("Rules: health cards, catalog, muted filters with a collapsible mute form", () => {
+  const page = read("app/rules/page.tsx");
+  const order = ['id="health"', 'id="catalog"', 'id="muted"'].map((needle) => page.indexOf(needle));
+  assert.ok(order.every((index) => index > 0));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.match(page, /buildRuleCards\(rules, muted\)/);
+  assert.match(page, /<Field label="Action"/);
+  assert.doesNotMatch(page, /<section|MessageBar|tracking-\[/);
+});
+
+test("Settings: preferences, account, reference; notes collapsed", () => {
+  const page = read("app/settings/page.tsx");
+  const order = ['id="preferences"', 'id="account"', 'id="reference"'].map((needle) => page.indexOf(needle));
+  assert.ok(order.every((index) => index > 0));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.match(page, /id="operator-notes"[^>]*defaultOpen=\{false\}/);
+  assert.doesNotMatch(page, /SectionLabel|mt-6 space-y/);
+});
+
+test("Event detail: summary, optional intel, payload with collapsible envelope and raw record", () => {
+  const page = read("app/events/[id]/page.tsx");
+  const order = ['id="summary"', 'id="intel"', 'id="payload"'].map((needle) => page.indexOf(needle));
+  assert.ok(order.every((index) => index > 0));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.match(page, /id="payload-raw"[^>]*defaultOpen=\{false\}/);
+  assert.doesNotMatch(page, /SectionLabel|mt-6 space-y/);
+});
+
+test("Tools: index and lookups use sections and breadcrumbs, not back links", () => {
+  assert.match(read("app/tools/page.tsx"), /<Section\s+id="lookups"/);
+  for (const file of ["app/tools/ip-lookup/page.tsx", "app/tools/dns-lookup/page.tsx"]) {
+    const page = read(file);
+    assert.match(page, /<Section id="lookup"/, file);
+    assert.match(page, /<Section id="result"/, file);
+    assert.match(page, /breadcrumbs=\{\[\{ label: "Tools"/, file);
+    assert.doesNotMatch(page, /back to tools/, file);
+  }
+});
+
+test("Coverage and Audit: health cards over the collectors table; audit entries in a section", () => {
+  const coverage = read("app/coverage/page.tsx");
+  assert.ok(coverage.indexOf('id="health"') > 0 && coverage.indexOf('id="health"') < coverage.indexOf('id="collectors"'));
+  assert.match(coverage, /buildCoverageCards\(data\.summary\)/);
+  assert.doesNotMatch(coverage, /function Metric/);
+  assert.match(read("app/audit/page.tsx"), /<Section id="entries"/);
+});
+
+test("Notification forms: breadcrumbs and a section instead of back links and bare panels", () => {
+  for (const file of [
+    "app/notifications/channels/new/page.tsx",
+    "app/notifications/channels/[id]/page.tsx",
+    "app/notifications/create/page.tsx",
+    "app/notifications/rules/new/page.tsx",
+    "app/notifications/rules/[id]/edit/page.tsx",
+  ]) {
+    const page = read(file);
+    assert.match(page, /<Section/, file);
+    assert.match(page, /breadcrumbs=\{\[\{ label: "Notifications"/, file);
+    assert.doesNotMatch(page, /BackLink|back to notifications/, file);
+  }
+});
+
+test("Connector add form, notification log and profile editor use breadcrumbs and sections", () => {
+  const add = read("app/connectors/new/page.tsx");
+  assert.match(add, /<Section id="settings"/);
+  assert.match(add, /<Section id="type"/);
+  assert.doesNotMatch(add, /back to connectors/);
+  assert.doesNotMatch(read("app/notifications/log/page.tsx"), /BackLink/);
+  const editor = read("app/notifications/profiles/[id]/page.tsx");
+  for (const id of ["delivery", "message", "advanced", "test"]) assert.ok(editor.includes(`id="${id}"`), id);
+  assert.match(editor, /<PageHeader/);
+  assert.doesNotMatch(editor, /BackLink|SectionTitle/);
+});

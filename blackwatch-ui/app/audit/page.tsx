@@ -1,6 +1,7 @@
 import { apiFetch } from "@/lib/server-fetch";
 import { AuditDataTable, type AuditEntry } from "@/components/domain/AuditDataTable";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Section } from "@/components/layout/Section";
 import { Input } from "@/components/ui/Input";
 import { ActiveFilters } from "@/components/ui/ActiveFilters";
 import { Field } from "@/components/ui/Field";
@@ -37,12 +38,13 @@ export default async function AuditPage({
   const rows = await loadAudit(sp);
 
   return (
-    <div className="space-y-4">
+    <>
       <PageHeader
         title="Audit log"
         subtitle="Append-only record of every mutation this BlackWatch instance received."
       />
 
+      <Section id="entries" title="Entries" description="Newest first. Filter by who, which path, or since when.">
       <FilterBar action="/audit" label="Filter audit log" clearHref="/audit">
         <Field label="Actor" compact className="w-full sm:w-44">
           <Input type="text" name="actor" defaultValue={sp.actor ?? ""} placeholder="username" />
@@ -64,6 +66,7 @@ export default async function AuditPage({
       />
 
       <AuditDataTable rows={rows} />
-    </div>
+      </Section>
+    </>
   );
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Globe, Network, ShieldCheck } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
+import { AutoGrid, Section } from "@/components/layout/Section";
 
 const TOOLS = [
   {
@@ -33,30 +34,27 @@ export default function ToolsPage() {
         title="Tools"
         subtitle="Look up an observable or review the intelligence attached to collected events."
       />
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {TOOLS.map((t) => (
-          <Link
-            key={t.href}
-            href={t.href}
-            className="group flex flex-col gap-2 rounded-md border border-line-soft bg-surface-1 px-4 py-4 transition-colors hover:border-line hover:bg-surface-2"
-          >
-            <div className="flex items-center gap-2">
-              <t.icon
-                size={14}
-                strokeWidth={1.5}
-                className="text-fg-subtle group-hover:text-signal"
-              />
-              <span className="text-sm text-fg">{t.title}</span>
-            </div>
-            <p className="text-xs text-fg-muted">{t.blurb}</p>
-          </Link>
-        ))}
-      </div>
-      <p className="mt-5 max-w-3xl text-xs leading-5 text-fg-subtle">
-        IP lookup uses the configured lookup provider for network context. Tor,
-        Bogon, and feed matches are shown from BlackWatch event enrichment when
-        that evidence exists; they are not silently inferred from the lookup.
-      </p>
+      <Section
+        id="lookups"
+        title="Lookups"
+        description="IP lookup uses the configured provider for network context. Tor, Bogon and feed matches come from BlackWatch event enrichment when that evidence exists; they are not inferred from the lookup."
+      >
+        <AutoGrid min="16rem">
+          {TOOLS.map((t) => (
+            <Link
+              key={t.href}
+              href={t.href}
+              className="group flex flex-col gap-2 rounded-md border border-line-soft bg-surface-1 px-4 py-4 transition-colors hover:border-line hover:bg-surface-2"
+            >
+              <div className="flex items-center gap-2">
+                <t.icon size={14} strokeWidth={1.5} className="text-fg-subtle group-hover:text-signal" />
+                <span className="text-sm text-fg">{t.title}</span>
+              </div>
+              <p className="text-xs text-fg-muted">{t.blurb}</p>
+            </Link>
+          ))}
+        </AutoGrid>
+      </Section>
     </>
   );
 }

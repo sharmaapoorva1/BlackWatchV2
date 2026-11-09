@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { headers } from "next/headers";
-import { ArrowLeft } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Section } from "@/components/layout/Section";
 import { Input } from "@/components/ui/Input";
 import { Field } from "@/components/ui/Field";
 import { FilterBar } from "@/components/ui/FilterBar";
@@ -62,33 +61,31 @@ export default async function IpLookupPage({
 
   return (
     <>
-      <div className="mb-4">
-        <Link
-          href="/tools"
-          className="inline-flex items-center gap-1.5 text-xs text-fg-muted transition-colors hover:text-fg"
-        >
-          <ArrowLeft size={12} /> back to tools
-        </Link>
-      </div>
-
       <PageHeader
+        breadcrumbs={[{ label: "Tools", href: "/tools" }, { label: "IP lookup" }]}
         title="IP lookup"
         subtitle="Fast geolocation plus optional threat sources, local feeds, related indicators, and matching BlackWatch events."
       />
 
+      <div className="flex min-w-0 flex-col gap-10">
+        <Section id="lookup" title="Lookup" description="Enter a value and run the lookup.">
       <FilterBar
         action="/tools/ip-lookup"
         label="Look up an IP address or hostname"
         clearHref={ip ? "/tools/ip-lookup" : undefined}
         applyLabel="Look up"
-        className="mb-6"
       >
         <Field label="IP address or hostname" compact className="w-full sm:w-80">
           <Input name="ip" mono defaultValue={ip ?? ""} placeholder="8.8.8.8  or  example.com" autoFocus />
         </Field>
       </FilterBar>
-
-      {result && <IpLookupResult query={ip ?? ""} result={result} />}
+        </Section>
+        {result && (
+          <Section id="result" title="Result" description="Lookup results for the value above.">
+            <IpLookupResult query={ip ?? ""} result={result} />
+          </Section>
+        )}
+      </div>
     </>
   );
 }

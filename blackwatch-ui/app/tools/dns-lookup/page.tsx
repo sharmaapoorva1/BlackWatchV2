@@ -1,7 +1,6 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Section } from "@/components/layout/Section";
 import { Input } from "@/components/ui/Input";
 import { Field } from "@/components/ui/Field";
 import { FilterBar } from "@/components/ui/FilterBar";
@@ -49,33 +48,31 @@ export default async function DnsLookupPage({
 
   return (
     <>
-      <div className="mb-4">
-        <Link
-          href="/tools"
-          className="inline-flex items-center gap-1.5 text-xs text-fg-muted transition-colors hover:text-fg"
-        >
-          <ArrowLeft size={12} /> back to tools
-        </Link>
-      </div>
-
       <PageHeader
+        breadcrumbs={[{ label: "Tools", href: "/tools" }, { label: "DNS lookup" }]}
         title="DNS lookup"
         subtitle="A, AAAA, MX, TXT, CNAME, NS, SOA — all in one pass. Resolved by the local Node resolver."
       />
 
+      <div className="flex min-w-0 flex-col gap-10">
+        <Section id="lookup" title="Lookup" description="Enter a value and run the lookup.">
       <FilterBar
         action="/tools/dns-lookup"
         label="Look up DNS records"
         clearHref={host ? "/tools/dns-lookup" : undefined}
         applyLabel="Look up"
-        className="mb-6"
       >
         <Field label="Hostname" compact className="w-full sm:w-80">
           <Input name="host" mono defaultValue={host ?? ""} placeholder="example.com" autoFocus />
         </Field>
       </FilterBar>
-
-      {result && <DnsLookupResult result={result} />}
+        </Section>
+        {result && (
+          <Section id="result" title="Result" description="Lookup results for the value above.">
+            <DnsLookupResult result={result} />
+          </Section>
+        )}
+      </div>
     </>
   );
 }

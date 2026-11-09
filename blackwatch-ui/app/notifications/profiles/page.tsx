@@ -6,6 +6,8 @@ import type { NotificationProfile, NotificationProfileModule } from "@/lib/types
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { StatusPill } from "@/components/ui/StatusPill";
+import { Section } from "@/components/layout/Section";
+import { Subsection } from "@/components/layout/Subsection";
 
 export const metadata = { title: "Message studio" };
 
@@ -28,13 +30,11 @@ export default async function NotificationProfilesPage() {
         subtitle={`${configured} customized · ${enabled} enabled · choose a module, then edit an alert in plain language`}
       />
 
-      <div className="mb-6 max-w-3xl border border-signal/20 bg-signal/5 px-4 py-3 text-sm leading-6 text-fg-muted">
-        Configure what a person should understand when an alert arrives. Each
-        alert type has its own wording, urgency, delivery, monitoring context,
-        impact, and next steps. Advanced templates are optional.
-      </div>
-
-      <div className="space-y-6">
+      <Section
+        id="modules"
+        title="Alert types by module"
+        description="Configure what a person should understand when an alert arrives: wording, urgency, delivery, context, impact and next steps. Advanced templates are optional."
+      >
         {data.catalog.map((module) => (
           <ModuleProfilePanel
             key={module.key}
@@ -42,7 +42,7 @@ export default async function NotificationProfilesPage() {
             profiles={module.events.map((event) => byModule.get(`profile:${module.key}:${event.key}`)).filter(Boolean) as NotificationProfile[]}
           />
         ))}
-      </div>
+      </Section>
     </>
   );
 }
@@ -55,15 +55,15 @@ function ModuleProfilePanel({
   profiles: NotificationProfile[];
 }) {
   const profileByKind = new Map(profiles.map((profile) => [profile.event_kind, profile]));
+  const enabled = module.events.filter((event) => profileByKind.get(event.key)?.enabled).length;
   return (
-    <section>
-      <div className="mb-2 flex items-baseline justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-medium text-fg">{module.label}</h2>
-          <p className="mt-0.5 text-xs text-fg-subtle">{module.description}</p>
-        </div>
-        <code className="font-mono text-[10px] text-fg-subtle">{module.key}</code>
-      </div>
+    <Subsection
+      id={`module-${module.key}`}
+      title={module.label}
+      count={module.events.length}
+      summary={`${enabled} enabled · ${module.description}`}
+      defaultOpen={enabled > 0}
+    >
       <DataPanel className="overflow-hidden">
         <div className="divide-y divide-line-soft">
           {module.events.map((event) => {
@@ -82,7 +82,7 @@ function ModuleProfilePanel({
                       label={profile?.enabled ? "enabled" : profile?.source === "saved" ? "saved · off" : "not configured"}
                     />
                   </div>
-                  <p className="mt-1 truncate font-mono text-[11px] text-fg-subtle">{event.key}</p>
+                  <p className="mt-1 truncate font-mono text-xs text-fg-subtle">{event.key}</p>
                 </div>
                 <ChevronRight size={14} className="shrink-0 text-fg-subtle" />
               </Link>
@@ -90,6 +90,6 @@ function ModuleProfilePanel({
           })}
         </div>
       </DataPanel>
-    </section>
+    </Subsection>
   );
 }

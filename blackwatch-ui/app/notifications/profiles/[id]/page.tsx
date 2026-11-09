@@ -1,9 +1,12 @@
-import { AlertTriangle, Check, ChevronDown, Save, Send } from "lucide-react";
+import { AlertTriangle, Check, Save, Send } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { fetchNotificationChannels, fetchNotificationProfiles } from "@/lib/api";
 import type { NotificationProfile, NotificationProfileContent } from "@/lib/types";
-import { BackLink } from "@/components/ui/BackLink";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Section } from "@/components/layout/Section";
+import { Subsection } from "@/components/layout/Subsection";
+import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { DataPanel } from "@/components/layout/DataPanel";
@@ -60,18 +63,20 @@ export default async function NotificationProfilePage({
 
   return (
     <>
-      <BackLink href="/notifications/profiles" label="back to Notification Studio" />
       {msg && <FlashToast message={msg} />}
-      <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-signal">
-            {profile.module} · {profile.event_kind}
-          </p>
-          <h1 className="mt-2 text-xl text-fg">{profile.label}</h1>
-          <p className="mt-1 max-w-2xl text-sm text-fg-muted">{profile.description}</p>
-        </div>
-        <StatusNote profile={profile} />
-      </div>
+      <PageHeader
+        breadcrumbs={[{ label: "Notification Studio", href: "/notifications/profiles" }, { label: profile.label }]}
+        title={profile.label}
+        subtitle={
+          <>
+            <code className="font-mono text-xs text-signal">
+              {profile.module} · {profile.event_kind}
+            </code>
+            <span className="mt-1 block max-w-2xl">{profile.description}</span>
+          </>
+        }
+        actions={<StatusNote profile={profile} />}
+      />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)]">
         <form action={saveNotificationProfileAction} data-notification-profile className="space-y-6">
@@ -79,9 +84,9 @@ export default async function NotificationProfilePage({
           <input type="hidden" name="module" value={profile.module} />
           <input type="hidden" name="event_kind" value={profile.event_kind} />
 
+          <Section id="delivery" title="When this alert is sent" description="Turn this alert on, choose urgency, and decide where it should arrive.">
           <DataPanel className="p-5" scrollX={false}>
-            <SectionTitle title="When this alert should be sent" subtitle="Turn this alert on, choose urgency, and decide where it should arrive." />
-            <div className="mt-5 flex items-center justify-between rounded-md border border-line-soft bg-surface-2 px-3 py-3">
+            <div className="flex items-center justify-between rounded-md border border-line-soft bg-surface-2 px-3 py-3">
               <div>
                 <p className="text-sm text-fg">Enable this alert</p>
                 <p className="mt-0.5 text-xs text-fg-subtle">BlackWatch will route matching events through the shared delivery worker.</p>
@@ -107,7 +112,7 @@ export default async function NotificationProfilePage({
                       <label key={channel.name} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-line bg-surface-1 px-2.5 py-2 text-xs text-fg-muted transition-colors hover:bg-surface-2 has-[:checked]:border-signal has-[:checked]:bg-signal/10 has-[:checked]:text-fg">
                         <Checkbox name="channel" value={channel.name} defaultChecked={profile.channels.includes(channel.name)} />
                         <span>{channel.name}</span>
-                        <span className="font-mono text-[10px] text-fg-subtle">{channel.type}</span>
+                        <span className="font-mono text-xs text-fg-subtle">{channel.type}</span>
                       </label>
                     ))}
                   </div>
@@ -118,49 +123,43 @@ export default async function NotificationProfilePage({
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <label className="text-xs text-fg-muted">
-                Throttle repeated alerts (seconds)
-                <Input name="throttle_seconds" type="number" min={0} step={60} defaultValue={profile.throttle_seconds} className="mt-1" />
-              </label>
-              <label className="text-xs text-fg-muted">
-                Digest window (seconds, 0 = off)
-                <Input name="digest_window_seconds" type="number" min={0} step={60} defaultValue={profile.digest_window_seconds} className="mt-1" />
-              </label>
+              <Field label="Throttle repeated alerts" hint="Seconds between repeats." compact>
+                <Input name="throttle_seconds" type="number" min={0} step={60} defaultValue={profile.throttle_seconds} />
+              </Field>
+              <Field label="Digest window" hint="Seconds. 0 turns digests off." compact>
+                <Input name="digest_window_seconds" type="number" min={0} step={60} defaultValue={profile.digest_window_seconds} />
+              </Field>
             </div>
           </DataPanel>
+          </Section>
 
+          <Section id="message" title="What people should understand" description="Start with the facts and next action. Optional context can stay short; advanced templates are available below.">
           <DataPanel className="p-5" scrollX={false}>
-            <SectionTitle title="What people should understand" subtitle="Start with the facts and next action. Optional context can stay short; advanced templates are available below." />
-            <div className="mt-5 space-y-4">
+            <div className="space-y-4">
               {CONTENT_FIELDS.filter((field) => contentFields.has(field.key)).map((field) => (
-                <label key={field.key} className="block text-xs text-fg-muted">
-                  <span>{field.label}</span>
-                  <span className="ml-2 text-fg-subtle">{field.hint}</span>
+                <Field key={field.key} label={field.label} hint={field.hint}>
                   {field.multiline ? (
-                    <Textarea name={field.key} defaultValue={profile.content[field.key]} rows={3} className="mt-1 text-sm leading-5" />
+                    <Textarea name={field.key} defaultValue={profile.content[field.key]} rows={3} className="text-sm leading-5" />
                   ) : (
-                    <Input name={field.key} defaultValue={profile.content[field.key]} className="mt-1" />
+                    <Input name={field.key} defaultValue={profile.content[field.key]} />
                   )}
-                </label>
+                </Field>
               ))}
             </div>
-            <p className="mt-4 border-l-2 border-signal/40 pl-3 font-mono text-[11px] leading-5 text-fg-subtle">
+            <p className="mt-4 border-l-2 border-signal/40 pl-3 font-mono text-xs leading-5 text-fg-subtle">
               Available placeholders: {availableFields.join(" · ")}
             </p>
-            <p className="mt-3 text-[11px] text-fg-subtle">
+            <p className="mt-3 text-xs text-fg-subtle">
               Contract status: <span className="text-fg-muted">{eventSpec?.content_status ?? profile.content_status}</span>. Preview and delivery use the same event-specific contract.
             </p>
           </DataPanel>
-
-          <DataPanel className="p-5" scrollX={false}>
-            <details>
-              <summary className="flex cursor-pointer list-none items-center gap-2 text-sm text-fg [&::-webkit-details-marker]:hidden">
-                <ChevronDown size={14} className="text-fg-subtle" /> Advanced template (optional)
-              </summary>
-              <p className="mt-3 text-xs leading-5 text-fg-subtle">Leave this blank to use the guided fields. Advanced templates use the existing Jinja event context and are intended for experienced operators.</p>
-              <Textarea name="advanced_template" defaultValue={profile.advanced_template ?? ""} rows={8} className="mt-3 font-mono text-xs leading-5" placeholder="{{ event.action }} on {{ event.target.name }}" />
-            </details>
-          </DataPanel>
+          <Subsection id="advanced" title="Advanced template" summary="optional" defaultOpen={Boolean(profile.advanced_template)}>
+            <DataPanel className="p-5" scrollX={false}>
+              <p className="mb-3 text-xs leading-5 text-fg-subtle">Leave this blank to use the guided fields. Advanced templates use the existing Jinja event context and are intended for experienced operators.</p>
+              <Textarea name="advanced_template" defaultValue={profile.advanced_template ?? ""} rows={8} className="font-mono text-xs leading-5" placeholder="{{ event.action }} on {{ event.target.name }}" />
+            </DataPanel>
+          </Subsection>
+          </Section>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-fg-subtle">Saving updates the alert profile and its compiled delivery rule.</p>
@@ -170,26 +169,23 @@ export default async function NotificationProfilePage({
 
         <aside className="space-y-6 xl:sticky xl:top-5 xl:self-start">
           <ProfilePreview profile={profile} channels={channelsData.channels} />
+          <Section id="test" title="Send a test" description="Uses the saved version and sends a sample through every selected channel.">
           <DataPanel className="p-5" scrollX={false}>
-            <SectionTitle title="Send a test" subtitle="Uses the saved version and sends a sample through every selected channel." />
-            <form action={testNotificationProfileAction} className="mt-4">
+            <form action={testNotificationProfileAction}>
               <input type="hidden" name="id" value={profile.id} />
               <Button type="submit" size="sm" disabled={!profile.channels.length}><Send size={13} /> Send test notification</Button>
               {!profile.channels.length && <p className="mt-3 text-xs text-fg-subtle">Save at least one channel first.</p>}
             </form>
           </DataPanel>
+          </Section>
         </aside>
       </div>
     </>
   );
 }
 
-function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
-  return <div><h2 className="text-sm text-fg">{title}</h2><p className="mt-1 text-xs leading-5 text-fg-subtle">{subtitle}</p></div>;
-}
-
 function ChoiceGroup({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
-  return <div><p className="text-xs text-fg-muted">{title}</p><p className="mt-1 text-[11px] text-fg-subtle">{hint}</p><div className="mt-2">{children}</div></div>;
+  return <div><p className="text-xs text-fg-muted">{title}</p><p className="mt-1 text-xs text-fg-subtle">{hint}</p><div className="mt-2">{children}</div></div>;
 }
 
 function StatusNote({ profile }: { profile: NotificationProfile }) {

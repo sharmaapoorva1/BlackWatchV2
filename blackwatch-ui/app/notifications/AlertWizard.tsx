@@ -274,7 +274,7 @@ function SourceStep({
             title={
               <span className="flex items-center gap-2">
                 <span>{m.label}</span>
-                <code className="font-mono text-[10px] text-fg-subtle">
+                <code className="font-mono text-xs text-fg-subtle">
                   {m.key}
                 </code>
               </span>
@@ -375,7 +375,7 @@ function ChannelStep({
               title={
                 <span className="flex items-center gap-2">
                   <span>{c.name}</span>
-                  <code className="border border-line-soft px-1 py-px font-mono text-[9px] uppercase tracking-wider text-fg-subtle">
+                  <code className="border border-line-soft px-1 py-px font-mono text-xs text-fg-subtle">
                     {c.type}
                   </code>
                 </span>
@@ -433,10 +433,10 @@ function MessageStep({
 
       {channelName && (
         <div className="mt-6 border-t border-line-soft pt-5">
-          <p className="mb-2 text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+          <p className="mb-2 text-xs font-medium text-fg-muted">
             Test-send this message
           </p>
-          <p className="mb-2.5 text-[11px] text-fg-subtle">
+          <p className="mb-2.5 text-xs text-fg-subtle">
             Delivers the currently-previewed sample to{" "}
             <code className="font-mono text-fg-muted">{channelName}</code> using
             the template above (or the channel default if empty). Change the
@@ -516,10 +516,10 @@ function ReviewStep({
 
       {channelName && (
         <div className="mt-6 border-t border-line-soft pt-5">
-          <p className="mb-1 text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+          <p className="mb-1 text-xs font-medium text-fg-muted">
             One-shot test
           </p>
-          <p className="mb-2.5 text-[11px] text-fg-subtle">
+          <p className="mb-2.5 text-xs text-fg-subtle">
             Fires the sample event picked in the Message step through{" "}
             <code className="font-mono text-fg-muted">{channelName}</code> right now
             {customTemplate ? " using your custom template." : " using the channel's default template — no template setup needed."}

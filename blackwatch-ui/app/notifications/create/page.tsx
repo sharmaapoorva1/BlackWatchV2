@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Bell, GaugeCircle } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
-import { BackLink } from "@/components/ui/BackLink";
+import { Section } from "@/components/layout/Section";
 
 // Landing chooser for the two mechanically-different notification types.
 // Event-based routes match on existing event fields (module/severity);
@@ -14,14 +14,14 @@ export const metadata = { title: "Create alert" };
 export default function CreateAlertChooser() {
   return (
     <div className="mx-auto max-w-3xl">
-      <BackLink href="/notifications" label="back to notifications" />
-
       <PageHeader
+        breadcrumbs={[{ label: "Notifications", href: "/notifications" }, { label: "Create alert" }]}
         title="Create alert"
         subtitle="Pick the shape that fits — event-based for anything BW already emits, performance-based for host metric thresholds."
       />
 
-      <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-2">
+      <Section id="shape" title="Alert type" description="Event-based and performance-based alerts work differently, so they have different forms.">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <ChoiceCard
           href="/notifications/create/event"
           icon={<Bell size={18} strokeWidth={1.5} />}
@@ -45,6 +45,7 @@ export default function CreateAlertChooser() {
           ]}
         />
       </div>
+      </Section>
     </div>
   );
 }
@@ -78,7 +79,7 @@ function ChoiceCard({
             />
           </div>
 
-          <h2 className="mt-4 text-base text-fg">{title}</h2>
+          <h3 className="mt-4 text-sm font-semibold text-fg">{title}</h3>
           <p className="mt-2 text-sm leading-relaxed text-fg-muted">{blurb}</p>
 
           <div className="mt-auto pt-5">
@@ -90,7 +91,7 @@ function ChoiceCard({
                 {examples.map((e) => (
                   <li
                     key={e}
-                    className="flex items-start gap-2 font-mono text-[11px] text-fg-subtle"
+                    className="flex items-start gap-2 font-mono text-xs text-fg-subtle"
                   >
                     <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-signal/40" />
                     <span>{e}</span>
