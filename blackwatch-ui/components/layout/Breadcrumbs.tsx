@@ -10,7 +10,7 @@ export function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
   if (items.length === 0) return null;
   return (
     <nav aria-label="Breadcrumb" className="mb-2">
-      <ol className="flex min-w-0 flex-wrap items-center gap-1 text-[10px] uppercase tracking-[0.08em] text-fg-subtle">
+      <ol className="flex min-w-0 flex-wrap items-center gap-1 text-xs text-fg-subtle">
         {items.map((item, index) => (
           <li key={`${item.label}-${index}`} className="flex min-w-0 items-center gap-1">
             {index > 0 && <ChevronRight size={11} aria-hidden="true" />}

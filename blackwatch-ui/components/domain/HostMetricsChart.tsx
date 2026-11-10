@@ -139,8 +139,8 @@ export function HostMetricsChart({ instanceId }: { instanceId: string }) {
               onClick={() => setRange(r.hours)}
               className={
                 r.hours === range
-                  ? "border border-signal bg-signal/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-fg"
-                  : "border border-line-soft bg-canvas px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-fg-subtle hover:text-fg"
+                  ? "border border-signal bg-signal/10 px-2 py-0.5 text-xs text-fg"
+                  : "border border-line-soft bg-canvas px-2 py-0.5 text-xs text-fg-subtle hover:text-fg"
               }
             >
               {r.label}
@@ -162,8 +162,8 @@ export function HostMetricsChart({ instanceId }: { instanceId: string }) {
               onClick={() => setMetric(m.key)}
               className={
                 m.key === metric
-                  ? "border border-signal bg-signal/10 px-2.5 py-1 text-[11px] text-fg"
-                  : "border border-line-soft bg-canvas px-2.5 py-1 text-[11px] text-fg-muted hover:text-fg"
+                  ? "border border-signal bg-signal/10 px-2.5 py-1 text-xs text-fg"
+                  : "border border-line-soft bg-canvas px-2.5 py-1 text-xs text-fg-muted hover:text-fg"
               }
             >
               {m.label}
@@ -171,7 +171,7 @@ export function HostMetricsChart({ instanceId }: { instanceId: string }) {
           ))}
 
           {summary && (
-            <div className="ml-auto flex flex-wrap items-baseline justify-end gap-x-4 gap-y-1 text-[11px] text-fg-subtle">
+            <div className="ml-auto flex flex-wrap items-baseline justify-end gap-x-4 gap-y-1 text-xs text-fg-subtle">
               <span>
                 mean hourly avg{" "}
                 <span className="font-mono text-fg">{summary.avg.toFixed(1)}%</span>
@@ -249,7 +249,7 @@ export function HostMetricsChart({ instanceId }: { instanceId: string }) {
           )}
         </div>
 
-        <div className="border-t border-line-soft px-4 py-2 text-[10px] text-fg-subtle">
+        <div className="border-t border-line-soft px-4 py-2 text-xs text-fg-subtle">
           Shaded band = hourly min→max · line = hourly avg · retained for 14
           days · times shown in {tz}
         </div>
@@ -281,7 +281,7 @@ function MetricTooltip({
   const fmt = (v: number | null) => (v === null ? "—" : `${v.toFixed(1)}%`);
   return (
     <div className="rounded-md border border-line-soft bg-surface-1 px-3 py-2 font-mono text-xs shadow-lg">
-      <div className="mb-1.5 text-[10px] uppercase tracking-[0.08em] text-fg-subtle">
+      <div className="mb-1.5 text-xs text-fg-subtle">
         {formatTooltipStamp(p.ts, tz)}
       </div>
       <div className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">

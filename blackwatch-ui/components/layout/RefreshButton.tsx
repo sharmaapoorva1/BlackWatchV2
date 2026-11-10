@@ -101,7 +101,7 @@ export function RefreshButton({
         }
         variant="secondary"
         size="sm"
-        className="gap-1.5 text-[11px] uppercase tracking-[0.08em]"
+        className="gap-1.5 text-xs"
       >
         {active ? <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" /> : <RefreshCw size={12} strokeWidth={1.75} />}
         <span>{active ? "Running" : label}</span>
@@ -110,7 +110,7 @@ export function RefreshButton({
         <span
           role="status"
           aria-live="polite"
-          className={`font-mono text-[11px] ${flash.kind === "ok" ? "text-signal" : "text-danger"}`}
+          className={`font-mono text-xs ${flash.kind === "ok" ? "text-signal" : "text-danger"}`}
         >
           {flash.message}
         </span>

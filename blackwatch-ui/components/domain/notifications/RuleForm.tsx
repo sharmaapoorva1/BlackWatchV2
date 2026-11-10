@@ -263,7 +263,7 @@ export function RuleForm({
         className="border-t border-line-soft px-4 py-3"
         open={init.uses_advanced}
       >
-        <summary className="cursor-pointer text-xs uppercase tracking-[0.08em] text-fg-subtle hover:text-fg">
+        <summary className="cursor-pointer text-xs text-fg-subtle hover:text-fg">
           advanced · custom JSON criteria (overrides the simple form above)
         </summary>
         <div className="mt-3 space-y-2">
@@ -274,7 +274,7 @@ export function RuleForm({
             placeholder={`{\n  "all": [\n    {"field": "severity", "in": ["critical"]},\n    {"field": "actor.principal", "regex": "ops-.*"}\n  ]\n}`}
             className="font-mono text-xs"
           />
-          <p className="text-[11px] text-fg-subtle">
+          <p className="text-xs text-fg-subtle">
             Same shape as detection rules · operators: equals, not_equals, in,
             contains, icontains, regex, cidr, exists, startswith, endswith ·
             nest with all / any / not
@@ -328,7 +328,7 @@ function ChannelChipPicker({
           defaultChecked={selected.includes(c.name)}
           subtle={!c.enabled}
         >
-          <span className="font-mono text-[10px] text-fg-subtle">{c.type}</span>
+          <span className="font-mono text-xs text-fg-subtle">{c.type}</span>
           <span className="ml-1.5">{c.name}</span>
         </Chip>
       ))}

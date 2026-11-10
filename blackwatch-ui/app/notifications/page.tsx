@@ -317,7 +317,7 @@ function CoverageSummary({
   tone: "configured" | "fallback" | "muted" | "unconfigured" | "gap";
 }) {
   const toneClass = tone === "configured" ? "text-signal" : tone === "gap" ? "text-sev-critical" : tone === "fallback" ? "text-sev-medium" : "text-fg-muted";
-  return <div className="bg-surface-1 px-3 py-3"><p className={clsx("text-lg", toneClass)}>{value}</p><p className="mt-0.5 text-[10px] uppercase tracking-[0.08em] text-fg-subtle">{label}</p></div>;
+  return <div className="bg-surface-1 px-3 py-3"><p className={clsx("text-lg", toneClass)}>{value}</p><p className="mt-0.5 text-xs text-fg-subtle">{label}</p></div>;
 }
 
 function CoverageModuleRow({ module }: { module: NotificationCoverageModule }) {
@@ -326,9 +326,9 @@ function CoverageModuleRow({ module }: { module: NotificationCoverageModule }) {
       <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-surface-2">
         <div className="min-w-0">
           <span className="text-fg">{module.label}</span>
-          <span className="ml-2 font-mono text-[10px] text-fg-subtle">{module.key}</span>
+          <span className="ml-2 font-mono text-xs text-fg-subtle">{module.key}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <CoverageStatePill state="configured" count={module.counts.configured} />
           <CoverageStatePill state="fallback" count={module.counts.fallback} />
           <CoverageStatePill state="muted" count={module.counts.muted} />
@@ -339,7 +339,7 @@ function CoverageModuleRow({ module }: { module: NotificationCoverageModule }) {
         </div>
       </summary>
       <div className="border-t border-line-soft bg-surface-2/40 px-4 py-2">
-        <p className="mb-2 text-[11px] text-fg-subtle">{module.blurb} <span className="font-mono text-[10px]">rollout: {module.content_rollout_stage}</span></p>
+        <p className="mb-2 text-xs text-fg-subtle">{module.blurb} <span className="font-mono text-xs">rollout: {module.content_rollout_stage}</span></p>
         <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-3">
           {module.events.map((event) => (
             <Link key={event.event_kind} href={`/notifications/profiles/${encodeURIComponent(event.profile_id)}`} className="flex items-center justify-between gap-2 rounded-md border border-line-soft bg-surface-1 px-2.5 py-2 hover:border-signal">
@@ -347,7 +347,7 @@ function CoverageModuleRow({ module }: { module: NotificationCoverageModule }) {
               <span className="flex shrink-0 items-center gap-1">
                 <CoverageStatePill state={event.state} />
                 <ContentRolloutPill status={event.content_status} stage={event.rollout_stage} />
-                {event.high_critical_gap && <span className="font-mono text-[9px] text-sev-critical">gap</span>}
+                {event.high_critical_gap && <span className="font-mono text-xs text-sev-critical">gap</span>}
               </span>
             </Link>
           ))}

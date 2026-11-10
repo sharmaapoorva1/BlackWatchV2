@@ -53,7 +53,7 @@ export function HostInventoryTable({
           type="search"
           value={query}
         />
-        <span aria-live="polite" className="font-mono text-[11px] text-fg-subtle">
+        <span aria-live="polite" className="font-mono text-xs text-fg-subtle">
           {filteredRows.length} of {rows.length}
         </span>
       </div>

@@ -7,7 +7,7 @@ import { Button } from "./Button";
 // Collapsible section with a caret + label trigger. Used anywhere a form
 // has an optional-detail area (advanced settings, custom message template,
 // per-rule overrides). Consistent with the rest of BW: text-fg-subtle
-// uppercase micro-label, focus ring in signal color, no motion beyond a
+// micro-label, focus ring in signal color, no motion beyond a
 // 150ms caret rotate — matches the "forensic minimalism" aesthetic.
 //
 // State (8): default · hover · focus-visible · active (press) · open
@@ -37,7 +37,7 @@ export function Disclosure({
         aria-expanded={open}
         aria-controls={panelId}
         disabled={disabled}
-        className="min-h-6 px-0 text-[11px] uppercase tracking-[0.08em]"
+        className="min-h-6 px-0 text-xs"
       >
         <ChevronRight size={12} className={`transition-transform ${open ? "rotate-90" : ""}`} />{label}
       </Button>

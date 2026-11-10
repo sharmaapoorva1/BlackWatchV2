@@ -15,7 +15,7 @@ export function ReviewGrid({
 
 export function ReviewLabel({ children }: { children: React.ReactNode }) {
   return (
-    <dt className="text-[11px] uppercase tracking-[0.08em] text-muted">{children}</dt>
+    <dt className="text-xs text-muted">{children}</dt>
   );
 }
 

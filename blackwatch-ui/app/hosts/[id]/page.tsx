@@ -126,7 +126,7 @@ function HostHeaderBar({ id, data }: { id: string; data: HostDetailResponse }) {
     <StickyHeader>
       <Breadcrumbs items={[{ label: "Hosts", href: "/hosts" }, { label: name }]} />
       <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
-        <h1 className="break-words font-display text-xl font-bold tracking-tight text-fg sm:text-2xl">{name}</h1>
+        <h1 className="break-words font-display text-xl font-semibold tracking-tight text-fg sm:text-2xl">{name}</h1>
         <span className={clsx("inline-flex items-center gap-1.5 text-xs", tone.text)}>
           <span aria-hidden className={clsx("h-1.5 w-1.5 rounded-full", tone.dot)} />
           {state.replaceAll("_", " ")}
@@ -474,7 +474,7 @@ function StatusSection({
             ) : (
               <span className="font-mono text-xs">
                 <span className="text-fg-muted">{formatAge(ageSeconds)} ago</span>
-                {stale && <span className="ml-2 text-[10px] uppercase tracking-wider text-sev-medium">stale</span>}
+                {stale && <span className="ml-2 text-xs text-sev-medium">stale</span>}
               </span>
             )}
           </KeyValueRow>
@@ -487,7 +487,7 @@ function StatusSection({
             <KeyValueRow label="Memory · latest report">
               <span className="inline-flex items-baseline gap-2">
                 <span className={clsx("font-mono", memoryColor(memory.used_pct))}>{memory.used_pct}%</span>
-                <span className="text-[11px] text-fg-subtle">· {kbToMib(memory.used_kb)} / {kbToMib(memory.total_kb)} MiB</span>
+                <span className="text-xs text-fg-subtle">· {kbToMib(memory.used_kb)} / {kbToMib(memory.total_kb)} MiB</span>
               </span>
             </KeyValueRow>
           )}
@@ -512,7 +512,7 @@ function StatusSection({
                 </div>
                 {cpuAnomaly && <div className="inline-flex items-center gap-1.5 text-xs text-sev-critical"><span aria-hidden className="h-1.5 w-1.5 rounded-full bg-sev-critical" />anomaly active</div>}
                 {!cpuAnomaly && baselineN >= 60 && extra._baseline_cpu && (
-                  <div className="text-[11px] text-fg-subtle">load baseline mean {extra._baseline_cpu.mean.toFixed(3)} ({baselineN} samples)</div>
+                  <div className="text-xs text-fg-subtle">load baseline mean {extra._baseline_cpu.mean.toFixed(3)} ({baselineN} samples)</div>
                 )}
               </div>
             </KeyValueRow>
@@ -621,7 +621,7 @@ function HostActivitySection({
                 <SeverityBadge severity={alert.severity as string} />
                 <div className="min-w-0 flex-1">
                   <Link href={`/events/${alert.event_id}`} className="break-words font-mono text-xs text-fg hover:text-signal">{alert.action ?? alert.category ?? "Security alert"}</Link>
-                  <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-fg-subtle">
+                  <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-fg-subtle">
                     <span>{alert.actor?.principal ?? alert.target?.name ?? "Unattributed"}</span>
                     <TimestampCell value={alert.event_time} />
                   </div>
@@ -637,7 +637,7 @@ function HostActivitySection({
           <h4 className="text-sm font-medium text-fg">Recent activity</h4>
           <p className="mt-1 text-xs text-fg-muted">Access, privilege, integrity, and host changes · newest first.</p>
         </div>
-        <span className="text-[11px] text-fg-subtle">{activity.length} entries</span>
+        <span className="text-xs text-fg-subtle">{activity.length} entries</span>
       </div>
       <DataPanel scrollX>
         {activity.length === 0 ? (
@@ -717,7 +717,7 @@ function CollectorHealthSummary({
                 <span className="break-all font-mono text-xs text-fg">{name}</span>
                 <span className={state === "ok" ? "text-xs text-sev-resolved" : state === "failed" ? "text-xs text-sev-critical" : state === "stale" ? "text-xs text-sev-medium" : "text-xs text-fg-subtle"}>{state}</span>
               </div>
-              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px] text-fg-subtle">
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs text-fg-subtle">
                 <span>last success {status?.age_seconds == null ? "never" : `${status.age_seconds}s ago`}</span>
                 {status && <span>every {status.interval_seconds}s</span>}
                 {status?.last_attempt_at && <span>last attempt {new Date(status.last_attempt_at).toLocaleString()}</span>}
@@ -788,7 +788,7 @@ function FimSection({
 function FimWatchedPaths({ paths }: { paths: FimConfiguredPaths }) {
   return (
     <DataPanel className="space-y-3 px-4 py-3 text-xs">
-      <div className="text-[10px] uppercase tracking-[0.08em] text-fg-subtle">
+      <div className="text-xs text-fg-subtle">
         watched paths · what FIM is monitoring on this host
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -796,7 +796,7 @@ function FimWatchedPaths({ paths }: { paths: FimConfiguredPaths }) {
         <PathColumn label="Critical directories" paths={paths.critical_dirs} />
         <PathColumn label="Binary directories" paths={paths.binary_dirs} />
       </div>
-      <div className="border-t border-line-soft pt-2 text-[10px] text-fg-subtle">
+      <div className="border-t border-line-soft pt-2 text-xs text-fg-subtle">
         Real-time (inotify): files + critical directories · Periodic (6h):
         everything · Auditd whodata: write &amp; attribute changes
       </div>
@@ -814,7 +814,7 @@ function PathColumn({
   const rows: HostInventoryRow[] = paths.map((path) => ({ key: path, cells: [path] }));
   return (
     <div className="min-w-0">
-      <div className="mb-1 flex items-baseline justify-between text-[10px] uppercase tracking-[0.08em] text-fg-subtle">
+      <div className="mb-1 flex items-baseline justify-between text-xs text-fg-subtle">
         {label} <span className="text-fg-disabled">({paths.length})</span>
       </div>
       <HostInventoryTable title={`${label} FIM paths`} columns={[{ label: "Path", mono: true }]} rows={rows} />
@@ -870,7 +870,7 @@ function FimCoverageCard({ coverage }: { coverage: FimCoverage | null }) {
           tone={coverage.scan_errors > 0 ? "warn" : undefined}
         />
       </div>
-      <div className="border-t border-line-soft pt-2 text-[10px] uppercase tracking-[0.08em] text-fg-subtle">
+      <div className="border-t border-line-soft pt-2 text-xs text-fg-subtle">
         Paths configured: <span className="text-fg-muted normal-case">{coverage.paths_configured}</span>
         {coverage.paths_inotify > 0 && (
           <>
@@ -900,7 +900,7 @@ function Stat({
 }) {
   return (
     <div className="space-y-0.5">
-      <div className="text-[10px] uppercase tracking-[0.08em] text-fg-subtle">
+      <div className="text-xs text-fg-subtle">
         {label}
       </div>
       <div

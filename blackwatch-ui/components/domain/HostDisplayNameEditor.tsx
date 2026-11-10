@@ -68,7 +68,7 @@ export function HostDisplayNameEditor({
           size="sm" variant="ghost"
           type="button"
           onClick={begin}
-          className="inline-flex items-center gap-1 border border-line-soft px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-fg-subtle transition-colors hover:border-line hover:text-fg"
+          className="inline-flex items-center gap-1 border border-line-soft px-1.5 py-0.5 text-xs text-fg-subtle transition-colors hover:border-line hover:text-fg"
           aria-label="Edit display name"
         >
           <Pencil size={10} strokeWidth={1.5} />
@@ -108,7 +108,7 @@ export function HostDisplayNameEditor({
         <X size={12} /> Cancel
       </Button>
       {error && (
-        <span id="host-display-name-error" role="alert" className="text-[11px] text-sev-critical">{error}</span>
+        <span id="host-display-name-error" role="alert" className="text-xs text-sev-critical">{error}</span>
       )}
     </div>
   );

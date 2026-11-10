@@ -33,6 +33,6 @@ export function SeverityChip({
 }) {
   const label = SHORT_LABEL[severity] ?? severity;
   return (
-    <span className={clsx("inline-flex h-[22px] items-center rounded border px-2 font-mono text-[10px]", severityChipClass(severity), className)}>{label}</span>
+    <span className={clsx("inline-flex h-[22px] items-center rounded border px-2 font-mono text-xs", severityChipClass(severity), className)}>{label}</span>
   );
 }

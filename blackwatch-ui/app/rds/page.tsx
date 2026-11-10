@@ -250,7 +250,7 @@ function AllowlistTable({
   if (entries.length === 0) {
     return (
       <div className="px-4 py-6">
-        <div className="mb-2 text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+        <div className="mb-2 text-xs text-fg-subtle">
           {heading}
         </div>
         <div className="text-xs text-fg-muted">{empty}</div>
@@ -259,7 +259,7 @@ function AllowlistTable({
   }
   return (
     <div>
-      <div className="px-4 pt-3 pb-1 text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+      <div className="px-4 pt-3 pb-1 text-xs text-fg-subtle">
         {heading} · {entries.length}
       </div>
       <AllowlistEntriesTable entries={entries} kind={heading.toLowerCase().replaceAll(" ", "-")} />

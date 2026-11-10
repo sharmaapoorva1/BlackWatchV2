@@ -196,7 +196,7 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
       {/* ------- Filter toolbar ------------------------------------------- */}
       <section aria-label="Rule filters" className="flex flex-col gap-2.5 border-b border-line-soft bg-surface-1 px-3 py-3">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="mr-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.1em] text-fg">
+          <div className="mr-1 flex items-center gap-2 text-xs font-medium text-fg">
             <span className="h-1.5 w-1.5 rounded-full bg-signal" aria-hidden="true" />
             Filters
           </div>
@@ -210,12 +210,12 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
             aria-label="Filter rules"
             className="min-w-0 flex-1 bg-transparent text-xs text-fg placeholder:text-fg-disabled focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal"
           />
-          <kbd className="hidden select-none rounded border border-line-soft bg-canvas px-1.5 py-0.5 font-mono text-[10px] text-fg-subtle sm:inline">
+          <kbd className="hidden select-none rounded border border-line-soft bg-canvas px-1.5 py-0.5 font-mono text-xs text-fg-subtle sm:inline">
             /
           </kbd>
           <span
             className={clsx(
-              "font-mono text-[11px]",
+              "font-mono text-xs",
               anyFilterActive ? "text-signal" : "text-fg-subtle",
             )}
           >
@@ -232,7 +232,7 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
             type="button"
             onClick={() => setShowFacets((open) => !open)}
             aria-expanded={showFacets}
-            className="rounded border border-line-soft px-2 py-1 text-[10px] uppercase tracking-wider text-fg-subtle transition-colors hover:border-signal hover:text-fg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal"
+            className="rounded border border-line-soft px-2 py-1 text-xs text-fg-subtle transition-colors hover:border-signal hover:text-fg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal"
           >
             {showFacets ? "Hide filters" : "More filters"}
             {activeFacetCount > 0 ? ` · ${activeFacetCount}` : ""}
@@ -241,7 +241,7 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
             <Button size="sm" variant="ghost"
               type="button"
               onClick={clearAll}
-              className="rounded border border-line-soft px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-fg-subtle transition-colors hover:border-signal hover:text-signal"
+              className="rounded border border-line-soft px-1.5 py-0.5 text-xs text-fg-subtle transition-colors hover:border-signal hover:text-signal"
               aria-label="Clear all filters"
             >
               Clear
@@ -250,7 +250,7 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
         </div>
 
         {/* Facet rows — one label + inline chips per facet */}
-        {showFacets && <div className="grid grid-cols-1 gap-2 border-t border-line-soft pt-2 text-[11px] xl:grid-cols-2">
+        {showFacets && <div className="grid grid-cols-1 gap-2 border-t border-line-soft pt-2 text-xs xl:grid-cols-2">
           <FacetRow label="severity">
             {facets.severities.map(([sev, count]) => (
               <SeverityChip
@@ -385,7 +385,7 @@ function RuleListTable({
               ))}
             </div>
           ) : (
-            <span className="text-xs italic text-fg-disabled">matches on non-action fields</span>
+            <span className="text-xs text-fg-disabled">matches on non-action fields</span>
           ),
       },
       {
@@ -466,7 +466,7 @@ function FacetRow({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="mr-1 w-14 shrink-0 uppercase tracking-[0.08em] text-fg-subtle">
+      <span className="mr-1 w-14 shrink-0 text-fg-subtle">
         {label}
       </span>
       {children}
@@ -476,7 +476,7 @@ function FacetRow({
 
 function baseChipClass(active: boolean) {
   return clsx(
-    "inline-flex select-none items-center gap-1.5 rounded border px-1.5 py-0.5 text-[11px] transition-colors",
+    "inline-flex select-none items-center gap-1.5 rounded border px-1.5 py-0.5 text-xs transition-colors",
     "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal",
     active
       ? "border-signal bg-surface-2 text-fg"
@@ -608,7 +608,7 @@ function SourceChip({
 
 function SourceBadge({ src }: { src: string }) {
   return (
-    <span className="rounded-sm border border-line-soft px-1 py-px font-mono text-[9.5px] uppercase tracking-wider text-fg-subtle">
+    <span className="rounded-sm border border-line-soft px-1 py-px font-mono text-xs text-fg-subtle">
       {src}
     </span>
   );
@@ -618,7 +618,7 @@ function NotifyPill({ tier }: { tier: NotifyTier }) {
   return (
     <span
       className={clsx(
-        "inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 font-mono text-[10.5px]",
+        "inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 font-mono text-xs",
         tier === "silent"
           ? "border-line-soft text-fg-disabled"
           : "border-line-soft text-fg-muted",
@@ -643,7 +643,7 @@ function EmptyState({
 }) {
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-3 text-fg-muted">
-      <div className="font-mono text-[11px] uppercase tracking-[0.12em] text-fg-subtle">
+      <div className="font-mono text-xs text-fg-subtle">
         no rules match
       </div>
       <p className="text-sm">
@@ -655,7 +655,7 @@ function EmptyState({
         <Button size="sm" variant="ghost"
           type="button"
           onClick={onClear}
-          className="rounded border border-line-soft px-2 py-1 text-[11px] uppercase tracking-wider text-fg-subtle transition-colors hover:border-signal hover:text-signal"
+          className="rounded border border-line-soft px-2 py-1 text-xs text-fg-subtle transition-colors hover:border-signal hover:text-signal"
         >
           Clear filters
         </Button>

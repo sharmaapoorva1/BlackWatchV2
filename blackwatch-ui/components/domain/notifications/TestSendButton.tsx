@@ -138,7 +138,7 @@ export function TestSendButton({
       </Button>
 
       {noChannels && (
-        <span className="text-[11px] text-fg-subtle">
+        <span className="text-xs text-fg-subtle">
           Pick a channel first.
         </span>
       )}
@@ -150,8 +150,8 @@ export function TestSendButton({
               key={r.channel}
               className={
                 r.ok
-                  ? "inline-flex items-center gap-1 border border-signal/40 bg-signal/10 px-1.5 py-0.5 font-mono text-[10px] text-signal"
-                  : "inline-flex items-center gap-1 border border-sev-critical/40 bg-sev-critical/10 px-1.5 py-0.5 font-mono text-[10px] text-sev-critical"
+                  ? "inline-flex items-center gap-1 border border-signal/40 bg-signal/10 px-1.5 py-0.5 font-mono text-xs text-signal"
+                  : "inline-flex items-center gap-1 border border-sev-critical/40 bg-sev-critical/10 px-1.5 py-0.5 font-mono text-xs text-sev-critical"
               }
               title={r.detail}
             >
@@ -163,7 +163,7 @@ export function TestSendButton({
       )}
 
       {!sending && results.length > 0 && anyFail && (
-        <span className="text-[10px] text-fg-subtle">
+        <span className="text-xs text-fg-subtle">
           Hover a failed pill for the error detail.
         </span>
       )}

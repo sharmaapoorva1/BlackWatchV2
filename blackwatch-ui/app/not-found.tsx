@@ -10,7 +10,7 @@ export default function NotFound() {
     <div className="mx-auto max-w-[720px] px-4 py-8 md:py-16">
       <div className="flex flex-col gap-4">
         <p className="font-mono text-xs text-fg-subtle">404</p>
-        <h1 className="font-display text-2xl font-bold">We could not find that page</h1>
+        <h1 className="font-display text-2xl font-semibold">We could not find that page</h1>
         <p className="text-sm text-fg-muted">
           The address may be mistyped, or the event, host or record it pointed to may no longer exist. Nothing was
           changed. Press <kbd className="rounded border border-line px-1 font-mono text-xs">/</kbd> to search.

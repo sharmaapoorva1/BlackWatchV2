@@ -66,14 +66,14 @@ export function IpLookupModal({ ip, onClose }: IpLookupModalProps) {
                 <div className="flex items-center gap-3">
                   <Link
                     href={investigationStartHref(ip)}
-                    className="inline-flex items-center gap-1 text-[11px] text-signal hover:text-fg"
+                    className="inline-flex items-center gap-1 text-xs text-signal hover:text-fg"
                     onClick={onClose}
                   >
                     investigate <ExternalLink size={10} />
                   </Link>
                   <Link
                     href={`/tools/ip-lookup?ip=${encodeURIComponent(ip)}`}
-                    className="inline-flex items-center gap-1 text-[11px] text-fg-muted hover:text-fg"
+                    className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg"
                     onClick={onClose}
                   >
                     open standalone tool <ExternalLink size={10} />

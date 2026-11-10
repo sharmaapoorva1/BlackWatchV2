@@ -40,7 +40,7 @@ export function TablePageSizeSetting() {
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
       <div>
         <p className="text-sm">Default table rows</p>
-        <p className="mt-0.5 text-[11px] text-subtle">
+        <p className="mt-0.5 text-xs text-subtle">
           Applies to every table in this browser. You can still change an
           individual table temporarily from its footer.
         </p>

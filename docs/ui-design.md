@@ -768,3 +768,7 @@ The channel (new/edit), rule (new/edit) and create-alert chooser pages use Notif
 ## Remaining flows
 
 `/connectors/new` uses a Connectors breadcrumb and a `type` or `settings` section. The notification log uses a breadcrumb. The Notification Studio profile editor (`/notifications/profiles/[id]`) has a `PageHeader` with the status as its action, `delivery`, `message` (all fields on `Field`), a collapsible `advanced` template, and a sticky `test` section beside the preview. The login page is intentionally standalone.
+
+## Unslop pass
+
+Source cleanup so the code matches what the readability floor already enforced: no `text-[9..11px]`, no `uppercase` or wide `tracking-*` labels, no `font-bold` (titles are 600), no gradient chrome (table header and actions column are solid; the alert-type cards lost their glow line), no italic placeholders. `lib/polish.test.ts` fails if any come back. Kept on purpose: the teal accent, the live-status pulse on "Collecting evidence", loading skeleton pulses, and the global readability-floor CSS as a safety net.

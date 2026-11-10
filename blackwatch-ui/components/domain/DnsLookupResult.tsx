@@ -69,7 +69,7 @@ function RecordBlock({
       <div className="flex items-baseline justify-between border-b border-line-soft px-3 py-2">
         <SectionLabel>{record.type}</SectionLabel>
         {!record.ok && (
-          <span className="font-mono text-[10px] text-fg-disabled">
+          <span className="font-mono text-xs text-fg-disabled">
             {record.error}
           </span>
         )}
@@ -87,7 +87,7 @@ function RecordBlock({
                 >
                   <code className="break-all font-mono text-xs text-fg">{v}</code>
                   {record.type === "TXT" && txtAnnotation(v) && (
-                    <span className="border border-signal/40 bg-signal/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-signal">
+                    <span className="border border-signal/40 bg-signal/10 px-1.5 py-0.5 text-xs text-signal">
                       {txtAnnotation(v)}
                     </span>
                   )}
@@ -98,7 +98,7 @@ function RecordBlock({
         ) : (
           <p className="text-xs text-fg-disabled">none</p>
         )}
-        {note && <p className="mt-2 text-[11px] text-fg-subtle">{note}</p>}
+        {note && <p className="mt-2 text-xs text-fg-subtle">{note}</p>}
       </div>
     </DataPanel>
   );

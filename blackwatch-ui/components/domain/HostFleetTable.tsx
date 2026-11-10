@@ -52,14 +52,14 @@ function AgentState({ host }: { host: HostSummary }) {
         <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
         {state.replaceAll("_", " ")}
       </span>
-      <div className="font-mono text-[11px] text-fg-subtle">
+      <div className="font-mono text-xs text-fg-subtle">
         {host.age_seconds == null ? "no report yet" : relativeAge(host.age_seconds)}
         {host.delivery?.queue_delay_seconds != null && host.delivery.queue_delay_seconds > 0 && (
           <span title="Time from agent send to server acceptance"> · queue {Math.round(host.delivery.queue_delay_seconds)}s</span>
         )}
       </div>
       {state !== "healthy" && reason && (
-        <div className="max-w-52 break-words text-[11px] text-fg-muted">{reason}</div>
+        <div className="max-w-52 break-words text-xs text-fg-muted">{reason}</div>
       )}
     </div>
   );
@@ -69,7 +69,7 @@ function SurfaceCount({ value, label }: { value: number; label: string }) {
   return (
     <span className="inline-flex min-w-12 items-baseline justify-between gap-2 font-mono text-xs">
       <span className="text-fg">{value}</span>
-      <span className="text-[10px] text-fg-subtle">{label}</span>
+      <span className="text-xs text-fg-subtle">{label}</span>
     </span>
   );
 }

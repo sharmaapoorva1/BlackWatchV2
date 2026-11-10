@@ -26,11 +26,11 @@ export default async function LoginPage({
             aria-hidden
             className="grid h-6 w-6 place-items-center border border-signal text-signal"
           >
-            <span className="font-mono text-[10px] font-medium leading-none">
+            <span className="font-mono text-xs font-medium leading-none">
               BW
             </span>
           </span>
-          <span className="font-mono text-xs uppercase tracking-[0.18em] text-fg-muted">
+          <span className="font-mono text-xs text-fg-muted">
             blackwatch
           </span>
         </div>

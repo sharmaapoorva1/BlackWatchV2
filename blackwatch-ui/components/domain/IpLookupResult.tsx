@@ -70,12 +70,12 @@ export function IpLookupResult({
       {/* Header — IP + reverse + flags */}
       <DataPanel className={clsx(compact ? "px-4 py-3" : "px-6 py-5")}>
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+          <div className="text-xs text-fg-subtle">
             {result.query === query ? "Resolved IP" : "Looked up"}
           </div>
           <Link
             href={investigationStartHref(result.query ?? query)}
-            className="inline-flex items-center gap-1 border border-signal/40 px-2 py-1 text-[11px] text-signal transition-colors hover:bg-signal/10"
+            className="inline-flex items-center gap-1 border border-signal/40 px-2 py-1 text-xs text-signal transition-colors hover:bg-signal/10"
           >
             open as investigation <ExternalLink size={10} aria-hidden />
           </Link>
@@ -100,7 +100,7 @@ export function IpLookupResult({
               .map((f) => (
                 <span
                   key={f.label}
-                  className="inline-flex items-center gap-1.5 border border-sev-medium/40 bg-sev-medium/5 px-2 py-0.5 text-[11px] uppercase tracking-wider text-sev-medium"
+                  className="inline-flex items-center gap-1.5 border border-sev-medium/40 bg-sev-medium/5 px-2 py-0.5 text-xs text-sev-medium"
                 >
                   <span
                     aria-hidden
@@ -252,7 +252,7 @@ function IntelligencePanel({
       <section className="space-y-2">
         <div className="flex items-baseline justify-between gap-3">
           <SectionLabel>intelligence sources</SectionLabel>
-          <span className="font-mono text-[10px] text-fg-subtle">
+          <span className="font-mono text-xs text-fg-subtle">
             {providers.length} checked
           </span>
         </div>
@@ -274,7 +274,7 @@ function IntelligencePanel({
         <section className="space-y-2">
           <div className="flex items-baseline justify-between gap-3">
             <SectionLabel>related indicators</SectionLabel>
-            <span className="font-mono text-[10px] text-fg-subtle">
+            <span className="font-mono text-xs text-fg-subtle">
               {indicators.length} found
             </span>
           </div>
@@ -294,7 +294,7 @@ function IntelligencePanel({
         <section className="space-y-2">
           <div className="flex items-baseline justify-between gap-3">
             <SectionLabel>matching events</SectionLabel>
-            <span className="font-mono text-[10px] text-fg-subtle">
+            <span className="font-mono text-xs text-fg-subtle">
               {events.length} found
             </span>
           </div>
@@ -333,7 +333,7 @@ function ProviderRow({ provider }: { provider: ProviderResult }) {
           <span className="text-xs text-fg-subtle">{provider.message ?? "No provider output."}</span>
         )}
         {evidence.length > 0 && provider.message && (
-          <div className="mt-1 text-[11px] text-fg-subtle">{provider.message}</div>
+          <div className="mt-1 text-xs text-fg-subtle">{provider.message}</div>
         )}
       </div>
       <a
@@ -355,7 +355,7 @@ function IndicatorGroupRow({ label, indicators }: { label: string; indicators: I
     <div className="px-4 py-3">
       <div className="mb-2 flex items-center justify-between gap-3">
         <span className="text-xs text-fg-muted">{label}</span>
-        <span className="font-mono text-[10px] text-fg-subtle">{indicators.length}</span>
+        <span className="font-mono text-xs text-fg-subtle">{indicators.length}</span>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {indicators.map((indicator) => (
@@ -374,7 +374,7 @@ function IndicatorPill({ indicator }: { indicator: IpIndicator }) {
       ? `https://${indicator.value}`
       : undefined;
   const content = (
-    <span className="inline-flex max-w-full items-center gap-2 rounded-md border border-line-soft bg-surface-2 px-2 py-1 text-[10px] text-fg-muted transition-colors hover:border-signal/50 hover:text-fg">
+    <span className="inline-flex max-w-full items-center gap-2 rounded-md border border-line-soft bg-surface-2 px-2 py-1 text-xs text-fg-muted transition-colors hover:border-signal/50 hover:text-fg">
       <span className="max-w-64 truncate font-mono">{indicator.value}</span>
       {href && <ExternalLink size={9} className="shrink-0 text-fg-subtle" />}
     </span>
@@ -400,7 +400,7 @@ function EventTrailRow({ event }: { event: IpLookupResponse["observedEvents"][nu
         <span className="block truncate font-mono text-xs text-fg">{event.action}</span>
         <span className="mt-1 block text-xs text-fg-muted">{event.summary}</span>
       </span>
-      <span className="font-mono text-[10px] text-fg-subtle">{event.module}</span>
+      <span className="font-mono text-xs text-fg-subtle">{event.module}</span>
     </a>
   );
 }

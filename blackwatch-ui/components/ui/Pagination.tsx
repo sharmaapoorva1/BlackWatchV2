@@ -24,14 +24,14 @@ export function TablePagination({
 
   return (
     <nav aria-label="Table pagination" className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-surface px-3 py-2.5">
-      <span aria-live="polite" className="font-mono text-[11px] text-muted">
+      <span aria-live="polite" className="font-mono text-xs text-muted">
         {first}–{last} <span className="text-fg-disabled">of</span> {total}
       </span>
       <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
-        <label className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted">Rows <NativeSelect value={String(pageSize)} onChange={(event) => onPageSizeChange(Number(event.target.value))} className="w-[78px]" aria-label="Rows per page">
+        <label className="flex items-center gap-1.5 text-xs text-muted">Rows <NativeSelect value={String(pageSize)} onChange={(event) => onPageSizeChange(Number(event.target.value))} className="w-[78px]" aria-label="Rows per page">
           {TABLE_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
         </NativeSelect></label>
-        <span className="min-w-16 text-center font-mono text-[11px] text-muted">
+        <span className="min-w-16 text-center font-mono text-xs text-muted">
           {page + 1} / {pageCount}
         </span>
         <Button

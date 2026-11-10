@@ -43,7 +43,7 @@ export function TopNav({
       </button>
       <Link href="/" className="flex items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70" aria-label="BlackWatch overview">
         <Logo />
-        <span className="hidden font-mono text-xs tracking-[0.18em] text-fg-muted sm:inline">blackwatch</span>
+        <span className="hidden font-mono text-xs text-fg-muted sm:inline">blackwatch</span>
       </Link>
 
       <button
@@ -72,7 +72,7 @@ export function TopNav({
 
 function Logo() {
   return (
-    <span aria-hidden className="grid h-6 w-6 place-items-center border border-signal text-[10px] font-medium leading-none text-signal">
+    <span aria-hidden className="grid h-6 w-6 place-items-center border border-signal text-xs font-medium leading-none text-signal">
       BW
     </span>
   );

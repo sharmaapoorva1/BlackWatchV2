@@ -10,7 +10,7 @@ import { unmuteAction } from "@/app/rules/actions";
 /** `null` means the mute matches any value, which is different from a literal
  *  empty string (the API rejects those), so show it as an explicit "any". */
 function FilterValue({ value }: { value: string | null }) {
-  return value === null ? <span className="italic text-fg-disabled">any</span> : <>{value}</>;
+  return value === null ? <span className="text-fg-disabled">any</span> : <>{value}</>;
 }
 
 export function MutedEventsTable({ muted }: { muted: MutedEvent[] }) {

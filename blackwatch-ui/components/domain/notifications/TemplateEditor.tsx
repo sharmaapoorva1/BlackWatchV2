@@ -274,7 +274,7 @@ export function TemplateEditor({
       {/* Presets */}
       {!hidePresets && presets.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+          <p className="text-xs text-fg-subtle">
             Start from a template
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -328,7 +328,7 @@ export function TemplateEditor({
 
       {/* Insert-variable chips — click OR drag onto the textarea */}
       <div className="space-y-1.5">
-        <p className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+        <p className="text-xs text-fg-subtle">
           Drag or click a variable to insert
         </p>
         <div className="flex flex-wrap gap-1.5">
@@ -346,7 +346,7 @@ export function TemplateEditor({
               className="inline-flex cursor-grab items-center gap-1.5 rounded-md border border-line-soft bg-surface-1 px-2 py-1 text-xs text-fg-muted transition-colors hover:border-line hover:text-fg active:cursor-grabbing"
             >
               <span>{v.name}</span>
-              <code className="font-mono text-[10px] text-fg-subtle">
+              <code className="font-mono text-xs text-fg-subtle">
                 {`{{ ${v.path} }}`}
               </code>
             </Button>
@@ -361,7 +361,7 @@ export function TemplateEditor({
       <div className="rounded-md border border-line-soft bg-surface-0">
         <div className="space-y-1.5 border-b border-line-soft px-3 py-2">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+            <span className="text-xs text-fg-subtle">
               Preview
             </span>
             {/* Source toggle: canned sample vs a real recent event.
@@ -374,8 +374,8 @@ export function TemplateEditor({
                   onClick={() => setSampleSource("canned")}
                   className={
                     sampleSource === "canned"
-                      ? "bg-signal/10 px-2 py-0.5 text-[10px] text-fg"
-                      : "bg-surface-1 px-2 py-0.5 text-[10px] text-fg-subtle hover:text-fg"
+                      ? "bg-signal/10 px-2 py-0.5 text-xs text-fg"
+                      : "bg-surface-1 px-2 py-0.5 text-xs text-fg-subtle hover:text-fg"
                   }
                 >
                   canned sample
@@ -385,8 +385,8 @@ export function TemplateEditor({
                   onClick={() => setSampleSource("recent")}
                   className={
                     sampleSource === "recent"
-                      ? "bg-signal/10 px-2 py-0.5 text-[10px] text-fg"
-                      : "bg-surface-1 px-2 py-0.5 text-[10px] text-fg-subtle hover:text-fg"
+                      ? "bg-signal/10 px-2 py-0.5 text-xs text-fg"
+                      : "bg-surface-1 px-2 py-0.5 text-xs text-fg-subtle hover:text-fg"
                   }
                 >
                   real recent event
@@ -395,7 +395,7 @@ export function TemplateEditor({
             )}
           </div>
           {contextKind === "perf" ? (
-            <p className="text-[10px] text-fg-disabled">
+            <p className="text-xs text-fg-disabled">
               Sample:{" "}
               {perfContext?.metric_label ?? "metric"} at{" "}
               {(() => {
@@ -412,12 +412,12 @@ export function TemplateEditor({
               {perfContext?.hostname ?? "ip-172-16-1-97"}.
             </p>
           ) : sampleSource === "canned" ? (
-            <label className="flex items-center gap-1.5 text-[10px] text-fg-disabled">
+            <label className="flex items-center gap-1.5 text-xs text-fg-disabled">
               <span>event type:</span>
               <NativeSelect
                 value={sample}
                 onChange={(e) => setSample(e.target.value as PreviewSampleKind)}
-                className="h-6 min-w-32 text-[10px]"
+                className="h-6 min-w-32 text-xs"
               >
                 {effectiveSampleOptions.map((s) => (
                   <option key={s.value} value={s.value}>
@@ -427,7 +427,7 @@ export function TemplateEditor({
               </NativeSelect>
             </label>
           ) : (
-            <label className="flex items-center gap-1.5 text-[10px] text-fg-disabled">
+            <label className="flex items-center gap-1.5 text-xs text-fg-disabled">
               <span>event:</span>
               {recentLoading ? (
                 <span className="text-fg-subtle">loading…</span>
@@ -437,7 +437,7 @@ export function TemplateEditor({
                 <NativeSelect
                   value={recentEventId}
                   onChange={(e) => setRecentEventId(e.target.value)}
-                  className="max-w-[60%] text-[10px]"
+                  className="max-w-[60%] text-xs"
                 >
                   {recentEvents.map((ev) => (
                     <option key={ev.event_id} value={ev.event_id}>

@@ -21,10 +21,10 @@ export function PickerCard({
         <span className="text-muted">{icon}</span>
         <span className="text-sm">{title}</span>
         {badge && (
-          <code className="ml-auto font-mono text-[11px] text-subtle">{badge}</code>
+          <code className="ml-auto font-mono text-xs text-subtle">{badge}</code>
         )}
       </div>
-      <span className="text-[11px] text-subtle">{blurb}</span>
+      <span className="text-xs text-subtle">{blurb}</span>
     </Link>
   );
 }

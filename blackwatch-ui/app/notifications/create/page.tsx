@@ -66,8 +66,6 @@ function ChoiceCard({
   return (
     <Link href={href} className="group block focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-signal">
       <div className="relative flex h-full flex-col rounded-md border border-line-soft bg-surface-1 transition-colors group-hover:border-signal group-focus-visible:border-signal">
-        <div className="h-px bg-gradient-to-r from-transparent via-signal/30 to-transparent transition-opacity group-hover:via-signal/70" />
-
         <div className="flex flex-1 flex-col p-6">
           <div className="flex items-center justify-between">
             <div className="flex h-9 w-9 items-center justify-center border border-signal/20 bg-signal/5">
@@ -84,7 +82,7 @@ function ChoiceCard({
 
           <div className="mt-auto pt-5">
             <div className="border-t border-line-soft pt-4">
-              <span className="text-[10px] uppercase tracking-[0.08em] text-fg-subtle">
+              <span className="text-xs text-fg-subtle">
                 Examples
               </span>
               <ul className="mt-2 space-y-1.5">

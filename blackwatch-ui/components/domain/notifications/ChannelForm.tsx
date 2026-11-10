@@ -162,7 +162,7 @@ export function ChannelForm({
       {/* Sending behaviour — friendly labels instead of "dedup window s" etc.
           Every knob is one plain-English sentence and a number input. */}
       <details className="border-t border-line-soft px-4 py-3">
-        <summary className="cursor-pointer text-xs uppercase tracking-[0.08em] text-fg-subtle hover:text-fg">
+        <summary className="cursor-pointer text-xs text-fg-subtle hover:text-fg">
           More options · how often to send & retry
         </summary>
         <div className="mt-4 space-y-3">
@@ -231,7 +231,7 @@ function SettingRow({
     <div className="grid min-w-0 grid-cols-1 items-start gap-2 border-b border-line-soft pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-4">
       <div className="min-w-0">
         <p className="text-sm text-fg">{label}</p>
-        <p className="mt-0.5 text-[11px] leading-relaxed text-fg-subtle">
+        <p className="mt-0.5 text-xs leading-relaxed text-fg-subtle">
           {hint}
         </p>
       </div>
@@ -324,7 +324,7 @@ function HelpHint({
   learnLabel?: string;
 }) {
   return (
-    <p className="text-[11px] leading-relaxed text-fg-subtle">
+    <p className="text-xs leading-relaxed text-fg-subtle">
       {text}
       {learnHref && (
         <>

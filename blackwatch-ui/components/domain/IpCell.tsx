@@ -167,7 +167,7 @@ export function IpCell({ value, className, fallback = "—" }: IpCellProps) {
               left: Math.min(menu.x, window.innerWidth - 220),
             }}
           >
-            <div className="border-b border-line-soft px-3 py-2 font-mono text-[11px] text-fg-subtle">
+            <div className="border-b border-line-soft px-3 py-2 font-mono text-xs text-fg-subtle">
               {value}
             </div>
             <MenuItem onClick={handleLookup} icon={Search}>

@@ -65,11 +65,11 @@ export function RetryAllButton() {
         {active ? "Retrying…" : "Retry eligible"}
       </Button>
       {active && progress && (
-        <span role="status" className="font-mono text-[10px] text-fg-muted">
+        <span role="status" className="font-mono text-xs text-fg-muted">
           {progress.completed ?? 0}/{progress.total ?? 0}
         </span>
       )}
-      {message && !active && <span role="status" className="text-[10px] text-fg-muted">{message}</span>}
+      {message && !active && <span role="status" className="text-xs text-fg-muted">{message}</span>}
     </span>
   );
 }

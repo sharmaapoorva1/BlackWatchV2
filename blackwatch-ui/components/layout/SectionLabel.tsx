@@ -12,7 +12,7 @@ export function SectionLabel({
   as?: "h2" | "h3";
 }) {
   return (
-    <Tag className={`text-sm font-semibold text-fg first-letter:uppercase ${className ?? ""}`}>
+    <Tag className={`text-sm font-semibold text-fg first-letter:${className ?? ""}`}>
       {children}
     </Tag>
   );

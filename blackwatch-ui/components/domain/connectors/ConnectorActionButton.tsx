@@ -97,7 +97,7 @@ export function ConnectorActionButton({
         {active ? (operation?.status === "running" ? "Running…" : "Queued…") : label}
       </Button>
       {message && (
-        <span role="status" className="max-w-28 truncate text-[10px] text-fg-muted" title={message}>
+        <span role="status" className="max-w-28 truncate text-xs text-fg-muted" title={message}>
           {message}
         </span>
       )}

@@ -32,10 +32,10 @@ export function StorageGroupCard({
       )}
     >
       <div className="flex items-center justify-between">
-        <span className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+        <span className="text-xs text-fg-subtle">
           {label}
         </span>
-        <span className="font-mono text-[10px] uppercase text-fg-disabled">
+        <span className="font-mono text-xs text-fg-disabled">
           {group}
         </span>
       </div>
@@ -43,9 +43,9 @@ export function StorageGroupCard({
         <span className="font-mono text-3xl tabular-nums text-fg">
           {counts.total}
         </span>
-        <span className="text-[11px] text-fg-subtle">events / {hours}h</span>
+        <span className="text-xs text-fg-subtle">events / {hours}h</span>
       </div>
-      <div className="mt-2 flex gap-3 text-[11px]">
+      <div className="mt-2 flex gap-3 text-xs">
         <span className={clsx(hasCritical ? "text-sev-critical" : "text-fg-subtle")}>
           critical {counts.critical}
         </span>

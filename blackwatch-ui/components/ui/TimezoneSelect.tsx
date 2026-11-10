@@ -35,7 +35,7 @@ export function TimezoneSelect({
   }
 
   return (
-    <NativeSelect value={value} onChange={(event) => select(event.target.value as TzKey)} aria-label="Timezone" className="min-h-7 w-[76px] px-2 py-1 text-[10px] uppercase tracking-[0.08em]">
+    <NativeSelect value={value} onChange={(event) => select(event.target.value as TzKey)} aria-label="Timezone" className="min-h-7 w-[76px] px-2 py-1 text-xs">
       {TZ_OPTIONS.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
     </NativeSelect>
   );

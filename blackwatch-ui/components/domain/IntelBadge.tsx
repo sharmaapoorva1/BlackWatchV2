@@ -51,7 +51,7 @@ export function IntelBadge({ intel }: { intel?: IntelData | null }) {
         <span
           key={c.key}
           className={clsx(
-            "inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide",
+            "inline-flex items-center rounded px-1.5 py-0.5 font-mono text-xs tracking-wide",
             c.danger
               ? "bg-sev-critical/15 text-sev-critical"
               : "bg-bg-emphasis text-fg-muted",

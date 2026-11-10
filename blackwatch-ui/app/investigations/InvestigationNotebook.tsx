@@ -193,7 +193,7 @@ export function InvestigationNotebook({
       <StickyHeader>
         <Breadcrumbs items={[{ label: "Investigations", href: "/investigations" }, { label: data.title }]} />
         <div className="flex min-w-0 flex-wrap items-end justify-between gap-x-4 gap-y-2">
-          <h1 className="min-w-0 break-words font-display text-xl font-bold tracking-tight text-fg sm:text-2xl">
+          <h1 className="min-w-0 break-words font-display text-xl font-semibold tracking-tight text-fg sm:text-2xl">
             {data.title}
           </h1>
           <div className="flex flex-wrap items-end gap-3">
@@ -574,13 +574,13 @@ function EvidenceTimeline({ results }: { results: InvestigationResult[] }) {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="font-medium text-fg">{event.action ?? "Related activity"}</span>
-                <span className="font-mono text-[10px] text-signal">{moduleLabel(result)}</span>
+                <span className="font-mono text-xs text-signal">{moduleLabel(result)}</span>
                 <SeverityBadge severity={event.severity} />
               </div>
               <p className="mt-1 break-words text-xs text-fg-muted">
                 {event.target?.id ?? event.target?.name ?? "Observable found in module evidence"}
               </p>
-              <p className="mt-2 break-words text-[11px] leading-5 text-fg-subtle">{result.match_reason}</p>
+              <p className="mt-2 break-words text-xs leading-5 text-fg-subtle">{result.match_reason}</p>
             </div>
             <EvidenceLink result={result} />
           </article>
@@ -688,9 +688,9 @@ function ActivityGraph({ results }: { results: InvestigationResult[] }) {
         <div className="flex h-28 items-end gap-1" role="img" aria-label="Evidence activity by day">
           {points.map(([day, count]) => (
             <div key={day} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-              <span className="text-[10px] text-fg-subtle">{count}</span>
+              <span className="text-xs text-fg-subtle">{count}</span>
               <div className="w-full max-w-8 bg-signal" style={{ height: `${Math.max(8, (count / max) * 72)}px` }} title={`${day}: ${count} matches`} />
-              <span className="truncate text-[9px] text-fg-disabled">{day.slice(5)}</span>
+              <span className="truncate text-xs text-fg-disabled">{day.slice(5)}</span>
             </div>
           ))}
         </div>
@@ -712,7 +712,7 @@ function StoryFact({
 }) {
   return (
     <div className="border border-line-soft bg-canvas/30 px-3 py-3">
-      <div className="flex items-center gap-2 text-fg-subtle">{icon}<span className="text-[10px] uppercase tracking-[0.1em]">{label}</span></div>
+      <div className="flex items-center gap-2 text-fg-subtle">{icon}<span className="text-xs">{label}</span></div>
       {severity ? <div className="mt-2"><SeverityBadge severity={severity} /></div> : <div className="mt-2 font-mono text-sm text-fg">{value}</div>}
     </div>
   );

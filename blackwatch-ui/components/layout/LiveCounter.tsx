@@ -87,7 +87,7 @@ export function LiveCounter() {
 
   return (
     <div
-      className="flex items-center gap-2 font-mono text-[11px] text-fg-muted"
+      className="flex items-center gap-2 font-mono text-xs text-fg-muted"
       title={title}
     >
       <span aria-hidden className={clsx("h-1.5 w-1.5 rounded-full", dotClass)} />

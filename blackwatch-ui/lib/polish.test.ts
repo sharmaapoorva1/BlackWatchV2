@@ -61,3 +61,17 @@ test("bordered, filled panels are rounded so cards match controls and tables", (
   }
   assert.deepEqual(offenders, []);
 });
+
+import { readdirSync, statSync } from "node:fs";
+
+test("no source file uses micro text sizes, uppercase tracked labels, bold headings or gradient chrome", () => {
+  const walk = (dir: string): string[] =>
+    readdirSync(dir).flatMap((name) => {
+      const full = `${dir}/${name}`;
+      return statSync(full).isDirectory() ? walk(full) : full.endsWith(".tsx") ? [full] : [];
+    });
+  for (const file of [...walk("app"), ...walk("components")]) {
+    const source = fs.readFileSync(path.join(process.cwd(), file), "utf8");
+    assert.doesNotMatch(source, /text-\[(9|10|11)px\]|(?<![\w-])uppercase(?![\w-])|tracking-\[|tracking-wider|font-bold|bg-gradient/, file);
+  }
+});

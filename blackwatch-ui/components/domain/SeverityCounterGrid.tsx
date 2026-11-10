@@ -31,7 +31,7 @@ function Cell({
   const empty = count === 0;
   return (
     <div className="rounded-md border border-line-soft bg-surface-1 px-4 py-3">
-      <div className="text-[11px] uppercase tracking-[0.08em] text-fg-subtle">
+      <div className="text-xs text-fg-subtle">
         {label}
       </div>
       <div className="mt-2 flex items-baseline gap-2">
