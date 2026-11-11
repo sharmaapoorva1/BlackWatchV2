@@ -772,3 +772,5 @@ The channel (new/edit), rule (new/edit) and create-alert chooser pages use Notif
 ## Unslop pass
 
 Source cleanup so the code matches what the readability floor already enforced: no `text-[9..11px]`, no `uppercase` or wide `tracking-*` labels, no `font-bold` (titles are 600), no gradient chrome (table header and actions column are solid; the alert-type cards lost their glow line), no italic placeholders. `lib/polish.test.ts` fails if any come back. Kept on purpose: the teal accent, the live-status pulse on "Collecting evidence", loading skeleton pulses, and the global readability-floor CSS as a safety net.
+
+`/rds` also has a "Log feed" card (databases whose log feed went quiet, from `silent_databases` in the summary API). See `docs/rds-monitoring.md` for the whole RDS workflow.

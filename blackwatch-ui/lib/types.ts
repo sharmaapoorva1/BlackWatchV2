@@ -220,6 +220,8 @@ export interface RdsDbSummary {
 export interface RdsSummaryResponse {
   databases: RdsDbSummary[];
   auth_failures_24h_total: number;
+  /** Databases whose log feed has gone quiet (flagged by the server's silence check). */
+  silent_databases?: string[];
 }
 
 export interface RdsLiveResponse {

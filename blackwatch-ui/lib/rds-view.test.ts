@@ -4,7 +4,7 @@ import test from "node:test";
 import { allowlistSummary, buildRdsCards } from "./rds-view.ts";
 
 const base = { databases: 2, active: 5, authFailures: 0, authHours: 24, alerts: 0, alertHours: 24, sources: 9 };
-const by = (input = base) => Object.fromEntries(buildRdsCards(input).map((c) => [c.id, c]));
+const by = (input: Parameters<typeof buildRdsCards>[0] = base) => Object.fromEntries(buildRdsCards(input).map((c) => [c.id, c]));
 
 test("quiet databases are ok, alerts and failures escalate", () => {
   const quiet = by();
@@ -24,4 +24,13 @@ test("no databases says nothing was ingested", () => {
 
 test("allowlist summary pluralises", () => {
   assert.equal(allowlistSummary(1, 2), "1 human · 2 services");
+});
+
+test("a silent log feed raises its own card", () => {
+  const quiet = by({ ...base, silent: ["prod-db"] });
+  assert.equal(quiet.feed.tone, "high");
+  assert.equal(quiet.feed.value, "1");
+  assert.match(quiet.feed.detail, /prod-db/);
+  assert.equal(by().feed.tone, "ok");
+  assert.equal(by({ ...base, databases: 0 }).feed.ratio, null);
 });

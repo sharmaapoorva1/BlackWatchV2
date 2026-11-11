@@ -66,6 +66,7 @@ export default async function RdsPage({
     alerts: shapeB.count,
     alertHours: shapeB.hours,
     sources: sources.count,
+    silent: summary.silent_databases,
   });
   const humans = allowlist.users.filter((u) => u.kind === "human");
   const services = allowlist.users.filter((u) => u.kind === "service");

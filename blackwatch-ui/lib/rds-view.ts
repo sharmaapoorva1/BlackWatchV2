@@ -10,6 +10,8 @@ export function buildRdsCards(input: {
   alerts: number;
   alertHours: number;
   sources: number;
+  /** Databases whose log feed went quiet. */
+  silent?: string[];
 }): HealthCard[] {
   return [
     {
@@ -45,6 +47,20 @@ export function buildRdsCards(input: {
       detail: input.databases === 0 ? "No RDS activity ingested yet." : "Connected right now.",
       href: "#connected",
       cta: "Show sessions",
+    },
+    {
+      id: "feed",
+      label: "Log feed",
+      value: String((input.silent ?? []).length),
+      of: `of ${n(input.databases)} database${input.databases === 1 ? "" : "s"}`,
+      tone: (input.silent ?? []).length > 0 ? "high" : "ok",
+      ratio: input.databases > 0 ? (input.silent ?? []).length / input.databases : null,
+      detail:
+        (input.silent ?? []).length > 0
+          ? `Quiet: ${(input.silent ?? []).join(", ")}. Check the forwarder and queue.`
+          : "Every database is still logging.",
+      href: "#databases",
+      cta: "Show databases",
     },
     {
       id: "sources",

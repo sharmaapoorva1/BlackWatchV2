@@ -14,16 +14,22 @@ trust for host-staleness."""
 
 from __future__ import annotations
 
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from .. import pipeline, storage
 from ..event import Actor, Category, Event, Outcome, Source, Target, Transport
+from . import silence
 
 IDLE_THRESHOLD_HOURS = 24
+# The silence check queries a week of events per database, so it runs rarely.
+_SILENCE_EVERY_SECONDS = 600
+_last_silence_check = -1e9
 
 
 def check() -> None:
+    check_silence()
     now = datetime.now(timezone.utc)
     threshold = now - timedelta(hours=IDLE_THRESHOLD_HOURS)
     try:
@@ -80,5 +86,54 @@ def check() -> None:
                 },
                 raw={"derived": "rds_staleness", "session_id": session_id},
             ))
+        except Exception:
+            pass
+
+
+def check_silence() -> None:
+    """Flag databases whose log feed went quiet (see rds/silence.py)."""
+    global _last_silence_check
+    if time.monotonic() - _last_silence_check < _SILENCE_EVERY_SECONDS:
+        return
+    _last_silence_check = time.monotonic()
+    now = datetime.now(timezone.utc)
+    try:
+        flagged = storage.list_rds_silent_dbs()
+        silence.silent_dbs.clear()
+        silence.silent_dbs.update(flagged)
+        databases = storage.list_rds_logged_dbs()
+    except Exception:
+        return
+    for db in databases:
+        try:
+            activity = storage.rds_db_activity(db)
+        except Exception:
+            continue
+        if not silence.is_silent(activity["last_event"], activity["events_7d"], activity["max_gap_seconds"], now, db in flagged):
+            continue
+        last = activity["last_event"]
+        minutes = int((now - last).total_seconds() // 60)
+        threshold = int(silence.silence_threshold(activity["max_gap_seconds"]).total_seconds() // 60)
+        try:
+            pipeline.process_event(Event(
+                source=Source(module="aws.rds", transport=Transport.poll),
+                event_time=now,
+                category=Category.other,
+                action="rds.logs.silent",
+                outcome=Outcome.failure,
+                actor=Actor(),
+                target=Target(id=db, type="rds.db", name=db),
+                extra={
+                    "db_instance": db,
+                    "last_event": last.isoformat(),
+                    "minutes_silent": minutes,
+                    "threshold_minutes": threshold,
+                    "tags": {"env": "prod", "db_instance": db},
+                    "message": f"{db}: no database log activity for {minutes} min (alert after {threshold})",
+                },
+                raw={"derived": "rds_silence"},
+            ))
+            storage.set_rds_silent(db, True)
+            silence.silent_dbs.add(db)
         except Exception:
             pass

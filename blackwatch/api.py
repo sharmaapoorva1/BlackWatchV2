@@ -3181,7 +3181,11 @@ def rds_summary() -> dict[str, Any]:
     for row in dbs:
         row["last_activity"] = row["last_activity"].isoformat() if row.get("last_activity") else None
         row["auth_failures_24h"] = fails_per_db.get(row["db_instance"], 0)
-    return {"databases": dbs, "auth_failures_24h_total": len(fails)}
+    try:
+        silent = sorted(storage.list_rds_silent_dbs())
+    except Exception:  # new table; never break the page over it
+        silent = []
+    return {"databases": dbs, "auth_failures_24h_total": len(fails), "silent_databases": silent}
 
 
 @router.get("/rds/live")

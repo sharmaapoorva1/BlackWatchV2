@@ -175,3 +175,35 @@
     field: action
     op: equals
     value: rds.proxy.backend_hba_reject
+
+# ---- Silent-failure and compromise signals --------------------------------
+
+- id: rds-logs-silent
+  title: RDS log feed went quiet
+  description: A database that normally logs activity has produced nothing for longer than its own normal gaps (and at least 2h; BLACKWATCH_RDS_SILENT_MINUTES). A broken subscription filter, forwarder, or queue looks exactly like this.
+  severity: high
+  tags: [rds, availability, silent-failure, "notify:high"]
+  match:
+    field: action
+    op: equals
+    value: rds.logs.silent
+
+- id: rds-logs-resumed
+  title: RDS log feed resumed
+  description: Database activity is arriving again after a silent period. Informational; closes rds-logs-silent.
+  severity: informational
+  tags: [rds, availability]
+  match:
+    field: action
+    op: equals
+    value: rds.logs.resumed
+
+- id: rds-auth-success-after-failures
+  title: RDS login succeeded after repeated failures
+  description: A human DB user logged in within 10 minutes of 5+ failed attempts. This is what a guessed password looks like. Service accounts are skipped (a rotated password makes an app fail and then succeed).
+  severity: high
+  tags: [rds, auth, credential-compromise, "notify:high"]
+  match:
+    field: action
+    op: equals
+    value: rds.auth.success_after_failures

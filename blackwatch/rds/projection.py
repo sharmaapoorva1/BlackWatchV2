@@ -20,6 +20,13 @@ and emits a few derived detection events:
                                   rds_proxy_sources; first-seen fires
                                   rds.proxy.source.new.
 
+  * rds.session.start         -> also: a login for a human DB user right after
+                                  BURST_THRESHOLD+ failures in the last
+                                  LOGIN_AFTER_FAILURES_MINUTES emits
+                                  rds.auth.success_after_failures.
+  * any activity              -> clears a "log feed silent" flag and emits
+                                  rds.logs.resumed (see rds/silence.py).
+
 Long-idle session detection lives in blackwatch/rds/staleness.py (periodic
 sweep) because it's timer-driven, not event-driven.
 """
@@ -31,6 +38,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .. import storage
+from . import silence
 from ..event import Actor, Category, Event, Outcome, Source, Target, Transport
 
 _MODULE = "aws.rds"
@@ -41,9 +49,11 @@ _MODULE = "aws.rds"
 # script attacks without alerting on the occasional pool reconnection glitch.
 BURST_THRESHOLD = 5
 BURST_WINDOW_MINUTES = 5
+# A successful login this soon after a burst of failures looks like a guessed password.
+LOGIN_AFTER_FAILURES_MINUTES = 10
 
 
-def project(event: Event) -> list[Event]:
+def _project(event: Event) -> list[Event]:
     if event.source.module != _MODULE:
         return []
     action = event.action
@@ -75,6 +85,7 @@ def project(event: Event) -> list[Event]:
         derived = _detect_concurrent(event, ts)
         derived.extend(_detect_unknown_user(event, ts))
         derived.extend(_detect_new_user_source(event, ts))
+        derived.extend(_detect_login_after_failures(event, ts))
         return derived
 
     if action == "rds.session.end":
@@ -100,6 +111,36 @@ def project(event: Event) -> list[Event]:
         return _record_proxy_source(event, ts)
 
     return []
+
+
+# Actions our own sweeps emit: they say nothing about the database being alive.
+_NOT_ACTIVITY = ("rds.logs.", "rds.session.long_idle")
+
+
+def project(event: Event) -> list[Event]:
+    """Run the projection, and report recovery if this database was flagged silent."""
+    derived = _project(event)
+    if event.source.module != _MODULE or event.action.startswith(_NOT_ACTIVITY):
+        return derived
+    db = (event.extra or {}).get("db_instance") or (event.target.id if event.target else None)
+    if db and db in silence.silent_dbs:
+        silence.silent_dbs.discard(db)
+        try:
+            storage.set_rds_silent(db, False)
+        except Exception:
+            return derived
+        ts = event.event_time or datetime.now(timezone.utc)
+        derived.insert(0, Event(
+            source=Source(module=_MODULE, transport=Transport.api),
+            event_time=ts,
+            category=Category.other,
+            action="rds.logs.resumed",
+            outcome=Outcome.success,
+            target=Target(id=db, type="rds.db", name=db),
+            extra={"db_instance": db, "tags": {"env": "prod", "db_instance": db}},
+            raw={"derived_from": event.action},
+        ))
+    return derived
 
 
 # --- Concurrent-session detection ------------------------------------------
@@ -214,6 +255,57 @@ def _detect_burst(event: Event, ts: datetime) -> list[Event]:
             ),
         },
         raw={"derived_from": "rds.auth.failure"},
+    )]
+
+
+def _detect_login_after_failures(event: Event, ts: datetime) -> list[Event]:
+    """A human DB user logs in right after a burst of failures. Service
+    accounts are skipped: a rotated password makes an app fail repeatedly and
+    then succeed, which is a fix, not an attack. One event per user per hour."""
+    e = event.extra or {}
+    user = e.get("user")
+    if not user:
+        return []
+    db_instance = e.get("db_instance") or "unknown"
+    try:
+        if storage.rds_user_kind(user) == "service":
+            return []
+        failures = storage.query_events(
+            module=_MODULE, action="rds.auth.failure", actor_principal=user,
+            since=ts - timedelta(minutes=LOGIN_AFTER_FAILURES_MINUTES),
+            limit=BURST_THRESHOLD + 20,
+        )
+    except Exception:
+        return []
+    if len(failures) < BURST_THRESHOLD:
+        return []
+    source_ip = e.get("real_client_ip") or e.get("source_ip")
+    hour = ts.strftime("%Y%m%d%H")
+    event_id = str(uuid.uuid5(
+        uuid.NAMESPACE_URL,
+        f"rds.auth.success_after_failures::{db_instance}::{user}::{hour}",
+    ))
+    return [Event(
+        event_id=event_id,
+        source=Source(module=_MODULE, transport=Transport.api),
+        event_time=ts,
+        category=Category.other,
+        action="rds.auth.success_after_failures",
+        outcome=Outcome.success,
+        actor=Actor(principal=user, source_ip=source_ip),
+        target=Target(id=db_instance, type="rds.db", name=db_instance),
+        extra={
+            "db_instance": db_instance,
+            "user": user,
+            "failure_count": len(failures),
+            "window_minutes": LOGIN_AFTER_FAILURES_MINUTES,
+            "tags": {"env": "prod", "db_instance": db_instance},
+            "message": (
+                f"{db_instance}: {user} logged in after {len(failures)} failed "
+                f"attempts in {LOGIN_AFTER_FAILURES_MINUTES} min"
+            ),
+        },
+        raw={"derived_from": "rds.session.start"},
     )]
 
 

@@ -3404,6 +3404,67 @@ def prune_expired_sessions() -> int:
 
 # ---- RDS Shape B detection helpers ---------------------------------------
 
+# Our own sweeps emit events that must not count as database activity.
+_RDS_NOT_ACTIVITY = ("rds.logs.silent", "rds.logs.resumed", "rds.session.long_idle")
+
+
+def list_rds_logged_dbs() -> list[str]:
+    """Databases that produced stored events in the last week."""
+    with get_pool().connection() as conn:
+        with conn.transaction():
+            conn.execute("SET LOCAL statement_timeout = '8000ms'")
+            rows = conn.execute(
+                "SELECT DISTINCT target_id FROM events WHERE module = 'aws.rds' AND target_type = 'rds.db' "
+                "AND target_id IS NOT NULL AND action <> ALL(%s) AND event_time >= now() - interval '7 days'",
+                (list(_RDS_NOT_ACTIVITY),),
+            ).fetchall()
+    return [r[0] for r in rows]
+
+
+def rds_db_activity(db_instance: str) -> dict[str, Any]:
+    """Last event time, event count and longest quiet gap (seconds) for one
+    database over the last week. Used to judge whether its log feed went silent."""
+    with get_pool().connection() as conn:
+        with conn.transaction():
+            conn.execute("SET LOCAL statement_timeout = '8000ms'")
+            row = conn.execute(
+                """
+                SELECT max(event_time), count(*), extract(epoch FROM max(gap))
+                  FROM (
+                    SELECT event_time, event_time - lag(event_time) OVER (ORDER BY event_time) AS gap
+                      FROM events
+                     WHERE module = 'aws.rds' AND target_id = %s AND action <> ALL(%s)
+                       AND event_time >= now() - interval '7 days'
+                  ) t
+                """,
+                (db_instance, list(_RDS_NOT_ACTIVITY)),
+            ).fetchone()
+    last, count, gap = row if row else (None, 0, None)
+    return {"last_event": last, "events_7d": int(count or 0), "max_gap_seconds": float(gap) if gap is not None else None}
+
+
+def list_rds_silent_dbs() -> set[str]:
+    with get_pool().connection() as conn:
+        rows = conn.execute("SELECT db_instance FROM rds_silence_state WHERE alerted").fetchall()
+    return {r[0] for r in rows}
+
+
+def set_rds_silent(db_instance: str, silent: bool) -> None:
+    with get_pool().connection() as conn:
+        conn.execute(
+            "INSERT INTO rds_silence_state (db_instance, alerted, alerted_at) VALUES (%s, %s, now()) "
+            "ON CONFLICT (db_instance) DO UPDATE SET alerted = EXCLUDED.alerted, alerted_at = now()",
+            (db_instance, silent),
+        )
+
+
+def rds_user_kind(username: str) -> str | None:
+    """'human', 'service', or None when the user is not on the allowlist."""
+    with get_pool().connection() as conn:
+        row = conn.execute("SELECT kind FROM rds_user_allowlist WHERE username = %s", (username,)).fetchone()
+    return row[0] if row else None
+
+
 def upsert_rds_proxy_source(source_ip: str, ts: datetime) -> bool:
     """Record that source_ip touched the proxy at ts. Returns True if this is
     the FIRST time we've ever seen this IP (used to fire rds.proxy.source.new)."""
