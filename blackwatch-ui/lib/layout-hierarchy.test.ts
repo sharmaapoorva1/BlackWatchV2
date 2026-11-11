@@ -180,9 +180,9 @@ test("Investigations: list has start, status cards and filterable cases; detail 
   assert.doesNotMatch(read("app/investigations/InvestigationIpIntelligence.tsx"), /SectionLabel/);
 });
 
-test("the VPN page: health cards, collapsible servers, auth attempts", () => {
+test("the VPN page: health cards, certificate renewals, collapsible servers, sessions, auth attempts", () => {
   const page = read("app/vpn/page.tsx");
-  const order = ['id="health"', 'id="servers" title="Servers" description', 'id="auth"'].map((needle) => page.indexOf(needle));
+  const order = ['id="health"', 'id="certificates"', 'id="servers" title="Servers" description', 'id="sessions"', 'id="auth"'].map((needle) => page.indexOf(needle));
   assert.ok(order.every((index) => index > 0));
   assert.deepEqual([...order].sort((a, b) => a - b), order);
   assert.match(page, /<StatCard/);

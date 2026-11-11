@@ -75,6 +75,56 @@
     op: equals
     value: vpn.session.start
 
+- id: vpn-agent-stale
+  title: VPN agent stopped reporting
+  description: The on-box agent has sent nothing for 5+ minutes. The agent or the box is down, so a service-down alert can never arrive. Recovers when the agent reports again.
+  severity: high
+  tags: [vpn, availability, silent-failure]
+  match:
+    field: action
+    op: equals
+    value: vpn.agent.stale
+
+- id: vpn-agent-recovered
+  title: VPN agent reporting again
+  description: The agent resumed heartbeats after being silent. Informational; closes vpn-agent-stale.
+  severity: informational
+  tags: [vpn, availability]
+  match:
+    field: action
+    op: equals
+    value: vpn.agent.recovered
+
+- id: vpn-logins-silent
+  title: No VPN logins for a long time
+  description: The service is up but nobody has logged in for the configured period (default 24h, BLACKWATCH_VPN_NO_LOGIN_HOURS). A blocked port or broken certificate looks exactly like this from the server.
+  severity: high
+  tags: [vpn, availability, silent-failure]
+  match:
+    field: action
+    op: equals
+    value: vpn.logins.silent
+
+- id: vpn-auth-success-after-failures
+  title: VPN login succeeded after repeated failures
+  description: A successful login right after 5+ failures from the same IP or against the same user. This is what a guessed password looks like.
+  severity: high
+  tags: [vpn, auth, credential-compromise]
+  match:
+    field: action
+    op: equals
+    value: vpn.auth.success_after_failures
+
+- id: vpn-auth-risky-source
+  title: VPN login from a Tor or threat-feed IP
+  description: A successful login whose source IP is a Tor exit node or listed in a threat feed.
+  severity: high
+  tags: [vpn, auth, threat-intel]
+  match:
+    field: action
+    op: equals
+    value: vpn.auth.risky_source
+
 # Example allowlist: keep your own admin CN connecting from being noisy. Adjust
 # the CN suffix and enable as needed (suppress wins over alert rules).
 - id: vpn-suppress-admin-client

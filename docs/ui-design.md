@@ -699,7 +699,7 @@ old header folded degraded into "down").
 
 ## VPN
 
-`/vpn` follows the same pattern: `health` (StatCards: servers active, clients connected, certificates expiring within 30 days, failed logins), `servers` (one collapsible h3 `Subsection` per server holding connected clients and certificates; servers that are down or have expiring certs start open), `auth` (recent attempts). Banding, sorting and card logic live in `lib/vpn-view.ts` (unit-tested). Stale servers get a "Remove stale server" button inside their block.
+`/vpn` follows the same pattern: `health` (StatCards: servers active, clients connected, certificates to renew, failed logins), `certificates` (a "renew first" list across servers with what breaks if each expires, plus a banner for certificates renewed but not deployed), `servers` (one collapsible h3 `Subsection` per server holding connected clients and certificates; servers that are down, silent or have expiring certs start open), `sessions` (recent sessions with duration), `auth` (recent attempts). Days left are computed from `not_after` at render time. See `docs/vpn-monitoring.md` for the whole workflow. Banding, sorting and card logic live in `lib/vpn-view.ts` (unit-tested). Stale servers get a "Remove stale server" button inside their block.
 
 ## API Gateway
 

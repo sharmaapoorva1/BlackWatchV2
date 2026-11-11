@@ -141,11 +141,25 @@ export interface VpnServer {
   client_count: number;
   clients: VpnClient[];
   certs: VpnCertificate[];
+  /** The on-box agent stopped reporting (set by the server's silence check). */
+  agent_stale?: boolean;
+}
+
+export interface VpnSession {
+  server: string;
+  identity: string;
+  real_ip: string | null;
+  virtual_address: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  bytes_received: number | null;
+  bytes_sent: number | null;
 }
 
 export interface VpnResponse {
   servers: VpnServer[];
   auth: EventEnvelope[];
+  sessions?: VpnSession[];
 }
 
 // --- RDS -------------------------------------------------------------------

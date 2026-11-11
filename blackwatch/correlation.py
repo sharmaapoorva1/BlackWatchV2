@@ -10,6 +10,13 @@ Two parallel sliding-window brute-force detectors, fed by the same auth events:
         host.auth.ssh.failure -> host.bruteforce.user
         vpn.auth.failure      -> vpn.bruteforce.user
 
+A third detector watches for the dangerous follow-up: a SUCCESSFUL VPN login
+right after THRESHOLD or more failures from the same IP, or against the same
+user. That is how a guessed password looks, so it is reported separately:
+        vpn.auth.success      -> vpn.auth.success_after_failures
+(A user who mistypes twice and then gets in does not trip it: the bar is the
+same THRESHOLD as brute force.)
+
 Both can fire on the same event if both criteria are met — they're separate
 signals and downstream rules/channels can de-dupe if desired. THRESHOLD failures
 within WINDOW seconds on the same key emit ONE event; the same key is then
@@ -51,6 +58,11 @@ _WATCH_USER: dict[str, tuple[str, str, Category]] = {
     "vpn.auth.failure": ("vpn.bruteforce.user", "vpn.openvpn", Category.vpn),
 }
 
+# success action -> (failure action it follows, derived action)
+_WATCH_SUCCESS: dict[str, tuple[str, str]] = {
+    "vpn.auth.success": ("vpn.auth.failure", "vpn.auth.success_after_failures"),
+}
+
 _lock = threading.Lock()
 # Each counter dimension has its own attempt deques + alert-suppression map.
 # Keyed by (action, dimension_value) where dimension_value is the IP or the
@@ -60,6 +72,7 @@ _ip_attempts: dict[tuple[str, str], deque[float]] = defaultdict(deque)
 _ip_alerted: dict[tuple[str, str], float] = {}
 _user_attempts: dict[tuple[str, str], deque[float]] = defaultdict(deque)
 _user_alerted: dict[tuple[str, str], float] = {}
+_success_alerted: dict[tuple[str, str], float] = {}
 
 
 def _now() -> float:
@@ -129,13 +142,79 @@ def _check_dimension(
     ]
 
 
+def _check_success(event: Event) -> list[Event]:
+    """Success right after a burst of failures from the same IP or user."""
+    if event.action not in _WATCH_SUCCESS:
+        return []
+    failure_action, derived_action = _WATCH_SUCCESS[event.action]
+    now = _now()
+    hit: tuple[str, str, int] | None = None
+    with _lock:
+        for dim_label, value, attempts in (
+            ("source_ip", event.actor.source_ip, _ip_attempts),
+            ("principal", event.actor.principal, _user_attempts),
+        ):
+            if not value:
+                continue
+            bucket = attempts.get((failure_action, value))
+            if not bucket:
+                continue
+            recent = sum(1 for t in bucket if now - t <= WINDOW_SECONDS)
+            if recent < THRESHOLD:
+                continue
+            key = (dim_label, value)
+            last_alert = _success_alerted.get(key, 0.0)
+            if last_alert and now - last_alert < WINDOW_SECONDS:
+                continue
+            hit = (dim_label, value, recent)
+            break
+        if hit is not None:
+            # One alert per episode: silence both dimensions, not just the one
+            # that fired, or the second success would re-alert via the other.
+            if event.actor.source_ip:
+                _success_alerted[("source_ip", event.actor.source_ip)] = now
+            if event.actor.principal:
+                _success_alerted[("principal", event.actor.principal)] = now
+    if hit is None:
+        return []
+    dim_label, _value, recent = hit
+    return [
+        Event(
+            source=Source(module="vpn.openvpn", vendor=event.source.vendor,
+                          account=event.source.account, region=event.source.region,
+                          transport=Transport.poll),
+            event_time=datetime.now(timezone.utc),
+            category=Category.vpn,
+            action=derived_action,
+            outcome=Outcome.success,
+            actor=Actor(principal=event.actor.principal, source_ip=event.actor.source_ip),
+            target=Target(
+                id=event.target.id if event.target else None,
+                type=event.target.type if event.target else None,
+                name=event.target.name if event.target else None,
+            ),
+            extra={
+                "failures_in_window": recent,
+                "window_seconds": WINDOW_SECONDS,
+                "threshold": THRESHOLD,
+                "trigger_event_id": event.event_id,
+                "source_ip": event.actor.source_ip,
+                "principal": event.actor.principal,
+                "dimension": dim_label,
+            },
+            raw={"derived": "success_after_failures", "trigger_action": event.action,
+                 "dimension": dim_label},
+        )
+    ]
+
+
 def observe(event: Event) -> list[Event]:
     """Run both detectors against this event; return all derived events.
 
     A single trigger event can produce up to two derived events (per-IP AND
     per-user), if both thresholds are crossed by it. That's intentional — they
     convey different signals."""
-    results: list[Event] = []
+    results: list[Event] = _check_success(event)
     if event.actor.source_ip:
         results.extend(_check_dimension(
             event, event.actor.source_ip, "source_ip",
@@ -156,3 +235,4 @@ def reset_state() -> None:
         _ip_alerted.clear()
         _user_attempts.clear()
         _user_alerted.clear()
+        _success_alerted.clear()

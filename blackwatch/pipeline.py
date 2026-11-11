@@ -169,7 +169,16 @@ def ingest_payload(
         if event.action in _PROJECTION_ONLY_ACTIONS:
             transient += 1  # feed projection, don't store/notify
         else:
-            summaries.append(_process(event))
+            summary = _process(event)
+            summaries.append(summary)
+            if summary.get("duplicate"):
+                # Already stored (and already projected) on an earlier delivery,
+                # e.g. an auth line the VPN follower sent and the next heartbeat
+                # re-sent. Projecting again would double-count it in the
+                # brute-force counters and re-emit derived events.
+                if progress:
+                    progress({"stage": "processed", "module": module, "action": event.action})
+                continue
         if progress:
             progress({"stage": "processed", "module": module, "action": event.action})
         # Stateful projections may derive further events: transitions
@@ -186,6 +195,13 @@ def ingest_payload(
             except Exception as exc:
                 summaries.append({"action": "projection.error", "detail": str(exc)})
         for derived_event in derived:
+            try:
+                # Derived events (brute force, risky logins) carry their own
+                # source IP; give them the same country/network/feed context.
+                if "intel" not in derived_event.extra:
+                    intel_enrich.enrich_event(derived_event)
+            except Exception:  # enrichment must never drop events
+                pass
             if noise.is_muted(derived_event):
                 muted += 1
                 continue

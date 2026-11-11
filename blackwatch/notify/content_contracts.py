@@ -76,6 +76,104 @@ _VPN = {
         recovery="This is the recovery event for vpn.service.down when Previous state is false; first-seen events have no prior incident.",
         preview_extra={"prev_active": False, "active": True, "server": "vpn-1"},
     ),
+    "vpn.agent.stale": _contract(
+        title="VPN monitoring went silent · {{ event.target.name or event.target.id or 'unknown server' }}",
+        what_happened="The VPN agent has not reported for several minutes.",
+        facts=("Server: {{ event.target.name or event.target.id or event.extra.server or 'unknown' }}\n"
+               "{% if event.extra.last_seen %}Last heard: {{ event.extra.last_seen }}\n{% endif %}"
+               "{% if event.extra.age_seconds is not none %}Silent for: {{ (event.extra.age_seconds / 60) | round | int }} minutes\n{% endif %}"
+               "Detected: {{ event.event_time }}"),
+        decision="Find out whether the VPN host or only its agent is down; BlackWatch cannot see VPN problems until it reports again.",
+        next_steps="1. Check the VPN host is running and reachable.\n2. Check the agent: systemctl status blackwatch-vpn-agent.\n3. Restart the agent and confirm a heartbeat arrives.",
+        why_it_matters="While the agent is silent, VPN outages, logins, and certificate problems go unseen.",
+        evidence="No heartbeat has arrived since the time shown above.",
+        monitoring_method="VPN agent heartbeats and the VPN staleness check.",
+        impact="The VPN may be down, or running without monitoring.",
+        recovery="Recovered when vpn.agent.recovered is observed.",
+        preview_extra={"server": "vpn-1", "last_seen": "2026-08-25T09:50:00Z", "age_seconds": 600},
+    ),
+    "vpn.agent.recovered": _contract(
+        title="VPN monitoring restored · {{ event.target.name or event.target.id or 'unknown server' }}",
+        what_happened="The VPN agent is reporting again after being silent.",
+        facts=("Server: {{ event.target.name or event.target.id or event.extra.server or 'unknown' }}\n"
+               "Detected: {{ event.event_time }}"),
+        decision="Confirm the VPN service itself is healthy and find out why the agent was silent.",
+        next_steps="1. Check the agent journal for the cause of the gap.\n2. Review logins and certificate status for the silent period.\n3. Close the earlier silence alert.",
+        why_it_matters="Anything that happened during the gap was not monitored.",
+        evidence="A heartbeat arrived after the silence alert fired.",
+        monitoring_method="VPN agent heartbeats and the VPN staleness check.",
+        impact="Monitoring is back; the silent period remains a blind spot.",
+        recovery="This is the recovery event for vpn.agent.stale.",
+        preview_extra={"server": "vpn-1"},
+    ),
+    "vpn.logins.silent": _contract(
+        title="No VPN logins · {{ event.target.name or event.target.id or 'unknown server' }}",
+        what_happened="The VPN service is up, but nobody has logged in for a long time.",
+        facts=("Server: {{ event.target.name or event.target.id or event.extra.server or 'unknown' }}\n"
+               "{% if event.extra.last_login %}Last login: {{ event.extra.last_login }}\n{% endif %}"
+               "{% if event.extra.hours_since is not none %}Silent for: {{ event.extra.hours_since }} hours (alert after {{ event.extra.threshold_hours | int }})\n{% endif %}"
+               "Detected: {{ event.event_time }}"),
+        decision="Decide whether the quiet is expected (holiday, weekend) or users cannot connect.",
+        next_steps="1. Connect to the VPN yourself, or ask a user to.\n2. Check the UDP port, the firewall, and certificate expiry.\n3. Check the OpenVPN journal for TLS or handshake errors.",
+        why_it_matters="A blocked port or expired certificate leaves the service up while nobody can connect.",
+        evidence="No successful login event has been recorded since the time shown above.",
+        monitoring_method="Successful-login history on the monitored VPN server.",
+        impact="Users may be unable to reach the network.",
+        recovery="Clears on the next successful login.",
+        preview_extra={"server": "vpn-1", "last_login": "2026-08-24T08:00:00Z", "hours_since": 26, "threshold_hours": 24},
+    ),
+    "vpn.auth.success_after_failures": _contract(
+        title="VPN login after repeated failures · {{ event.actor.principal or event.actor.source_ip or 'unknown identity' }}",
+        what_happened="A VPN login succeeded right after repeated failed attempts.",
+        facts=("{% if event.actor.principal %}User: {{ event.actor.principal }}\n{% endif %}"
+               "{% if event.actor.source_ip %}Source IP: {{ event.actor.source_ip }}\n{% endif %}"
+               "{% if event.extra.intel and event.extra.intel.country %}Origin: {{ event.extra.intel.country }}{% if event.extra.intel.asn_org %} · {{ event.extra.intel.asn_org }}{% endif %}{% if event.extra.intel.is_tor %} · Tor exit{% endif %}{{ '\n' }}{% endif %}"
+               "Failures before login: {{ event.extra.failures_in_window or 'not reported' }} in {{ event.extra.window_seconds or 'not reported' }} seconds\n"
+               "Server: {{ event.target.name or event.target.id or 'unknown' }}"),
+        decision="Treat the account as possibly compromised until the owner confirms this login.",
+        next_steps="1. Contact the user and confirm they just logged in.\n2. If not, end the session and reset the password and MFA.\n3. Review what the session accessed.",
+        why_it_matters="A success after a burst of failures is what a guessed password looks like.",
+        evidence="The failure count and window above; the successful login is the trigger.",
+        monitoring_method="VPN authentication correlation by source IP and user.",
+        impact="An attacker may have working VPN access.",
+        recovery="No automatic recovery; resolve with owner confirmation or an account reset.",
+        preview_extra={"failures_in_window": 7, "window_seconds": 300, "threshold": 5, "server": "vpn-1"},
+    ),
+    "vpn.auth.risky_source": _contract(
+        title="VPN login from a risky IP · {{ event.actor.principal or event.actor.source_ip or 'unknown identity' }}",
+        what_happened="A VPN login succeeded from an IP address flagged by threat intelligence.",
+        facts=("{% if event.actor.principal %}User: {{ event.actor.principal }}\n{% endif %}"
+               "{% if event.actor.source_ip %}Source IP: {{ event.actor.source_ip }}\n{% endif %}"
+               "{% if event.extra.intel and event.extra.intel.country %}Origin: {{ event.extra.intel.country }}{% if event.extra.intel.asn_org %} · {{ event.extra.intel.asn_org }}{% endif %}{% if event.extra.intel.is_tor %} · Tor exit{% endif %}{{ '\n' }}{% endif %}"
+               "{% if event.extra.reasons %}Flagged as: {{ event.extra.reasons | join(', ') }}\n{% endif %}"
+               "Server: {{ event.target.name or event.target.id or 'unknown' }}"),
+        decision="Decide whether the user is knowingly connecting through Tor or a flagged network.",
+        next_steps="1. Contact the user and confirm this login.\n2. If not expected, end the session and reset the password and MFA.\n3. Review what the session accessed.",
+        why_it_matters="Legitimate employees rarely log in from Tor exits or listed hostile networks.",
+        evidence="The source IP matched the local threat-intelligence feeds shown above.",
+        monitoring_method="OpenVPN logins enriched with local Tor and threat-feed data.",
+        impact="The account may be in use by someone other than its owner.",
+        recovery="No automatic recovery; resolve with owner confirmation or an account reset.",
+        preview_extra={"reasons": ["Tor exit node"], "server": "vpn-1", "intel": {"country": "DE", "asn_org": "Example Hosting", "is_tor": True, "feeds": ["tor_exit"]}},
+    ),
+    "vpn.cert.renewed_not_deployed": _contract(
+        title="VPN certificate renewed but not deployed · {{ event.target.name or event.target.id or 'unknown certificate' }}",
+        what_happened="A renewed certificate exists in the PKI, but OpenVPN is still using the old copy.",
+        facts=("Certificate: {{ event.target.name or event.target.id or 'not reported' }}\n"
+               "Server: {{ event.extra.server or 'unknown' }}\n"
+               "{% if event.extra.live_not_after %}Live copy expires: {{ event.extra.live_not_after }} ({{ event.extra.live_days_remaining }} days)\n{% endif %}"
+               "{% if event.extra.pki_not_after %}Renewed copy expires: {{ event.extra.pki_not_after }}\n{% endif %}"
+               "{% if event.extra.path %}Live path: {{ event.extra.path }}\n{% endif %}"
+               "Detected: {{ event.event_time }}"),
+        decision="Deploy the renewed certificate before the live one expires.",
+        next_steps="1. Copy the renewed certificate from the PKI to the OpenVPN directory.\n2. Restart openvpn-server and check the live expiry.\n3. Confirm a client can connect.",
+        why_it_matters="OpenVPN reads the live copy, so it will stop accepting connections at the old expiry.",
+        evidence="The PKI copy expires later than the live copy; both dates are shown above.",
+        monitoring_method="OpenVPN certificate inventory comparing the PKI and live copies.",
+        impact="Clients will reject the server when the live certificate expires.",
+        recovery="Recovered when the live copy matches the renewed expiry.",
+        preview_extra={"server": "vpn-1", "kind": "server", "live_not_after": "2026-09-01T00:00:00Z", "live_days_remaining": 6, "pki_not_after": "2028-09-01T00:00:00Z", "pki_days_remaining": 736, "path": "/etc/openvpn/server/server.crt"},
+    ),
     "vpn.session.start": _contract(
         title="VPN session started · {{ event.actor.principal or event.extra.common_name or 'unidentified client' }}",
         what_happened="A client appeared in the latest VPN status snapshot and was not present in the previous snapshot.",
@@ -96,6 +194,7 @@ _VPN = {
         what_happened="A client present in the previous VPN status snapshot is no longer present.",
         facts=("{% if event.actor.principal %}User: {{ event.actor.principal }}\n{% elif event.extra.common_name %}Client name: {{ event.extra.common_name }}\n{% endif %}"
                "{% if event.actor.source_ip %}Last observed source IP: {{ event.actor.source_ip }}\n{% endif %}"
+               "{% if event.extra.duration_seconds is defined and event.extra.duration_seconds is not none %}Duration: {{ (event.extra.duration_seconds / 60) | round | int }} min\n{% endif %}"
                "Server: {{ event.target.name or event.target.id or 'unknown' }}\nDetected: {{ event.event_time }}"),
         decision="Decide whether the session ended normally or disappeared unexpectedly.",
         next_steps="1. Compare the end time with the user's expected work window.\n2. Check OpenVPN and authentication logs for disconnect or failure evidence.\n3. Close the session trail only when the end is expected or explained.",
@@ -126,11 +225,12 @@ _VPN = {
         what_happened="A VPN authentication attempt failed.",
         facts=("{% if event.actor.principal %}User: {{ event.actor.principal }}\n{% endif %}"
                "{% if event.actor.source_ip %}Source IP: {{ event.actor.source_ip }}\n{% endif %}"
+               "{% if event.extra.intel and event.extra.intel.country %}Origin: {{ event.extra.intel.country }}{% if event.extra.intel.asn_org %} · {{ event.extra.intel.asn_org }}{% endif %}{% if event.extra.intel.is_tor %} · Tor exit{% endif %}{{ '\n' }}{% endif %}"
                "Server: {{ event.target.name or event.target.id or 'unknown' }}\nWhen: {{ event.event_time }}"),
         decision="Decide whether the failed attempt was expected; one failure alone is not proof of an attack.",
         next_steps="1. Confirm whether the user initiated the attempt.\n2. If unexpected, investigate the source IP and recent account activity.\n3. Escalate or follow the credential-response runbook if failures continue.",
         why_it_matters="An unexplained failure may be a mistyped password or an attempted account takeover.",
-        evidence="{% if event.extra.message %}{{ event.extra.message }}{% endif %}{% if event.extra.log_line %}\nLog: {{ event.extra.log_line }}{% endif %}",
+        evidence="{% if event.extra.message %}{{ event.extra.message }}{% endif %}{% if event.extra.log_line %}\nLog: {{ event.extra.log_line }}{% endif %}{{ '' }}",
         monitoring_method="OpenVPN authentication logs on the monitored VPN server.",
         impact="This attempt did not establish access; repeated failures can precede credential abuse.",
         recovery="There is no automatic recovery. A later successful login is separate context and must not silently close this failure.",
@@ -141,11 +241,12 @@ _VPN = {
         what_happened="A VPN authentication attempt succeeded.",
         facts=("{% if event.actor.principal %}User: {{ event.actor.principal }}\n{% endif %}"
                "{% if event.actor.source_ip %}Source IP: {{ event.actor.source_ip }}\n{% endif %}"
+               "{% if event.extra.intel and event.extra.intel.country %}Origin: {{ event.extra.intel.country }}{% if event.extra.intel.asn_org %} · {{ event.extra.intel.asn_org }}{% endif %}{% if event.extra.intel.is_tor %} · Tor exit{% endif %}{{ '\n' }}{% endif %}"
                "Server: {{ event.target.name or event.target.id or 'unknown' }}\nWhen: {{ event.event_time }}"),
         decision="Decide whether the successful login matches the user's expected access.",
         next_steps="1. If expected, no action is required.\n2. If unexpected, verify the user and source and review recent failures or concurrent sessions.\n3. Escalate only when corroborating evidence exists.",
         why_it_matters="A successful login confirms access and is useful context when it follows failures or unusual activity.",
-        evidence="{% if event.extra.message %}{{ event.extra.message }}{% endif %}{% if event.extra.log_line %}\nLog: {{ event.extra.log_line }}{% endif %}",
+        evidence="{% if event.extra.message %}{{ event.extra.message }}{% endif %}{% if event.extra.log_line %}\nLog: {{ event.extra.log_line }}{% endif %}{{ '' }}",
         monitoring_method="OpenVPN authentication logs on the monitored VPN server.",
         impact="The account established VPN access from the recorded source.",
         recovery="This event has no recovery semantics and does not close a previous failed-login alert.",
@@ -155,6 +256,7 @@ _VPN = {
         title="VPN brute-force activity · {{ event.actor.source_ip or 'unknown source' }}",
         what_happened="The configured threshold of failed VPN logins was reached from one source within the detection window.",
         facts=("{% if event.actor.source_ip %}Source IP: {{ event.actor.source_ip }}\n{% endif %}"
+               "{% if event.extra.intel and event.extra.intel.country %}Origin: {{ event.extra.intel.country }}{% if event.extra.intel.asn_org %} · {{ event.extra.intel.asn_org }}{% endif %}{% if event.extra.intel.is_tor %} · Tor exit{% endif %}{{ '\n' }}{% endif %}"
                "{% if event.actor.principal %}Targeted user: {{ event.actor.principal }}\n{% endif %}"
                "Count: {{ event.extra.count_in_window or 'not reported' }}\nThreshold: {{ event.extra.threshold or 'not reported' }}\nWindow: {{ event.extra.window_seconds or 'not reported' }} seconds\nServer: {{ event.target.name or event.target.id or 'unknown' }}"),
         decision="Treat this as active suspicious authentication activity unless the source is an approved scanner or gateway.",
@@ -1298,6 +1400,8 @@ def field_guidance(event_key: str) -> list[str]:
             base += ["{common_name}", "{identity}", "{source_ips}"]
         elif event_key.startswith("vpn.bruteforce"):
             base += ["{count_in_window}", "{threshold}", "{window_seconds}"]
+        elif event_key == "vpn.auth.success_after_failures":
+            base += ["{failures_in_window}", "{window_seconds}"]
         elif event_key.startswith("vpn.cert."):
             base += ["{certificate_subject}", "{days_remaining}", "{not_after}", "{certificate_path}", "{certificate_error}"]
     elif event_key.startswith("cert."):

@@ -403,4 +403,48 @@ class VpnOpenVpnAdapter(Adapter):
                     )
                 )
 
+            events.extend(self._renewed_not_deployed(certs, server, src))
+
+        return events
+
+    @staticmethod
+    def _renewed_not_deployed(certs: list[dict], server: str, src) -> list[Event]:
+        """A cert renewed in the PKI (source of truth) but the copy OpenVPN
+        actually reads still has the old, earlier expiry. This is the exact
+        failure behind the June 2026 outage: renewed, never copied."""
+        by_name: dict[tuple[str, str], dict[str, dict]] = {}
+        for c in certs:
+            if c.get("error") or c.get("revoked") or c.get("days_remaining") is None:
+                continue
+            by_name.setdefault((str(c.get("kind")), str(c.get("name"))), {})[str(c.get("source"))] = c
+        events: list[Event] = []
+        for (kind, name), copies in by_name.items():
+            pki, live = copies.get("pki"), copies.get("live")
+            if not pki or not live:
+                continue
+            if pki["days_remaining"] - live["days_remaining"] < 1:
+                continue
+            events.append(
+                Event(
+                    event_id=str(uuid.uuid5(
+                        uuid.NAMESPACE_URL, f"vpn-cert-mismatch:{server}:{kind}:{name}:{pki.get('not_after')}"
+                    )),
+                    source=src(),
+                    event_time=datetime.now(timezone.utc),
+                    category=Category.vpn,
+                    action="vpn.cert.renewed_not_deployed",
+                    outcome=Outcome.failure,
+                    target=Target(id=f"{server}/{name}", type=f"vpn.cert.{kind}", name=name),
+                    extra={
+                        "server": server,
+                        "kind": kind,
+                        "live_not_after": live.get("not_after"),
+                        "live_days_remaining": live["days_remaining"],
+                        "pki_not_after": pki.get("not_after"),
+                        "pki_days_remaining": pki["days_remaining"],
+                        "path": live.get("path"),
+                    },
+                    raw={"pki": pki, "live": live},
+                )
+            )
         return events

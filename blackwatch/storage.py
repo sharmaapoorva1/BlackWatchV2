@@ -441,7 +441,7 @@ def get_vpn_status(server: str) -> dict[str, Any] | None:
         with conn.transaction():
             conn.execute("SET LOCAL statement_timeout = '5000ms'")
             row = conn.execute(
-                "SELECT server, updated_at, active, clients, certs "
+                "SELECT server, updated_at, active, clients, certs, agent_stale, no_login_alerted "
                 "FROM vpn_status WHERE server = %s",
                 (server,),
             ).fetchone()
@@ -450,6 +450,7 @@ def get_vpn_status(server: str) -> dict[str, Any] | None:
     return {
         "server": row[0], "updated_at": row[1], "active": row[2],
         "clients": row[3], "certs": row[4],
+        "agent_stale": bool(row[5]), "no_login_alerted": bool(row[6]),
     }
 
 
@@ -458,13 +459,14 @@ def list_vpn_status() -> list[dict[str, Any]]:
         with conn.transaction():
             conn.execute("SET LOCAL statement_timeout = '5000ms'")
             rows = conn.execute(
-                "SELECT server, updated_at, active, clients, certs "
+                "SELECT server, updated_at, active, clients, certs, agent_stale, no_login_alerted "
                 "FROM vpn_status ORDER BY server"
             ).fetchall()
     return [
         {
             "server": r[0], "updated_at": r[1], "active": r[2],
             "clients": r[3], "certs": r[4],
+            "agent_stale": bool(r[5]), "no_login_alerted": bool(r[6]),
         }
         for r in rows
     ]
@@ -526,6 +528,90 @@ def upsert_vpn_clients(
                 """,
                 (server, updated_at, Jsonb(clients)),
             )
+
+
+def set_vpn_flag(server: str, flag: str, value: bool) -> None:
+    """Set one of the silence de-dupe flags on a VPN server row."""
+    if flag not in ("agent_stale", "no_login_alerted"):
+        raise ValueError(f"unknown vpn flag: {flag}")
+    with get_pool().connection() as conn:
+        conn.execute(f"UPDATE vpn_status SET {flag} = %s WHERE server = %s", (value, server))
+
+
+def last_vpn_login(server: str) -> datetime | None:
+    """Time of the most recent successful VPN login on a server, if any."""
+    with get_pool().connection() as conn:
+        with conn.transaction():
+            conn.execute("SET LOCAL statement_timeout = '5000ms'")
+            row = conn.execute(
+                "SELECT max(event_time) FROM events "
+                "WHERE action = 'vpn.auth.success' AND target_id = %s",
+                (server,),
+            ).fetchone()
+    return row[0] if row else None
+
+
+# --- VPN session history --------------------------------------------------------
+
+def open_vpn_sessions(server: str, clients: list[dict[str, Any]], started_at: datetime) -> None:
+    """Record sessions that appeared in a snapshot."""
+    if not clients:
+        return
+    with get_pool().connection() as conn:
+        with conn.transaction():
+            for client in clients:
+                conn.execute(
+                    "INSERT INTO vpn_sessions (server, identity, common_name, real_address, real_ip, "
+                    "virtual_address, started_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    (
+                        server,
+                        client.get("username") or client.get("common_name") or "unknown",
+                        client.get("common_name"),
+                        client.get("real_address"),
+                        client.get("real_ip"),
+                        client.get("virtual_address"),
+                        started_at,
+                    ),
+                )
+
+
+def close_vpn_session(
+    server: str, identity: str, real_address: str | None, ended_at: datetime,
+    bytes_received: int | None, bytes_sent: int | None,
+) -> datetime | None:
+    """Close the newest open session for this client. Returns its start time
+    (None if no open session was recorded, e.g. history began after it)."""
+    with get_pool().connection() as conn:
+        with conn.transaction():
+            row = conn.execute(
+                "UPDATE vpn_sessions SET ended_at = %s, bytes_received = %s, bytes_sent = %s "
+                "WHERE id = (SELECT id FROM vpn_sessions WHERE server = %s AND identity = %s "
+                "AND real_address IS NOT DISTINCT FROM %s AND ended_at IS NULL "
+                "ORDER BY started_at DESC LIMIT 1) RETURNING started_at",
+                (ended_at, bytes_received, bytes_sent, server, identity, real_address),
+            ).fetchone()
+    return row[0] if row else None
+
+
+def list_vpn_sessions(limit: int = 50) -> list[dict[str, Any]]:
+    with get_pool().connection() as conn:
+        with conn.transaction():
+            conn.execute("SET LOCAL statement_timeout = '5000ms'")
+            rows = conn.execute(
+                "SELECT server, identity, real_ip, virtual_address, started_at, ended_at, "
+                "bytes_received, bytes_sent FROM vpn_sessions "
+                "ORDER BY started_at DESC LIMIT %s",
+                (min(max(limit, 1), 500),),
+            ).fetchall()
+    return [
+        {
+            "server": r[0], "identity": r[1], "real_ip": r[2], "virtual_address": r[3],
+            "started_at": r[4].isoformat() if r[4] else None,
+            "ended_at": r[5].isoformat() if r[5] else None,
+            "bytes_received": r[6], "bytes_sent": r[7],
+        }
+        for r in rows
+    ]
 
 
 # --- Connectors ----------------------------------------------------------------

@@ -1,6 +1,6 @@
 import { fetchVpn } from "@/lib/api";
 import type { VpnServer } from "@/lib/types";
-import { buildVpnCards, certSummary, countByBand, serverOk, sortCerts } from "@/lib/vpn-view";
+import { buildVpnCards, certSummary, countByBand, renewalQueue, renewedNotDeployed, serverOk, sortCerts } from "@/lib/vpn-view";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataPanel } from "@/components/layout/DataPanel";
 import { AutoGrid, Section } from "@/components/layout/Section";
@@ -8,7 +8,7 @@ import { Subsection } from "@/components/layout/Subsection";
 import { SectionLabel } from "@/components/layout/SectionLabel";
 import { AutoRefresh } from "@/components/layout/AutoRefresh";
 import { RefreshButton } from "@/components/layout/RefreshButton";
-import { VpnAuthTable, VpnCertsTable, VpnClientsTable } from "@/components/domain/VpnTables";
+import { VpnAuthTable, VpnCertsTable, VpnClientsTable, VpnRenewalTable, VpnSessionsTable } from "@/components/domain/VpnTables";
 import { StatCard } from "@/components/domain/OverviewParts";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmSubmitButton } from "@/components/ui/ConfirmSubmitButton";
@@ -18,17 +18,23 @@ export const metadata = { title: "VPN" };
 
 /**
  * VPN, in the order an operator works:
- *   1. VPN health      : servers, clients, certificate expiry, failed logins
- *   2. Servers         : one collapsible block per server (clients + certificates)
- *   3. Auth attempts   : recent logins, success and failure
+ *   1. VPN health   : servers, clients, certificate renewals, failed logins
+ *   2. Certificates : what to renew next, and anything renewed but not deployed
+ *   3. Servers      : one collapsible block per server (clients + certificates)
+ *   4. Sessions     : who connected, from where, and for how long
+ *   5. Auth         : recent login attempts, success and failure
  * h1 page, h2 section, h3 server.
  */
 export default async function VpnPage() {
-  const { servers, auth } = await fetchVpn();
+  const { servers, auth, sessions = [] } = await fetchVpn();
 
+  // One timestamp for every "days left" so the server render and the browser agree.
+  const now = Date.now();
   const activeCount = servers.filter(serverOk).length;
   const totalClients = servers.reduce((acc, s) => acc + s.client_count, 0);
-  const cards = buildVpnCards(servers, auth);
+  const cards = buildVpnCards(servers, auth, now);
+  const renewals = renewalQueue(servers, now);
+  const mismatches = renewedNotDeployed(servers, now);
 
   return (
     <>
@@ -63,10 +69,48 @@ export default async function VpnPage() {
               </AutoGrid>
             </Section>
 
+            <Section
+              id="certificates"
+              title="Certificates"
+              description="Renew the first row first. Days are counted from each certificate's expiry date, so they stay correct even if an agent goes quiet."
+            >
+              {mismatches.length > 0 && (
+                <div role="alert" className="rounded-md border border-sev-high/40 bg-sev-high/5 px-4 py-3 text-sm">
+                  <p className="font-medium text-sev-high">Renewed but not deployed</p>
+                  <ul className="mt-1 space-y-0.5 text-fg-muted">
+                    {mismatches.map((m) => (
+                      <li key={`${m.server}-${m.name}`}>
+                        <code className="text-fg">{m.name}</code> on {m.server}: OpenVPN is still using the old copy, which expires in{" "}
+                        {Math.max(m.liveDays, 0).toFixed(0)} days. The renewed copy is good for {m.renewedDays.toFixed(0)}. Copy it to the OpenVPN
+                        directory and restart.
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <DataPanel className="overflow-hidden">
+                {renewals.length === 0 ? (
+                  <EmptyState tone="ok">Every certificate has more than 30 days left.</EmptyState>
+                ) : (
+                  <VpnRenewalTable items={renewals} now={now} />
+                )}
+              </DataPanel>
+            </Section>
+
             <Section id="servers" title="Servers" description="Connected clients and certificates for each server. Problem servers start open.">
               {servers.map((s) => (
-                <ServerBlock key={s.server} server={s} total={servers.length} />
+                <ServerBlock key={s.server} server={s} total={servers.length} now={now} mismatchNames={mismatches.filter((m) => m.server === s.server).map((m) => m.name)} />
               ))}
+            </Section>
+
+            <Section id="sessions" title="Recent sessions" description="Who connected, from where, and for how long. Sessions shorter than a minute can be missed.">
+              <DataPanel className="overflow-hidden">
+                {sessions.length === 0 ? (
+                  <EmptyState>No sessions recorded yet. They appear as clients connect and disconnect.</EmptyState>
+                ) : (
+                  <VpnSessionsTable sessions={sessions} now={now} />
+                )}
+              </DataPanel>
             </Section>
           </>
         )}
@@ -93,11 +137,11 @@ export default async function VpnPage() {
   );
 }
 
-function ServerBlock({ server: s, total }: { server: VpnServer; total: number }) {
+function ServerBlock({ server: s, total, now, mismatchNames }: { server: VpnServer; total: number; now: number; mismatchNames: string[] }) {
   const certs = s.certs ?? [];
-  const bands = countByBand(certs);
-  const certProblem = bands.expired + bands.critical + bands.high > 0;
-  const status = serverOk(s) ? "active" : s.stale ? "stale" : "down";
+  const bands = countByBand(certs, now);
+  const certProblem = bands.expired + bands.critical + bands.high > 0 || mismatchNames.length > 0;
+  const status = serverOk(s) ? "active" : s.agent_stale ? "agent silent" : s.stale ? "stale" : "down";
   const summary = [
     status,
     s.age_seconds !== null ? `updated ${s.age_seconds}s ago` : null,
@@ -146,7 +190,7 @@ function ServerBlock({ server: s, total }: { server: VpnServer; total: number })
               The agent has not shipped a certificate inventory yet. Upgrade the on-host agent to v0.4+; once a heartbeat lands, this fills in.
             </EmptyState>
           ) : (
-            <VpnCertsTable certs={sortCerts(certs)} server={s.server} />
+            <VpnCertsTable certs={sortCerts(certs, now)} server={s.server} now={now} notDeployed={mismatchNames} />
           )}
         </DataPanel>
       </div>

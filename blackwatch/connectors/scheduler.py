@@ -12,6 +12,7 @@ from ..hosts import staleness as host_staleness
 from ..intel import refresher as intel_refresher
 from ..rds import staleness as rds_staleness
 from ..services import staleness as probe_staleness
+from ..vpn import staleness as vpn_staleness
 from . import operations
 
 _TICK_SECONDS = 10
@@ -183,6 +184,7 @@ def _loop() -> None:
             ("host staleness", host_staleness.check),
             ("probe staleness", probe_staleness.check),
             ("RDS staleness", rds_staleness.check),
+            ("VPN staleness", vpn_staleness.check),
         ):
             try:
                 check()

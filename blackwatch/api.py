@@ -877,12 +877,17 @@ def vpn_view(stale_after_seconds: int = 180) -> dict[str, Any]:
             "client_count": len(clients),
             "clients": clients,
             "certs": certs,
+            "agent_stale": bool(row.get("agent_stale")),
         })
+    try:
+        sessions = storage.list_vpn_sessions(40)
+    except Exception:  # history table is new; never break the page over it
+        sessions = []
     auth = [
         e for e in storage.query_events(category="vpn", limit=200)
         if e.get("action") in ("vpn.auth.success", "vpn.auth.failure")
     ][:40]
-    return {"servers": servers, "auth": auth}
+    return {"servers": servers, "auth": auth, "sessions": sessions}
 
 
 @router.delete("/vpn/servers/{server}", dependencies=[Depends(require_role("admin"))])

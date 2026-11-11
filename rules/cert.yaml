@@ -107,3 +107,13 @@
     field: action
     op: equals
     value: vpn.cert.probe.failed
+
+- id: vpn-cert-renewed-not-deployed
+  title: VPN cert renewed but not deployed
+  description: The PKI has a newer copy of a cert than the one OpenVPN reads. The live cert will still expire on the old date. Copy the renewed cert to the OpenVPN directory and restart.
+  severity: high
+  tags: [cert, vpn]
+  match:
+    field: action
+    op: equals
+    value: vpn.cert.renewed_not_deployed
