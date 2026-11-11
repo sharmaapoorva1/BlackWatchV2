@@ -217,8 +217,9 @@ export function DataTable<TData>({
   return (
     <div className="min-w-0">
       <LiveRegion message={message} />
+      <div className="min-w-0 max-w-full overflow-hidden rounded-md border border-line bg-surface [[data-panel]_&]:rounded-none [[data-panel]_&]:border-0">
       {hideableColumns.length > 1 && (
-        <div className="mb-2 flex justify-end">
+        <div className="flex justify-end border-b border-line-soft px-2 py-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button type="button" size="sm" variant="ghost">
@@ -258,7 +259,7 @@ export function DataTable<TData>({
         </div>
       )}
 
-      <div className={cn("bw-table-shell max-w-full rounded-md border border-line bg-surface", responsive && "bw-table-shell-cards")}>
+      <div className={cn("bw-table-shell max-w-full bg-surface", responsive && "bw-table-shell-cards")}>
         <table className="bw-table w-full border-collapse text-sm" data-responsive={responsive ? "cards" : "scroll"} aria-label={ariaLabel}>
           <thead className="border-b border-line bg-surface-2 text-left text-xs text-muted">
             {table.getHeaderGroups().map((group) => (
@@ -349,6 +350,7 @@ export function DataTable<TData>({
           setMessage(`Showing ${size} rows per page.`);
         }}
       />
+      </div>
     </div>
   );
 }
