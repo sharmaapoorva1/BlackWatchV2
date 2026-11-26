@@ -76,7 +76,7 @@ export default async function AwsTimelineUserPage({ searchParams }: { searchPara
             </DataPanel>
           ) : (
             <>
-              <UserTimeline events={data.events} />
+              <UserTimeline events={data.events} hours={hours} />
               {data.truncated && <p className="text-xs text-fg-subtle">Showing the newest 1,000 events.</p>}
             </>
           )}

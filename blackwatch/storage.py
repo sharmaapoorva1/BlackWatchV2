@@ -160,7 +160,7 @@ def aws_activity_users(*, module: str, since: datetime, limit: int = 200) -> lis
         SELECT actor_principal,
                count(*) AS events,
                max(event_time) AS last_seen,
-               count(*) FILTER (WHERE outcome <> 'success') AS failed,
+               count(*) FILTER (WHERE outcome = 'failure') AS failed,
                count(DISTINCT actor_source_ip) FILTER (WHERE actor_source_ip IS NOT NULL) AS source_ips,
                max({_SEVERITY_RANK_SQL}) AS top_rank,
                COALESCE(bool_or(actor_is_root), false) AS is_root

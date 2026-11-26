@@ -48,18 +48,20 @@ def test_user_summary_counts_failures_ips_and_actions(monkeypatch):
         _event("iam.user.create", sev="high", t="2026-11-25T10:00:00+00:00"),
         _event("auth.console.login", outcome="failure", ip="198.51.100.9", t="2026-11-25T09:00:00+00:00"),
         _event("auth.console.login", t="2026-11-25T08:00:00+00:00"),
+        # An unknown outcome (e.g. a UEBA anomaly) is not a failure.
+        _event("auth.anomaly.first_seen_hour_of_day", outcome="unknown", t="2026-11-25T08:30:00+00:00"),
     ]
     monkeypatch.setattr(api.storage, "query_events", lambda **k: events)
 
     out = api.aws_timeline_user(principal="alice", hours=168, limit=500)
     s = out["summary"]
-    assert s["events"] == 3
+    assert s["events"] == 4
     assert s["failed"] == 1
     assert s["first_seen"] == "2026-11-25T08:00:00+00:00"
     assert s["last_seen"] == "2026-11-25T10:00:00+00:00"
     assert dict(s["top_actions"])["auth.console.login"] == 2
-    assert dict(s["source_ips"])["203.0.113.5"] == 2
-    assert s["severities"] == {"high": 1, "none": 2}
+    assert dict(s["source_ips"])["203.0.113.5"] == 3
+    assert s["severities"] == {"high": 1, "none": 3}
     assert out["truncated"] is False
 
 

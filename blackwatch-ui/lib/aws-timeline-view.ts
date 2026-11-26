@@ -122,6 +122,11 @@ export function buildUserCards(data: AwsTimelineUserResponse): HealthCard[] {
   ];
 }
 
+/** Only a real failure counts. "unknown" (for example a behaviour anomaly) is not one. */
+export function isFailed(event: Pick<EventEnvelope, "outcome">): boolean {
+  return event.outcome === "failure";
+}
+
 /** Slim row for the activity table: only what it shows. */
 export interface AwsActivityRow {
   event_id: string;
@@ -141,7 +146,7 @@ export function toAwsActivityRow(event: EventEnvelope): AwsActivityRow {
     severity: (event.severity as string | null | undefined) ?? null,
     principal: event.actor?.principal ?? null,
     action: event.action,
-    failed: event.outcome !== undefined && event.outcome !== "success",
+    failed: isFailed(event),
     target: (event.target?.id ?? event.target?.name ?? null) as string | null,
     source_ip: (event.actor as { source_ip?: string } | undefined)?.source_ip ?? null,
   };
@@ -180,6 +185,65 @@ export function eventsToCsv(events: EventEnvelope[]): string {
 export interface TimelineDay {
   day: string; // YYYY-MM-DD (UTC)
   events: EventEnvelope[];
+}
+
+/** Worth a person's eye: a rule scored it, or it failed. */
+export function isFlagged(event: EventEnvelope): boolean {
+  return Boolean(event.severity) || isFailed(event);
+}
+
+export interface TimelineRun {
+  key: string;
+  /** Newest first, like the timeline. */
+  events: EventEnvelope[];
+}
+
+function runSignature(event: EventEnvelope): string {
+  const ip = (event.actor as { source_ip?: string } | undefined)?.source_ip ?? "";
+  const target = event.target?.id ?? event.target?.name ?? "";
+  return [event.action, target, ip, event.outcome ?? "", event.severity ?? ""].join("|");
+}
+
+/**
+ * Fold neighbouring events that look the same (same action, target, source IP,
+ * outcome and severity) into one run, so ten identical logins become one row
+ * with a count. Order is kept; only adjacent events merge, so a different event
+ * in between always splits a run and the sequence is never rearranged.
+ */
+export function collapseRuns(events: EventEnvelope[]): TimelineRun[] {
+  const sorted = [...events].sort((a, b) => Date.parse(b.event_time) - Date.parse(a.event_time));
+  const runs: TimelineRun[] = [];
+  for (const event of sorted) {
+    const signature = runSignature(event);
+    const last = runs[runs.length - 1];
+    if (last && runSignature(last.events[0]) === signature) last.events.push(event);
+    else runs.push({ key: event.event_id, events: [event] });
+  }
+  return runs;
+}
+
+export interface DayCell {
+  day: string; // local YYYY-MM-DD
+  count: number;
+  flagged: number;
+}
+
+/** One cell per day for the last `days` days (oldest first), zeros included, for the overview strip. */
+export function dayCells(events: EventEnvelope[], days: number, dayOf: (e: EventEnvelope) => string, now: Date = new Date()): DayCell[] {
+  const cells = new Map<string, DayCell>();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    cells.set(key, { day: key, count: 0, flagged: 0 });
+  }
+  for (const event of events) {
+    const cell = cells.get(dayOf(event));
+    if (!cell) continue;
+    cell.count += 1;
+    if (isFlagged(event)) cell.flagged += 1;
+  }
+  return [...cells.values()];
 }
 
 const utcDay = (event: EventEnvelope) => new Date(event.event_time).toISOString().slice(0, 10);

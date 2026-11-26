@@ -1950,7 +1950,7 @@ def aws_timeline_user(
         actions[action] = actions.get(action, 0) + 1
         sev = e.get("severity") or "none"
         severities[sev] = severities.get(sev, 0) + 1
-        if e.get("outcome") not in (None, "success"):
+        if e.get("outcome") == "failure":
             failed += 1
     return {
         "principal": principal,

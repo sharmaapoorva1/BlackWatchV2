@@ -3,8 +3,12 @@ import test from "node:test";
 
 import {
   buildAwsTimelineCards,
+  collapseRuns,
+  dayCells,
   eventsToCsv,
   groupByDay,
+  isFailed,
+  isFlagged,
   parseAwsTimelineHours,
   parseAwsTimelineTab,
   toAwsActivityRow,
@@ -54,6 +58,47 @@ test("activity row flags failures and tolerates missing fields", () => {
   const bare = toAwsActivityRow({ event_id: "y", event_time: "2026-11-25T10:00:00Z", action: "a" });
   assert.equal(bare.failed, false);
   assert.equal(bare.principal, null);
+});
+
+test("only a real failure counts as failed; unknown does not", () => {
+  assert.equal(isFailed({ outcome: "failure" }), true);
+  assert.equal(isFailed({ outcome: "unknown" }), false);
+  assert.equal(isFailed({ outcome: "success" }), false);
+  assert.equal(isFailed({}), false);
+});
+
+test("identical neighbours fold into one run, a different event splits it", () => {
+  const login = (id: string, t: string, ip = "198.51.100.1") =>
+    ev(id, t, { action: "auth.console.login", actor: { principal: "alice", source_ip: ip } });
+  const runs = collapseRuns([
+    login("1", "2026-11-25T10:00:00Z"),
+    login("2", "2026-11-25T09:00:00Z"),
+    ev("3", "2026-11-25T08:00:00Z", { action: "iam.user.create" }),
+    login("4", "2026-11-25T07:00:00Z"),
+    login("5", "2026-11-25T06:00:00Z", "203.0.113.9"),
+  ]);
+  assert.deepEqual(runs.map((r) => r.events.length), [2, 1, 1, 1]);
+  assert.deepEqual(runs[0].events.map((e) => e.event_id), ["1", "2"]);
+});
+
+test("flagged means scored or failed", () => {
+  assert.equal(isFlagged(ev("a", "2026-11-25T10:00:00Z", { severity: "high" })), true);
+  assert.equal(isFlagged(ev("b", "2026-11-25T10:00:00Z", { outcome: "failure" })), true);
+  assert.equal(isFlagged(ev("c", "2026-11-25T10:00:00Z")), false);
+});
+
+test("day cells cover every day in the window, zeros included", () => {
+  const now = new Date(2026, 10, 25, 12, 0, 0); // local 25 Nov
+  const key = (e: EventEnvelope) => e.event_id;
+  const cells = dayCells(
+    [ev("2026-11-25", "x", { severity: "high" }), ev("2026-11-23", "x"), ev("2026-11-23", "x")],
+    3,
+    key,
+    now,
+  );
+  assert.deepEqual(cells.map((c) => c.day), ["2026-11-23", "2026-11-24", "2026-11-25"]);
+  assert.deepEqual(cells.map((c) => c.count), [2, 0, 1]);
+  assert.equal(cells[2].flagged, 1);
 });
 
 test("csv is oldest first, quotes commas and neutralizes formulas", () => {
