@@ -182,12 +182,18 @@ export interface TimelineDay {
   events: EventEnvelope[];
 }
 
-/** Group events (any order) into UTC days, newest day first, newest event first. */
-export function groupByDay(events: EventEnvelope[]): TimelineDay[] {
+const utcDay = (event: EventEnvelope) => new Date(event.event_time).toISOString().slice(0, 10);
+
+/**
+ * Group events (any order) into days, newest day first, newest event first.
+ * Days are UTC unless `dayOf` says otherwise (the timeline passes the viewer's
+ * local day so "today" means the viewer's today).
+ */
+export function groupByDay(events: EventEnvelope[], dayOf: (event: EventEnvelope) => string = utcDay): TimelineDay[] {
   const sorted = [...events].sort((a, b) => Date.parse(b.event_time) - Date.parse(a.event_time));
   const days: TimelineDay[] = [];
   for (const event of sorted) {
-    const day = new Date(event.event_time).toISOString().slice(0, 10);
+    const day = dayOf(event);
     const last = days[days.length - 1];
     if (last && last.day === day) last.events.push(event);
     else days.push({ day, events: [event] });
