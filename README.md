@@ -71,10 +71,10 @@ The interactive API explorer remains at `/docs`.
   tampering, CloudTrail tampering, no-MFA login, …). Setup: [deploy/iam/](deploy/iam/).
 - **ec2.host** — per-EC2 host telemetry. A Python reporter
   ([scripts/ec2_agent.py](scripts/ec2_agent.py)) on each instance pushes SSH/sudo
-  access + a heartbeat to SQS via the instance role (no SSH, no inbound);
-  BlackWatch polls via the SQS connector (`target_module=ec2.host`), normalizes to
-  `host.*` events, maintains a per-host read-model (`/ui/hosts`), and alerts on
-  agent **staleness** (absence detection). Setup: [deploy/ec2/](deploy/ec2/).
+  activity, host state, file integrity changes and a heartbeat outbound, over
+  direct HTTPS or SQS (no SSH, no inbound port). BlackWatch normalizes to `host.*`
+  events, maintains a per-host read-model (`/hosts`, `/fim`), and alerts on
+  agent **staleness**. Full reference: [docs/ec2-agent.md](docs/ec2-agent.md).
 
 Notification channels + routes are configured in [`notifications.yaml`](notifications.yaml).
 
@@ -193,7 +193,7 @@ rules/              # rule content as YAML (operator-editable)
 notifications.yaml  # channels + routes (operator-editable)
 scripts/webhook_listener.py    # local receiver for testing notifications
 scripts/vpn_agent.py           # on-host agent for the OpenVPN box (push to SQS)
-scripts/ec2_agent.py           # on-host agent for any EC2 (push to SQS)
+scripts/ec2_agent.py           # on-host agent for any EC2 (push over HTTPS or SQS)
 docs/EVENT_SCHEMA.md
 tests/
 ```

@@ -257,7 +257,7 @@ disjoint privileges.
 ## 8. Security model (the hardening)
 
 Same playbook as the EC2 agent. Refer to
-[ec2-agent.md §8](ec2-agent.md#8-security-model-the-hardening) for the
+[ec2-agent.md, Security model](ec2-agent.md#11-security-model) for the
 shared details (systemd directives, version compat table, scrubber
 patterns); this section calls out the VPN-specific bits.
 
@@ -722,6 +722,6 @@ install-script change.*
 ## Related docs
 
 - [`docs/ec2-agent.md`](ec2-agent.md) — sister doc for the EC2 agent (same hardening playbook + collectors)
-- [`docs/fim.md`](fim.md) — File Integrity Monitoring. Lives inside the EC2 agent, not the VPN agent. The VPN box can also host a co-installed EC2 agent if you want FIM coverage of OpenVPN config files.
+- [`docs/ec2-agent.md`](ec2-agent.md#7-file-integrity-monitoring-fim) — File Integrity Monitoring lives inside the EC2 agent, not the VPN agent. The VPN box can also host a co-installed EC2 agent for FIM coverage of OpenVPN config files.
 - [`vpn-info.md`](vpn-info.md) — VPN box runtime facts (unit name, PAM, CRL state)
 - [`docs/EVENT_SCHEMA.md`](EVENT_SCHEMA.md) — Event envelope schema

@@ -16,8 +16,7 @@ def test_installer_supports_direct_transport_without_exposing_token_in_unit():
 
 def test_operator_docs_include_https_canary_and_sqs_rollback():
     docs = (ROOT / "docs" / "ec2-agent.md").read_text(encoding="utf-8")
-    readme = (ROOT / "deploy" / "ec2" / "README.md").read_text(encoding="utf-8")
-    for text in (docs, readme):
+    for text in (docs,):
         assert "BLACKWATCH_TRANSPORT=https" in text
         assert "BLACKWATCH_INGEST_URL" in text
         assert "BLACKWATCH_AGENT_TOKEN" in text

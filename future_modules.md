@@ -97,97 +97,6 @@ New category `database` (additive); new `db.*` actions.
 
 ---
 
-## EC2 Host Monitoring module (agent → SQS)
-
-Goal: a lightweight **reporter** on every EC2 that ships host-level security
-telemetry back to BlackWatch — access attempts, privilege/config changes,
-persistence, integrity, heartbeat — **without SSH** and **without BlackWatch
-needing to be reachable**.
-
-### Data flow
-```
-reporter (systemd, each EC2)
-  --(instance IAM role, sqs:SendMessage)-->  SQS blackwatch-ec2-agents (+DLQ)
-  -->  BlackWatch SQS connector polls
-  -->  ec2.host adapter normalizes
-  -->  rules + storage + projection (per-host read-model)
-  -->  /ui/hosts + alerts
-```
-
-Why this shape:
-- **No SSH, no inbound** port on the EC2 — the agent only makes outbound calls to SQS.
-- **No stored credentials** — the agent uses the instance's **IAM role** (the role is the trust; no enrollment/keys to manage).
-- **Works with BlackWatch on the PC** — BlackWatch pulls from SQS; agents never need to reach it.
-- **SQS buffers** if BlackWatch is offline; **DLQ** catches poison messages.
-- Same connector/adapter/projection pattern as the IAM + VPN modules — additive, nothing rebuilt.
-
-### The reporter agent (on each EC2)
-- **Runtime:** **Python 3 + boto3** (consistency with the rest of BlackWatch). Packaged as a **systemd service, runs as root** (needs `/var/log/secure`, `ss -p`, shadow hashes).
-- **Host identity:** instance-id from IMDSv2 + hostname + account + region, stamped on every message.
-- **Each cycle (~60s)** it builds ONE SQS message containing: a **heartbeat**, **new log events** since the last cursor, and **state snapshots** (when changed / every N cycles).
-- **Collection modes (mirror what we've already built):**
-  1. **Log events** — incremental tail of journald (sshd, sudo) via a saved cursor → ship matched auth/sudo lines (like the VPN auth capture).
-  2. **State snapshots** — `ss -tlnp` (listening ports), `getent passwd`/`group`, hashes of `authorized_keys` + sensitive files (`sshd_config`, `sudoers`, `passwd`/`shadow`), SUID inventory, cron/systemd timers → BlackWatch diffs vs the last snapshot.
-  3. **Heartbeat** — always, for liveness/staleness.
-- **Local buffering:** small on-disk spool; if SendMessage fails, queue locally and replay later (dedup handles repeats).
-- **Least-priv IAM:** instance-role policy allows ONLY `sqs:SendMessage` to the one queue.
-- **Config:** queue URL, region, interval, enabled checks (file or instance tags).
-
-### AWS infrastructure (deploy/ec2/)
-- SQS `blackwatch-ec2-agents` (+ `blackwatch-ec2-agents-dlq`, maxReceiveCount 5), region **us-west-1** (consistent with the rest).
-- **Instance-role policy** (attach to each EC2's instance profile): `sqs:SendMessage` on the queue ARN. Create/attach an instance profile for boxes that lack one (live, no reboot).
-- **BlackWatch reader:** extend `blackwatch-sqs-reader` with Receive/Delete/GetQueueAttributes on the new queue (or a second reader).
-- Deploy script `deploy/ec2/setup.ps1` (mirrors deploy/iam) + an `install-agent.sh` to drop on each box (binary + systemd unit + config).
-
-### BlackWatch core additions (additive)
-- Category **`host`** (additive enum); `host.*` actions.
-- Adapter **`ec2.host`** — one agent message → heartbeat event + log-derived events + a snapshot envelope for the projection. Pure.
-- Connector: **generalize the SQS connector** to a `sqs` type with a configurable `target_module` (one type serves both `aws.cloudtrail` and `ec2.host`). Config: queue_url, region, profile, target_module.
-- Projection + **`host_status` read-model** keyed by instance-id (latest heartbeat, active, last_seen, ports, users, authorized_keys, …). Diffs consecutive snapshots → `host.port.opened/closed`, `host.user.added`, `host.authorized_key.added`, `host.sudoers.changed`, `host.suid.added`.
-- **Staleness detection** (the absence-detection we deferred): a periodic scheduler check flags hosts whose `last_seen` exceeds a threshold → `host.agent.stale` (high). Reuse for VPN too.
-- UI: **`/ui/hosts`** page (per instance: up/stale, last seen, recent SSH/sudo, open ports, recent changes) + a dashboard tile.
-- Rules score `host.*`.
-
-### Normalized actions + field mapping
-- `host.auth.ssh.success` / `.failure` — actor.principal=user, source_ip, target=instance-id
-- `host.sudo.exec` / `.failure` — actor=user, extra.command
-- `host.user.added` / `.removed`, `host.authorized_key.added` (key fingerprint observable)
-- `host.port.opened` / `.closed` (extra.port/proc), `host.sudoers.changed`, `host.file.changed` (FIM, target=path)
-- `host.cron.added`, `host.service.added`, `host.package.installed` / `.removed`, `host.suid.added`
-- `host.service.health` (host/agent up) + `host.agent.stale` (absence)
-- Common: source.module=`ec2.host`, account/region, actor (user/ip), target (instance-id/path), observables (ip/user/hash/port), raw=agent payload, deterministic event_id from journald cursor for log events.
-
-### Security monitoring list (tiers · source)
-**Tier 1 — access + highest signal (build first)**
-- SSH login success *(log)* · SSH failure / invalid user / **brute force** *(log)* · **sudo** usage + failures *(log)* · direct root login *(log)* · new `authorized_keys` *(snapshot-diff)* · user/group + **sudoers** changes *(log + diff)* · new **listening port** *(snapshot-diff)* · **heartbeat** + reboot *(heartbeat)*
-
-**Tier 2 — persistence & integrity**
-- cron/systemd-timer/rc additions *(diff)* · **FIM** on sshd_config/sudoers/passwd/shadow/authorized_keys *(hash diff)* · package install/remove *(yum/dnf history)* · new SUID/SGID *(diff)*
-
-**Tier 3 — deep (later)**
-- auditd `execve` (exec from /tmp, /dev/shm, as root) *(auditd)* · outbound to bad IPs / large egress *(ss + intel)* · kernel modules / LD_PRELOAD *(auditd)* · **IMDS abuse** (unexpected proc hitting 169.254.169.254) *(auditd/net)*
-
-**Cloud-context (already via the IAM/CloudTrail module — don't duplicate):** instance start/stop/terminate, SG changes, AMI sharing, **SSM StartSession**.
-
-### Detection rules to ship
-- `host-ssh-brute-force` — N failures/IP/window — **STATEFUL** (needs the windowed counter; shared with VPN brute force)
-- `host-ssh-login-success` (info; high if root / unexpected IP)
-- `host-sudo-failure` (medium), `host-new-authorized-key` (high), `host-new-user` (medium), `host-new-sudoer` (high), `host-new-listening-port` (medium/high), `host-fim-critical-file` (high), `host-agent-stale` (high), `host-cron-added` (medium)
-
-### Dedup & noise
-- Log events: deterministic event_id from journald cursor → `ON CONFLICT DO NOTHING` (covers SQS redelivery + agent buffer replay).
-- Snapshot diffs: idempotent — re-sending the same snapshot yields no change vs stored state, so no duplicate derived events.
-- Existing rule toggles + muted-actions controls apply.
-
-### Build phases
-- **A (✅ built):** queue + instance-role policy + reader; agent Tier-1 (SSH/sudo auth + heartbeat); `ec2.host` adapter; generalized SQS connector; `/ui/hosts`; **staleness alerting** (the absence-detection capability).
-- **B (✅ built):** agent ships state snapshots (ports/users/authorized_keys/sudoers) only on change; projection diffs vs. last; emits `host.port.opened/closed`, `host.user.added/removed`, `host.authorized_key.added/removed`, `host.sudoers.changed`; rules score the new-* ones; `/ui/hosts` gets port/user/key counts + a "Recent state changes" card.
-- **C (✅ built):** agent snapshots **critical files**, **cron** (system + drop-ins + per-user), **enabled systemd unit-files**, **SUID binaries** (scoped to /usr/opt/bin/sbin), and **installed packages** (rpm -qa). Diff emits `host.file.changed`, `host.cron.changed`, `host.service.added/removed`, `host.suid.added/removed`, and a single batched `host.packages.changed` (capped at 50 added/removed to bound message size). Five new rules (file/cron/suid = high; service/packages = medium).
-- **D (partial ✅):** *Stateful brute-force counter built* — shared across host SSH (`host.auth.ssh.failure → host.bruteforce`) and VPN (`vpn.auth.failure → vpn.bruteforce`). In-memory sliding window (5 failures / 5 min per source IP), suppressed for the rest of the window after one alert. Wired as a projection in the pipeline. Remaining: auditd `execve` and IMDS-abuse detection.
-- **Visibility (✅ built):** `/ui/hosts/{instance_id}` per-host detail page — heartbeat, listening ports, **running processes**, users, authorized keys, sudoers, critical files, cron, systemd units, SUID, packages, recent SSH/sudo, recent state changes, recent notable activity. Agent now snapshots `processes` (visibility-only, no diff).
-
----
-
 ## Notifications / Webhooks module (advanced)
 
 Goal: turn the current YAML-only notifier into a **UI-managed, fully customizable**
@@ -326,15 +235,6 @@ Event core untouched; this all hangs off the existing `notifier.dispatch` seam.
 2. **Secrets:** env-var / file references (recommended) or DB-encrypted?
 3. **Send-queue:** in-process thread (simple; loses on crash) or DB-backed queue (durable)? Start in-process; add DB-backed only if needed.
 4. **Which non-existing channel types to add first** in 2b? My guess: PagerDuty + Email cover most teams.
-
-### Cost
-- SQS within free tier at small fleet (~1 msg/host/min); no hosting; instance role = no credential infra. ~$0.
-
-### Decisions (locked)
-1. Agent language: **Python 3 + boto3** (consistency with the rest of BlackWatch).
-2. **One shared SQS queue** for all hosts (`blackwatch-ec2-agents`).
-3. **Log-only first**; auditd deferred to Phase D (phased build).
-4. **Generalize the SQS connector** to take a `target_module` field — set `ec2.host` for the agent queue (and `aws.cloudtrail` for the existing one).
 
 ---
 

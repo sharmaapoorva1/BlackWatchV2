@@ -16,8 +16,8 @@ evidence:
   - file: "scripts/ec2_agent.py"
     location: "951-1000"
     observation: "The agent emits periodic reports but does not expose a delivery sequence, boot ID, or phase-specific transfer timestamps."
-  - file: "docs/superpowers/plans/2026-10-21-agent-transfer-reliability.md"
-    location: "Phase 1"
+  - file: "docs/ec2-agent.md"
+    location: "Delivery and reliability"
     observation: "Phase 1 defines the required metadata, health states, delivery read model, regression coverage, and operator UI."
 impact: "Operators can distinguish a stopped agent from delayed transport, delayed ingestion, collector degradation, and database processing lag."
 acceptance_criteria:

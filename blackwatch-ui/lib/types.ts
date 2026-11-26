@@ -93,6 +93,42 @@ export interface IamViewResponse {
   ct_tamper: EventEnvelope[];
 }
 
+// --- AWS timeline (CloudTrail activity by severity and by user) -----------
+
+export interface AwsTimelineUser {
+  principal: string;
+  events: number;
+  last_seen: string;
+  failed: number;
+  source_ips: number;
+  top_severity: string | null;
+  is_root: boolean;
+}
+
+export interface AwsTimelineResponse {
+  tab: "critical" | "high" | "all";
+  hours: number;
+  counts: { critical: number; high: number; all: number };
+  events: EventEnvelope[];
+  users: AwsTimelineUser[];
+}
+
+export interface AwsTimelineUserResponse {
+  principal: string;
+  hours: number;
+  truncated: boolean;
+  summary: {
+    events: number;
+    failed: number;
+    first_seen: string | null;
+    last_seen: string | null;
+    source_ips: [string, number][];
+    top_actions: [string, number][];
+    severities: Record<string, number>;
+  };
+  events: EventEnvelope[];
+}
+
 // --- VPN -----------------------------------------------------------------
 
 export interface VpnClient {

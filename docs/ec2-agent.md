@@ -1,854 +1,636 @@
-# EC2 host agent — full reference
+# EC2 host agent
 
-The canonical document for everything on the BlackWatch EC2 reporter agent:
-what it does, where it lives, how to install/upgrade it, what it protects
-against, and how to verify it's working.
+The one reference for host monitoring on EC2: what the agent collects, how
+reports reach BlackWatch, what BlackWatch derives from them, how to install and
+operate it, and how file integrity monitoring (FIM) works. Everything here was
+checked against `scripts/ec2_agent.py`, `scripts/agent_transport.py`,
+`scripts/fim_engine.py`, `deploy/ec2/`, `blackwatch/agents/`,
+`blackwatch/modules/ec2_host.py`, `blackwatch/hosts/` and `rules/host.yaml`.
 
-The quick-start install is at [`deploy/ec2/README.md`](../deploy/ec2/README.md);
-read this when you want the *full* picture or are debugging at 3am.
-
-Current agent version: **v1.10** (safer authentication events, richer host context, structured policy-change summaries, and explicit coverage semantics).
-
-Recent version history:
-- **v1.2** — scrubbing, systemd sandbox, watchdog, size caps, send backoff
-- **v1.3** — FIM Part 1: periodic baseline scan + per-instance coverage
-- **v1.4** — FIM Part 2: real-time inotify watcher on critical paths
-- **v1.5** — FIM Part 3: auditd whodata, actor attribution per change event
-- **v1.6** — stable report identity, sequence tracking, and server-side delivery timing
-- **v1.8** — critical-event cadence, immutable send timestamps, rollout labels, and transfer latency metrics
-- **v1.7** — selectable BlackWatch HTTPS ingress with SQS rollback and priority-aware local recovery
-- **v1.9** — process command-line removal, collector freshness, UDP/inode/active-service coverage, schema v2, and corrected HTTPS transport labels
-- **v1.10** — sudo argument omission, account/group and package-version context, per-sample disk times, running-service distinction, and safe policy summaries
-
-For a deep dive on FIM specifically (architecture, every detection path,
-auditd rules, the UI surfaces, troubleshooting), see [`docs/fim.md`](fim.md).
-This file remains the canonical reference for the agent as a whole.
+Current: **agent v1.10**, **report schema v2**.
 
 ---
 
-## 1. What it does
+## 1. What it is
 
-Runs as a systemd service on every EC2 we want monitored. Every `INTERVAL`
-seconds (default 60s) it:
+A Python reporter that runs as a systemd service (`blackwatch-agent`) on each
+EC2 host. It collects host state and security evidence, scrubs it, and pushes
+reports outbound. No inbound port is opened on the host and BlackWatch never
+connects to it.
 
-1. Reads recent `sshd` + `sudo` lines from `journalctl`.
-2. Runs whichever collectors are *due* (each has its own cadence — fast
-   ones every minute, FIM-tier every 2 min, heavy ones every 10 min).
-3. Samples always-on lightweight metrics (memory, CPU, sessions, OOM,
-   rpm-DB health).
-4. Drains any pending **FIM** change events queued by the FIM engine's
-   three detection threads (periodic baseline / inotify / auditd whodata).
-5. Builds **one JSON payload** and sends it through the configured transport:
-   direct HTTPS to BlackWatch or SQS using the instance role.
-6. Spools to disk and replays if the selected transport is unreachable.
-   Critical reports replay before bulk telemetry. Bounded — see
-   [Failure modes](#13-failure-modes--recovery).
+It covers: SSH and sudo activity, users, authorized keys, sudoers and cron
+policy, listening ports, services, packages, kernel modules, SUID files, disk,
+memory, CPU, OOM kills, and file integrity (periodic, real-time and "who did
+it" attribution).
 
-Each report also carries `agent_id`, `boot_id`, a monotonic `sequence`, a
-`report_id`, `collected_at`, and `sent_at`. BlackWatch records when the report
-was accepted and processed separately, so queue delay and ingest delay are
-visible without treating either as agent downtime.
-
-In parallel, three background threads owned by `fim_engine.py` run
-independently of the heartbeat tick:
-- **Periodic baseline scanner** — every 6h, hashes ~3000 files, diffs
-  against the local SQLite baseline, queues any changes.
-- **Inotify watcher** — sub-second detection on critical paths (sudoers,
-  sshd_config, authorized_keys, cron, systemd units, etc).
-- **Audit reader** — tails `/var/log/audit/audit.log` with key `bw_fim`,
-  maintains a path → `{uid,pid,comm,exe,proctitle}` lookup map. The other
-  two threads consult it when emitting changes, attaching actor data.
-
-BlackWatch admits HTTPS reports to a persistent server-side spool and drains
-them asynchronously; SQS remains a compatibility path. Both paths turn each
-payload into normalized events. FIM changes get persisted to
-`fim_history` + `fim_baselines`; coverage stats land in `fim_coverage`
-and feed the `/fim` UI.
+It does not cover (and the UI must not imply it does): outbound network flows,
+UDP connection history, process execution ancestry or command lines, memory
+capture, executable signature or CVE checks, container internals.
 
 ---
 
-## 2. Architecture / pipeline
+## 2. How reports reach BlackWatch
+
+Two transports, chosen per host with `BLACKWATCH_TRANSPORT`. The agent and the
+installer both default to `sqs`; set `https` to use direct delivery.
 
 ```
-   ┌──────────────────────┐                                 ┌─────────────────────────┐
-   │  EC2 instance        │                                 │  BlackWatch             │
-   │                      │                                 │  (Docker / Lightsail)   │
-   │  ec2_agent.py        │   sqs:SendMessage               │                         │
-   │  ──────────────┐     │   (instance role)               │  aws_sqs.drain()        │
-   │   collectors   │     │ ─────────────────────────────►  │   │                     │
-   │   journalctl   │     │   queue: blackwatch-ec2-agents  │   ▼                     │
-   │   heartbeat    │     │                                 │  Ec2HostAdapter         │
-   │   metrics      │     │                                 │   │                     │
-   │  ──────────────┘     │                                 │   ▼                     │
-   │   ▲ watchdog ping    │                                 │  pipeline.ingest_payload│
-   │  systemd notify      │                                 │   │                     │
-   │                      │                                 │   ▼                     │
-   └──────────────────────┘                                 │  events table +         │
-                                                            │  hosts projection       │
-                                                            │  /hosts page            │
-                                                            └─────────────────────────┘
+EC2 host                                         BlackWatch (Lightsail, Docker)
+ec2_agent.py ── HTTPS  POST /api/agent/v1/reports ──► app: validate + durably admit
+  (https)        Bearer per-agent token, 202 ack         to the ingress spool volume
+                                                          │
+                                                          ▼
+                                              agent-worker container drains the spool
+                                                          │
+ec2_agent.py ── SQS SendMessage ──► queue blackwatch-ec2-agents
+  (sqs)         (instance role)        │
+                                       ▼
+                         app: aws_sqs connector (target_module=ec2.host)
+                                                          │
+                                                          ▼
+                          Ec2HostAdapter → rules → events table → hosts projection
+                                                          │
+                                                          ▼
+                                                 notifications, /hosts, /fim
 ```
 
-Agents PUSH outbound to SQS (no inbound port open on the EC2). This is
-critical for internal-only boxes — they need full egress to reach SQS,
-but no inbound from the public internet ever.
-
----
-
-## 3. Files & paths
-
-### On the EC2 box (set up by `install-agent.sh`)
-
-| Path | Mode | Purpose |
+| | HTTPS (direct) | SQS |
 |---|---|---|
-| `/opt/blackwatch/ec2_agent.py` | `0755 root:root` | The agent script itself. Not a secret. |
-| `/opt/blackwatch/agent_transport.py` | `0644 root:root` | SQS/HTTPS transport implementation. Not a secret. |
-| `/opt/blackwatch/fim_engine.py` | `0644 root:root` | FIM engine module (v1.3+). Imported by `ec2_agent.py` at startup. |
-| `/etc/systemd/system/blackwatch-agent.service` | `0644 root:root` | systemd unit. Owns all env vars + sandboxing. |
-| `/etc/blackwatch-agent.env` | `0600 root:root` | Transport settings and the per-agent HTTPS token. |
-| `/etc/sysctl.d/99-blackwatch-agent.conf` | `0644 root:root` | Bumps `fs.inotify.max_user_watches` for FIM Part 2. |
-| `/etc/audit/rules.d/bw_fim.rules` | `0640 root:root` | Audit rules for FIM Part 3 whodata. Loaded by auditd. |
-| `/var/lib/blackwatch-agent/` | `0700 root:root` | Spool parent. Locked at install time. |
-| `/var/lib/blackwatch-agent/spool/` | `0700 root:root` | Created on first send failure. Files are `0600`. |
-| `/var/lib/blackwatch-agent/spool/<unix-ms>.json` | `0600 root:root` | One spooled report. JSON, gzipped if grown. |
-| `/var/lib/blackwatch-agent/fim/` | `0700 root:root` | FIM state directory. |
-| `/var/lib/blackwatch-agent/fim/baseline.db` | `0600 root:root` | SQLite (WAL) holding per-path hash + metadata. Shared by all three FIM threads. |
-| systemd journal (`journalctl -u blackwatch-agent`) | n/a | All agent stdout/stderr lands here. |
+| Acknowledged when | the report is durably written to BlackWatch's own spool | the queue accepted the message |
+| Credential | per-agent bearer token | instance IAM role (`sqs:SendMessage` to one queue) |
+| Size handling | bulk reports are gzipped; a report over 1 MiB (JSON, before compression) is rejected by the server, and the agent will not send a body over 1 MiB; no field dropping | body limited to 256 KiB; the agent drops fields to fit (section 6.4) |
+| Server side | `agent-worker` container | scheduler thread in the `app` container, about every 60 s |
+| Duplicate handling | one receipt per (agent, report id) | event ids deduplicate on insert |
 
-### In the BlackWatch repo
+The two containers process events independently. `rules/` and
+`notifications.yaml` are mounted read-only into both, so restart both
+`app` and `agent-worker` after editing them.
 
-| Path | Purpose |
+To roll a host back to SQS, set `BLACKWATCH_TRANSPORT=sqs` with the queue URL
+in `/etc/blackwatch-agent.env` and restart the unit. Neither the agent spool nor
+the server ingress volume is touched.
+
+---
+
+## 3. What a report contains
+
+The agent builds a **heartbeat report every `INTERVAL` seconds** (default 60)
+and a **critical report every `CRITICAL_INTERVAL_SEC` seconds** (default 2),
+the latter only when there are OOM events or FIM changes to send.
+
+Every report carries: `kind=ec2_report`, `report_schema_version=2`, `host`
+(instance id from IMDS, hostname, account, region, optional tags),
+`agent_id` (the instance id), `boot_id`, a persistent monotonic `sequence`
+(stored in `/var/lib/blackwatch-agent/sequence`), `report_id`, `collected_at`,
+`sent_at` (set once, never rewritten on replay), `transport`, `rollout`,
+`agent_version`, `uptime_seconds`, `collector_status`, `priority_counts` and
+`tick_duration_ms`.
+
+Heartbeat reports add:
+
+| Field | Source |
 |---|---|
-| `scripts/ec2_agent.py` | Source-of-truth for the agent. Pushed to each EC2's `/opt/blackwatch/`. |
-| `scripts/fim_engine.py` | FIM engine — periodic + inotify + auditd threads. Pushed alongside `ec2_agent.py`. |
-| `deploy/ec2/install-agent.sh` | Idempotent installer. Sets up systemd unit, sysctl, audit rules. |
-| `deploy/ec2/setup.ps1` | One-time AWS bootstrap (creates SQS queue, IAM policies). |
-| `deploy/ec2/blackwatch-ec2-agent-send-policy.json` | Minimal IAM policy: `sqs:SendMessage` to the one queue. |
-| `deploy/ec2/README.md` | Quick-start (5 min). |
-| `blackwatch/modules/ec2_host.py` | Adapter that converts the JSON payload into BlackWatch Events (incl. `host.fim.*`). |
-| `blackwatch/hosts/projection.py` | Stateful read-model — last-seen, staleness, snapshot diffs, FIM baseline + history + coverage. |
-| `blackwatch/hosts/diff.py` | Snapshot diffing — what changed since last snapshot. |
-| `blackwatch/connectors/aws_sqs.py` | Generic SQS poller. `target_module=ec2.host` routes to the adapter. |
-| `blackwatch/sql/014_fim.sql`, `015_fim_inotify.sql`, `016_fim_whodata.sql`, `017_fim_path_stats.sql` | FIM read-model migrations. Additive — apply in order. |
-| `docs/ec2-agent.md` | **This file** — the agent overall. |
-| `docs/fim.md` | The deep-dive FIM reference. |
+| `memory` | `/proc/meminfo`: total, available, used kB, used % |
+| `cpu` | `/proc/loadavg` and `/proc/cpuinfo`: 1/5/15 min load, CPU count, load normalised by CPU count, and utilisation % where available |
+| `active_sessions` | `who --ips` (falls back to `who`) |
+| `oom_events` | `journalctl -k` OOM-killer lines |
+| `rpm_db_corrupted` | stale `/var/lib/rpm/__db.*` lock files with no live rpm/yum/dnf process (RPM hosts only) |
+| `stalled_collectors`, `collector_errors` | derived from collector state |
+| `auth_events` | sshd and sudo journal lines (section 5) |
+| `fim_changes`, `fim_coverage` | the FIM engine (section 7) |
+| `snapshots` | collector output, see below |
+
+**Snapshots** ship when any diffable collector's output changed, and at least
+every 5 minutes (the process inventory refresh). Processes are not part of the
+change hash.
+
+**Priority**: a report with any OOM or FIM change is `critical`; everything
+else is `bulk`. Critical reports are sent and replayed first.
 
 ---
 
-## 4. Configuration (environment variables)
+## 4. Collectors
 
-All set in the systemd unit's `Environment=` lines (read at startup; restart
-the unit to apply changes).
+Each collector has its own cadence (seconds, overridable, section 9) and
+reports `ok`, `error` or `pending` with last attempt, last success, age and
+error in `collector_status`. A collector is **stalled** once it has succeeded
+before but not within 3 x its interval. A cached result stays visible after a
+failure, with its age and error shown separately.
 
-### Transport selection
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `BLACKWATCH_TRANSPORT` | `sqs` | Selects `sqs` for compatibility or `https` for direct BlackWatch admission. |
-| `BLACKWATCH_INGEST_URL` | unset | HTTPS endpoint, normally `https://<host>/api/agent/v1/reports`. Required for `https`. |
-| `BLACKWATCH_AGENT_TOKEN` | unset | Token scoped to this agent. Required for `https`; stored in `/etc/blackwatch-agent.env` mode `0600`. |
-
-### Required for SQS mode
-
-| Variable | Example | Purpose |
-|---|---|---|
-| `BLACKWATCH_SQS_URL` | `https://sqs.us-west-1.amazonaws.com/095899260107/blackwatch-ec2-agents` | The queue. Validated by regex at startup — refuses bad shapes. |
-
-### Common overrides
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `AWS_REGION` | from IMDS | SQS queue region. Almost always same as the instance. |
-| `INTERVAL` | `60` | Tick interval in seconds. Also drives the `auth_events` lookback (`INTERVAL + 120`). |
-| `CRITICAL_INTERVAL_SEC` | `2` | Maximum polling interval for critical FIM/OOM reports. Tune from measured CPU and acceptance latency. |
-| `BLACKWATCH_ROLLOUT` | `unclassified` | Non-secret rollout label recorded with delivery metrics, e.g. `phase3-canary`. |
-| `BLACKWATCH_TAGS` | `""` | `k=v,k=v` pairs stamped onto every event's extras. E.g. `env=prod,role=api`. Used for routing rules. |
-| `SPOOL_DIR` | `/var/lib/blackwatch-agent` | Parent of `spool/`. |
-| `SPOOL_MAX_FILES` | `5000` | Hard cap. Oldest files deleted when exceeded. |
-| `SPOOL_MAX_BYTES` | `100*1024*1024` (100 MB) | Hard byte cap. Oldest files deleted when exceeded. |
-
-To use direct HTTPS on a canary, install with `BLACKWATCH_TRANSPORT=https`,
-`BLACKWATCH_INGEST_URL`, and that agent's token. The server maps tokens with
-`BLACKWATCH_AGENT_TOKENS=instance-id:token` and binds the credential to the
-report's `agent_id`. The endpoint acknowledges only after durable server-side
-spool persistence. Set `BLACKWATCH_TRANSPORT=sqs` and restart the service to
-roll back without deleting local or server data.
-
-### FIM (Part 1 / 2 / 3)
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `COLLECT_FIM_SEC` | `21600` (6h) | Periodic baseline scan interval. Lower = faster drift detection + more CPU at scan time. |
-| `BLACKWATCH_FIM_DISABLED` | `""` (off) | Set to `1` / `true` / `yes` to disable FIM entirely. The agent still ships heartbeat + auth + snapshots; FIM threads don't start. |
-| `BLACKWATCH_FIM_EXTRA_FILES` | `""` | Comma-separated paths to ADD to the per-file FIM watch (e.g. `/etc/redis/redis.conf,/etc/postgresql/postgresql.conf`). Merged with defaults. |
-| `BLACKWATCH_FIM_EXTRA_DIRS` | `""` | Comma-separated dirs to ADD to the recursive FIM watch (e.g. `/etc/nginx,/etc/letsencrypt`). |
-
-### Per-collector cadence (only override if you know why)
-
-| Variable | Default (sec) | Collector |
-|---|---|---|
-| `COLLECT_PORTS_SEC` | 60 | listening sockets |
-| `COLLECT_PROCESSES_SEC` | 60 | process table (visibility-only, non-diffable) |
-| `COLLECT_PROCESSES_REPORT_SEC` | 300 | maximum process inventory send interval |
-| `COLLECT_DISK_SEC` | 60 | per-mount fill |
-| `COLLECT_USERS_SEC` | 120 | `getent passwd` |
-| `COLLECT_AUTHORIZED_KEYS_SEC` | 120 | `~/.ssh/authorized_keys` per user |
-| `COLLECT_SUDOERS_SEC` | 120 | `/etc/sudoers` + `/etc/sudoers.d/*` hashes |
-| `COLLECT_CRITICAL_FILES_SEC` | 120 | FIM on `/etc/passwd`, `/etc/shadow`, `sshd_config`, etc. |
-| `COLLECT_CRON_SEC` | 120 | `/etc/cron.*`, `/var/spool/cron` |
-| `COLLECT_PACKAGES_SEC` | 3600 | `rpm -qa` or `dpkg-query` |
-| `COLLECT_SYSTEMD_UNITS_SEC` | 600 | enabled and active service+timer units |
-| `COLLECT_SUID_SEC` | 600 | `find / -perm -4000` (scoped) |
-| `COLLECT_KERNEL_MODULES_SEC` | 600 | `lsmod` |
-
----
-
-## 5. What gets collected
-
-### Collectors (cadence-driven, diff against last snapshot)
-
-| Collector | Cadence | Diffable | What it captures |
+| Collector | Every | Diffable | What it captures |
 |---|---|---|---|
-| `ports` | 60s | ✓ | `ss -tulnp` — TCP and UDP listener, address, port, binding process |
-| `processes` | 60s collect / 300s send | ✗ | `ps -eo user,pid,comm` — user, PID, executable name; **no command-line arguments** |
-| `disk` | 60s | ✓ | `df -PT` + `df -Pi` — per-mount byte and inode fill, skips pseudo filesystems |
-| `users` | 120s | ✓ | Name, UID, shell, interactive/system classification, groups, sudo/wheel membership, and separately labeled password/account status. “Human or local” is a heuristic classification, not identity proof. |
-| `authorized_keys` | 120s | ✓ | Per-user keys → `{user, OpenSSH SHA256 fingerprint, type}`. Fingerprint hashes only the key blob; no key body or comment is sent. |
-| `sudoers` | 120s | ✓ | SHA256 of `/etc/sudoers` + each `/etc/sudoers.d/*` |
-| `critical_files` | 120s | ✓ | SHA256 of `/etc/passwd`, `/etc/shadow`, `sshd_config`, `hosts`, `resolv.conf`, `pam.d/{sshd,sudo,openvpn}`, `crontab` |
-| `cron` | 120s | ✓ | SHA256 of `/etc/crontab`, `/etc/cron.{d,hourly,daily,weekly,monthly}/*`, `/var/spool/cron/*` |
-| `packages` | 3600s | ✓ | Installed package names, retained as supporting context |
-| `package_details` | 3600s | ✓ | Package versions; RPM install times where available, otherwise explicitly unavailable. Not CVE, publisher, or signature verification. |
-| `policy_summaries` | 120s | ✓ | Allowlisted SSH daemon directives and counts of active sudo/cron entries. Never sends file text or scheduled commands. |
-| `systemd_units` | 600s | ✓ | Enabled unit files, active services/timers, and running services as separate sets |
-| `suid` | 600s | ✓ | `find /usr /opt /bin /sbin -xdev -perm -4000 -type f`; failures or partial output are surfaced, not treated as complete inventory |
-| `kernel_modules` | 600s | ✓ | Sorted set of loaded modules from `lsmod` |
+| `ports` | 60 | yes | `ss -tulnp` (falls back to `ss -tuln`): TCP and UDP listeners with protocol, address, port, process |
+| `processes` | 60, sent every 300 | no | `ps -eo user,pid,comm`: user, PID, command name. **No arguments.** |
+| `disk` | 60 | yes | `df -P -T` and `df -P -i`: byte and inode fill per mount, pseudo filesystems skipped, separate sample times |
+| `users` | 120 | yes | `getent passwd/group/shadow`: name, UID, shell, interactive flag, groups, sudo/wheel membership, password state (`locked`, `no_password`, `password_set`, `unknown`), account class (`system` or `human_or_local`, a UID and shell heuristic, not identity proof). Password hashes are never sent. |
+| `authorized_keys` | 120 | yes | `/home/*/.ssh` and `/root/.ssh`: user, key type, OpenSSH SHA256 fingerprint of the key blob. No key body or comment. |
+| `sudoers` | 120 | yes | SHA256 of `/etc/sudoers` and each `/etc/sudoers.d/*` |
+| `critical_files` | 120 | yes | SHA256 of `/etc/passwd`, `group`, `shadow`, `gshadow`, `ssh/sshd_config`, `hosts`, `resolv.conf`, `pam.d/sshd`, `pam.d/sudo`, `pam.d/openvpn`, `crontab` |
+| `cron` | 120 | yes | SHA256 of `/etc/crontab`, `/etc/cron.{d,hourly,daily,weekly,monthly}/*`, `/var/spool/cron/*` |
+| `policy_summaries` | 120 | yes | Allowlisted sshd directives (`passwordauthentication`, `pubkeyauthentication`, `permitrootlogin`, `permitemptypasswords`, `maxauthtries`, `x11forwarding`, `allowagentforwarding`, `allowtcpforwarding`, `clientaliveinterval`, `clientalivecountmax`) and counts of active sudo and cron entries. Never file text or scheduled commands. |
+| `packages` | 3600 | yes | Installed package names (`rpm -qa` or `dpkg-query`) |
+| `package_details` | 3600 | yes | Versions; RPM install time where the database has it, otherwise marked unavailable. Not a vulnerability, publisher or signature check. |
+| `systemd_units` | 600 | yes | Enabled unit files, active services and timers, and running services as three separate sets |
+| `suid` | 600 | yes | `find /usr /opt /bin /sbin -xdev -perm -4000 -type f` (30 s timeout). A failed or partial scan is reported as a collector error and never replaces a complete inventory. |
+| `kernel_modules` | 600 | yes | Sorted module names from `lsmod` |
 
-**Snapshots only ship when something changed** (hash of all diffable
-collectors). Forced full resync every 1 hour even if unchanged.
-
-Every report includes `report_schema_version: 2` and a `collector_status`
-object. Each collector records state (`ok`, `error`, or `pending`), cadence,
-last attempt, last success, age since success, and current error. A cached
-snapshot can remain visible after a transient failure, with its age and error
-shown separately. Ingress continues accepting unversioned/v1 queued reports.
-
-Disk rows include separate byte and inode sample times. FIM rows label the
-detection source and actor confidence; auditd attribution is best-effort, and
-full process command lines (`PROCTITLE`) are ignored because they can contain
-secrets.
-
-The server keeps both cumulative historical sequence gaps and unresolved
-sequence gaps. Urgent reports can overtake bulk reports during spool replay;
-a late report resolves its matching gap. Tracking is bounded and overflow is
-shown as uncertainty rather than exact loss.
-
-The agent no longer collects process command-line arguments, and the server no
-longer emits `host.process.first_seen` from ordinary process inventory. Existing
-historical event and snapshot records are retained.
-
-### Always-on heartbeat fields (every tick)
-
-| Field | Source | Purpose |
-|---|---|---|
-| `memory` | `/proc/meminfo` | total/available/used kB + used % |
-| `cpu` | `/proc/loadavg` + `/proc/cpuinfo` | 1/5/15-min load, CPU count, load normalized by CPU count |
-| `active_sessions` | `who --ips` (fallback `who`) | currently logged-in interactive sessions, with source IP for SSH |
-| `oom_events` | `journalctl -k` | OOM-killer entries from kernel ring buffer |
-| `rpm_db_corrupted` | `/var/lib/rpm/__db.*` + `pgrep` | Stale lock files w/o live rpm process → DB stuck |
-| `stalled_collectors` | derived | Collectors that succeeded once but not within `3 * interval` |
-| `collector_errors` | derived | Last error per failing collector |
-| `tick_duration_ms` | timer | How long this tick took. Watchdog signal. |
-
-### Journal events (sshd + sudo)
-
-Read every tick with overlap window `INTERVAL + 120s`. Deterministic
-event IDs via journal `__CURSOR` → dedup at insert.
-
-SSH messages are conservatively scrubbed before shipping. Sudo messages are
-reduced to the user, target account, and executable; command arguments, TTY,
-and working directory are omitted because regex scrubbing cannot guarantee
-their safety. `__CURSOR` and `__REALTIME_TIMESTAMP` are preserved so overlap
-deduplication and event time remain reliable. The adapter stores only the
-reduced event fields, not the complete journal record.
+RPM and DPKG hosts are auto-detected.
 
 ---
 
-## 6. Events emitted (BlackWatch-side)
+## 5. SSH and sudo events
 
-The `Ec2HostAdapter` converts each payload into one or more normalized
-events. Action names you'll see in `/events`:
+The agent reads `sshd` and `sudo` lines from the journal every heartbeat over an
+overlapping window of `INTERVAL + 120` seconds, so a missed tick loses nothing.
+Journal `__CURSOR` and timestamp are kept; the adapter derives a deterministic
+event id from the cursor (`host-auth:<instance>:<cursor>`), so re-reads dedupe.
 
-| Action | Trigger | Notes |
-|---|---|---|
-| `host.service.health` | every heartbeat | Drives `host_status` read model. Always emitted. |
-| `host.state.snapshot` | when snapshots shipped | Diff is computed in projection. Capped at 512 KB body. |
-| `host.state.snapshot.rejected` | snapshot > 512 KB | Synthetic event so operator sees something went wrong instead of silently dropping. |
-| `host.auth.ssh.success` | `Accepted publickey for ec2-user from …` | One per match. `actor.principal=user`, `actor.source_ip=ip`. |
-| `host.auth.ssh.failure` | `Failed publickey for …` OR `Invalid user …` | Includes `extra.reason=invalid_user` for the latter. |
-| `host.sudo.exec` | `sudo: user : COMMAND=...` | `extra.command` contains only the executable path/name; arbitrary arguments are omitted. |
-| `host.sudo.failure` | `authentication failure`, `NOT in the sudoers`, etc. | |
-| `host.oom_kill` | matched kernel OOM message | Includes truncated kernel message. Severity `failure`. |
+- **SSH** messages are pattern-scrubbed (section 10.3). Scrubbing reduces
+  accidental exposure; it cannot guarantee arbitrary log text is clean, so only
+  parsed access fields are kept.
+- **Sudo** records are reduced to acting user, target account and executable.
+  Arguments, TTY and working directory are dropped before transport.
+- The normalised event keeps action, outcome, user, source IP and method, plus
+  cursor and time. The original journal message is not stored in the event.
 
-Diff-derived events (emitted by `hosts/projection.py`, not the adapter):
+---
 
+## 6. Delivery and reliability
+
+### 6.1 Agent spool
+If a send is not accepted, the report is written to
+`/var/lib/blackwatch-agent/spool/<priority>-<unix-ms>-<uuid>.json` (mode `0600`,
+directories `0700`). On the next send the spool is replayed first, critical
+files before bulk, oldest first. Caps: `SPOOL_MAX_FILES` (5000) and
+`SPOOL_MAX_BYTES` (100 MiB); when exceeded the oldest files are deleted, so an
+outage can never fill the disk.
+
+### 6.2 Backoff
+After 3 consecutive failures the agent sleeps `30 x floor((failures - 1) / 3)`
+seconds after each further failure, capped at 300 (failures 4-6: 30 s,
+7-9: 60 s, 10-12: 90 s, 13-15: 120 s, and so on). The counter resets on the first
+accepted send.
+
+### 6.3 HTTPS admission (server side)
+`POST /api/agent/v1/reports` authenticates the bearer token against
+`BLACKWATCH_AGENT_TOKENS`, validates the report, and writes it to the ingress
+spool before answering `202 {accepted, duplicate, ack_id, accepted_at}`.
+The token is bound to the report's `agent_id`; a mismatch is rejected.
+
+| Status | Meaning |
+|---|---|
+| 401 | missing or wrong token |
+| 413 / 422 | body too large, or invalid report (schema, timestamps, identity mismatch) |
+| 429 | admission spool is at capacity (`Retry-After: 5`) |
+| 503 | the spool volume is unavailable |
+
+The agent counts any non-2xx answer as a failure, spools the report, and uses
+its own backoff (it does not read `Retry-After`).
+
+The `agent-worker` container claims one report at a time (it polls every
+second when idle). Spool folders: `incoming`, `processing`, `retry`,
+`quarantine`. A processing failure moves the report to `retry` after
+`min(300, 5 x 2^min(attempts, 6))` seconds; a report that fails validation goes to
+`quarantine`; a claim lease lasts 300 s. Reports are deduplicated per
+(agent id, report id). Defaults: 10,000 files, 1 GiB, and 1 MiB per report (checked on the compressed body and again on the decompressed JSON).
+
+### 6.4 SQS size cap
+Only on the SQS transport the agent trims a report to 240,000 bytes: it drops
+`snapshots.suid`, `systemd_units`, `packages`, `kernel_modules`, `cron`, then
+`processes`, then the whole `snapshots` block, then halves `fim_changes`, then
+drops `auth_events`. What was dropped is listed in `payload.truncated`, shown in
+BlackWatch as `extra.adapter_truncated`, and as `trunc=...` in the agent log.
+The SQS queue keeps messages 24 hours and moves a message to
+`blackwatch-ec2-agents-dlq` after 5 failed receives.
+
+### 6.5 Sequence and delivery tracking
+Each report has a per-agent `sequence` and `boot_id`. BlackWatch records
+acceptance and processing times separately from the agent's own timestamps, so
+queue delay and ingest delay are never mistaken for an agent outage. It keeps
+cumulative historical gaps and a bounded list (256 ranges) of currently missing
+sequences; a late report resolves its gap, and overflow is shown as
+"data-loss risk" rather than exact loss.
+
+Delivery state per agent: `data_loss_risk` (gaps or overflow), `silent` (nothing
+accepted for 180 s), `processing_delayed` or `delivery_delayed` (over 60 s),
+`collector_degraded`, `healthy`. Where to look: the **Agent ingestion** block under Collection diagnostics on
+`/hosts` (accept p95, processing p95, retrying, quarantined), and the API
+`GET /api/agents/ingress` (HTTPS receipts and spool state) and
+`GET /api/agents/delivery`.
+
+---
+
+## 7. File integrity monitoring (FIM)
+
+FIM is part of the agent: three threads in `fim_engine.py` sharing one local
+SQLite baseline (`/var/lib/blackwatch-agent/fim/baseline.db`, WAL mode,
+guarded by a lock). It needs no separate daemon.
+
+### 7.1 What is watched
+
+`critical_files` (exact files): `/etc/passwd`, `shadow`, `group`, `gshadow`,
+`sudoers`, `login.defs`, `ssh/sshd_config`, `hosts`, `hosts.allow`,
+`hosts.deny`, `resolv.conf`, `crontab`, `nsswitch.conf`, `pam.conf`, `profile`,
+`bashrc`, `environment`.
+
+`critical_dirs` (recursive, plus real-time): `/etc/ssh/sshd_config.d`,
+`/etc/sudoers.d`, `/etc/pam.d`, `/etc/security`, `/etc/cron.d`, `cron.hourly`,
+`cron.daily`, `cron.weekly`, `cron.monthly`, `/etc/systemd/system`,
+`/etc/profile.d`, `/root/.ssh`.
+
+`binary_dirs` (periodic scan only): `/bin`, `/sbin`, `/usr/bin`, `/usr/sbin`,
+`/usr/local/bin`, `/usr/local/sbin`.
+
+Never traversed: `/proc`, `/sys`, `/dev`, `/run`, `/var/run`, `/var/log`,
+`/var/cache`, `/var/tmp`, `/tmp`, `/var/lib/blackwatch-agent`. Files over
+50 MB are not hashed. At most 1000 changes are queued per scan; beyond that a
+single `<<truncated>>` marker change is emitted.
+
+Add paths per host with `BLACKWATCH_FIM_EXTRA_FILES` and
+`BLACKWATCH_FIM_EXTRA_DIRS` (comma separated, merged with the defaults).
+
+### 7.2 Detection paths
+
+1. **Periodic baseline scan.** First scan 15 s after start, then every
+   `COLLECT_FIM_SEC` (6 h). Hashes every configured path, compares with the
+   baseline (hash, size, mode, uid, gid) and reports `modified`,
+   `perm_changed`, `owner_changed`, `created`, or `deleted` (baseline rows in
+   scope that were not walked). A file with no baseline row is reported
+   `created`, so the first scan after install reports every monitored file as
+   created.
+2. **Real-time inotify** (needs the `inotify_simple` package, which the
+   installer adds). Watches `critical_files`, `critical_dirs` and one level of
+   their subdirectories, not `binary_dirs`. Events: modify, create, delete,
+   attrib, moved to/from, delete-self, move-self. A 200 ms per-path debounce
+   turns one editor save into one change.
+3. **Whodata via auditd.** The installer writes `/etc/audit/rules.d/bw_fim.rules`
+   (`-w <path> -p wa -k bw_fim`) for: `/etc/passwd`, `shadow`, `group`,
+   `gshadow`, `sudoers`, `sudoers.d`, `ssh/sshd_config`, `sshd_config.d`,
+   `pam.d`, `security`, `login.defs`, `crontab`, `cron.d`, `cron.hourly`,
+   `cron.daily`, `cron.weekly`, `cron.monthly`, `systemd/system`, `hosts`,
+   `hosts.allow`, `hosts.deny`, `/root/.ssh`. **Whodata therefore does not cover**
+   `resolv.conf`, `nsswitch.conf`, `pam.conf`, `profile`, `profile.d`, `bashrc`,
+   `environment`, or any extra path you add. The reader tails
+   `/var/log/audit/audit.log`, keeps the writer's `uid, gid, euid, egid, pid,
+   ppid, comm, exe, tty`, and attaches it to a change only if the audit record
+   is within 2 s (4096-entry cap). `PROCTITLE` (the full command line) is
+   ignored because it can contain secrets. Attribution is best effort: a missing
+   actor means "unknown", never "no one did it". It is almost always absent on
+   periodic-scan changes, which are found long after the write.
+
+If `inotify_simple`, auditd or the audit log is missing, the matching thread
+logs once and stops; the rest keeps working. `BLACKWATCH_FIM_DISABLED=1` turns
+FIM off entirely.
+
+### 7.3 Event shape
+Action `host.fim.{created,modified,deleted,perm_changed,owner_changed}` with
+`extra`: `path`, `change_type`, `sha256_before/after`, `size_before/after`,
+`perm_before/after`, `owner_before/after`, `detection` (`baseline`, `inotify`
+or `auditd`), `detection_source`, `actor_confidence` (`best_effort` or
+`unknown`), and `actor` (`uid, gid, pid, comm, exe`) when attribution hit. The
+event's top-level actor principal is `"<comm> uid=<uid>"` when known. The event
+id is deterministic (path, change, new hash, detection time), so re-shipped
+reports do not duplicate.
+
+`host.fim.coverage` rides on every heartbeat, updates the coverage table, and
+is never stored as an event.
+
+### 7.4 Storage
+Migrations `014` to `017` (additive): `fim_baselines` (current known state per
+instance and path, only for paths that have changed), `fim_history`
+(append-only log: change fields, `detection`, `actor_uid/gid/pid/comm/exe`; the
+`actor_proctitle` column exists but is no longer filled), and `fim_coverage`
+(per host: paths configured, files tracked, last scan time and duration, scan
+errors, inotify and auditd state and watch count, `configured_paths`,
+`path_stats`).
+
+### 7.5 Detection rules (`rules/host.yaml`)
+| Rule | Severity |
+|---|---|
+| sudoers changed (`host-fim-sudoers-changed`), non-root edit of a critical file, system binary modified by an editor (vim, vi, nano, emacs, ed) | critical |
+| sshd_config, authorized_keys, PAM, cron, system binary modified | high |
+| systemd unit changed, generic modified, perm changed, owner changed | medium |
+| created, deleted | low |
+
+`host.file.changed` (the `critical_files` hash collector) is a separate,
+slower signal at high severity.
+
+### 7.6 UI
+`/fim` lists every host with FIM data (files, paths, real-time and whodata
+state, last scan) and recent changes across hosts. `/fim/<instance id>` shows
+that host's coverage, monitored paths with file counts, recent changes, stray
+baselines (baseline rows outside any configured path) and the configuration
+how-to. Any event opens in `/events/<event id>`.
+
+---
+
+## 8. What BlackWatch derives
+
+### 8.1 From the adapter (`Ec2HostAdapter`)
+| Action | When |
+|---|---|
+| `host.service.health` | every heartbeat; feeds the host read model; not stored as an event |
+| `host.state.snapshot` | when snapshots ship; capped at 512 KB, not stored as an event |
+| `host.state.snapshot.rejected` | a snapshot over 512 KB (the heartbeat is kept) |
+| `host.auth.ssh.success`, `host.auth.ssh.password.success`, `host.auth.ssh.failure` | SSH log lines (`reason=invalid_user` for unknown users) |
+| `host.sudo.exec`, `host.sudo.failure` | sudo log lines |
+| `host.oom_kill` | kernel OOM lines |
+| `host.fim.*` | FIM changes (section 7) |
+
+### 8.2 From the host projection
 | Action | Trigger |
 |---|---|
-| `host.authorized_key.added` / `removed` | diff between snapshots |
-| `host.user.added` / `removed` | diff in `users` collector |
-| `host.sudoers.changed` | sudoers hash change |
-| `host.port.opened` / `closed` | diff in `ports` collector |
-| `host.suid.added` / `removed` | diff in SUID set |
-| `host.cron.added` / `removed` / `changed` | diff in cron files |
-| `host.file.changed` | critical_files hash change |
-| `host.service.added` / `removed` | diff in systemd units |
-| `host.packages.changed` | diff in package set |
-| `host.agent.stale` | no heartbeat in 3× interval |
-| `host.agent.recovered` | heartbeat returns after staleness |
-| `host.collector.stalled` | individual collector hasn't succeeded in 3× its interval |
+| `host.first_seen` | first report from an instance |
+| `host.agent.stale` / `host.agent.recovered` | no report received for 180 s (server receive time) / reports resume |
+| `host.collector.stalled` / `host.collector.recovered` | a collector missed 3 x its interval / recovered |
+| `host.memory.exhausted` / `host.memory.recovered` | used memory at or above 95 % / below 90 % |
+| `host.cpu.anomaly` / `host.cpu.normal` | normalised load above the host's own mean + 3 standard deviations, at least 0.5, for 10 consecutive samples (needs 60 samples first) / 5 normal samples |
+| `host.disk.warn`, `host.disk.critical`, `host.disk.recovered` | per mount, bytes or inodes: warn at 90 %, critical at 95 %, recovered below 85 % (the event says which) |
+| `host.package_db.corrupted` / `.recovered` | the RPM lock-file check |
+| `host.authorized_key.added/removed`, `host.user.added/removed/changed`, `host.sudoers.changed`, `host.cron.changed`, `host.file.changed`, `host.port.opened/closed`, `host.suid.added/removed`, `host.service.added/removed`, `host.kernel.module.added/removed`, `host.packages.changed` | snapshot differences |
+| `host.bruteforce`, `host.bruteforce.user` | 5 failed SSH logins in 5 minutes from one IP / against one user |
 
-FIM events (emitted by the new `fim_engine.py` threads):
+Host heartbeats also feed the performance-alert rules (memory, CPU
+utilisation, worst disk) configured under Notifications.
 
-| Action | Trigger | Severity (default) |
-|---|---|---|
-| `host.fim.created` | new file appeared in a watched path | low |
-| `host.fim.modified` | content changed (sha256 differs) | medium · upgraded by per-path rules for sudoers / sshd_config / etc. |
-| `host.fim.deleted` | watched file removed | low |
-| `host.fim.perm_changed` | mode bits changed | medium |
-| `host.fim.owner_changed` | uid/gid changed | medium |
-| `host.fim.coverage` | per-heartbeat coverage stats | n/a — projection-only, never stored |
-
-Every FIM event carries `extra.detection ∈ {baseline, inotify, auditd}` plus
-(when audit caught it) `extra.actor = {uid, gid, pid, comm, exe, proctitle}`.
-See [`docs/fim.md`](fim.md) for the full event shape, all detection rules,
-and the UI surfaces (`/fim`, `/fim/<id>`).
+### 8.3 Default severities (`rules/host.yaml`)
+- **critical**: `host.disk.critical`, plus the critical FIM rules above.
+- **high**: `host.agent.stale`, SSH root login, SSH brute force (both), new
+  authorized key, sudoers changed, critical file changed, cron changed, new
+  SUID, kernel module added, OOM kill, memory exhausted, CPU anomaly, disk warn,
+  and the high FIM rules.
+- **medium**: sudo failure, SSH password login, new user, new listening port,
+  new systemd service, packages changed, kernel module removed, package DB
+  corrupted, collector stalled, and the medium FIM rules.
+- **low**: a single failed SSH login, FIM created and deleted.
+- **informational**: first seen, agent recovered, SSH key login, and the
+  recovery events.
 
 ---
 
-## 7. IAM (the only AWS permission the agent needs)
+## 9. Configuration
 
-`deploy/ec2/blackwatch-ec2-agent-send-policy.json`:
+### 9.1 Agent (`/etc/blackwatch-agent.env`)
+The installer writes: `BLACKWATCH_TRANSPORT`, `BLACKWATCH_SQS_URL`,
+`BLACKWATCH_INGEST_URL`, `BLACKWATCH_AGENT_TOKEN`, `AWS_REGION`, `INTERVAL`,
+`CRITICAL_INTERVAL_SEC`, `BLACKWATCH_ROLLOUT`, `BLACKWATCH_TAGS`, `PYTHONPATH`,
+`PYTHONUNBUFFERED`. Add any optional variable below to the same file (one
+`NAME=value` per line) and restart the unit.
 
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "BlackWatchAgentSendToQueue",
-      "Effect": "Allow",
-      "Action": "sqs:SendMessage",
-      "Resource": "arn:aws:sqs:REGION:ACCOUNT_ID:blackwatch-ec2-agents"
-    }
-  ]
-}
-```
+| Variable | Default | Purpose |
+|---|---|---|
+| `BLACKWATCH_TRANSPORT` | `sqs` | `sqs` or `https` |
+| `BLACKWATCH_INGEST_URL` | none | `https://<host>/api/agent/v1/reports`; required for `https` |
+| `BLACKWATCH_AGENT_TOKEN` | none | this agent's token; required for `https` |
+| `BLACKWATCH_SQS_URL` | none | queue URL; required for `sqs`. Must match `^https://sqs\.[a-z0-9-]+\.amazonaws\.com/\d{12}/[A-Za-z0-9_\-]{1,80}$` or the agent refuses to start |
+| `AWS_REGION` | from IMDS (installer: `us-west-1`) | SQS region |
+| `INTERVAL` | 60 | heartbeat seconds; also sets the auth lookback (`INTERVAL + 120`) |
+| `CRITICAL_INTERVAL_SEC` | 2 | how often to check for OOM and FIM changes |
+| `BLACKWATCH_ROLLOUT` | `unclassified` (installer: `phase3-canary`) | label stored with delivery metrics |
+| `BLACKWATCH_TAGS` | none | `k=v,k=v` stamped on every event (for routing) |
+| `SPOOL_DIR`, `SPOOL_MAX_FILES`, `SPOOL_MAX_BYTES` | `/var/lib/blackwatch-agent`, 5000, 100 MiB | local spool |
+| `COLLECT_FIM_SEC` | 21600 | FIM periodic scan |
+| `BLACKWATCH_FIM_DISABLED` | off | `1`, `true` or `yes` disables FIM |
+| `BLACKWATCH_FIM_EXTRA_FILES`, `BLACKWATCH_FIM_EXTRA_DIRS` | none | extra FIM paths |
+| `COLLECT_PORTS_SEC`, `COLLECT_PROCESSES_SEC`, `COLLECT_DISK_SEC` | 60 | collector cadence |
+| `COLLECT_PROCESSES_REPORT_SEC` | 300 | longest gap between process inventory sends |
+| `COLLECT_USERS_SEC`, `COLLECT_AUTHORIZED_KEYS_SEC`, `COLLECT_SUDOERS_SEC`, `COLLECT_CRITICAL_FILES_SEC`, `COLLECT_CRON_SEC`, `COLLECT_POLICY_SUMMARIES_SEC` | 120 | collector cadence |
+| `COLLECT_PACKAGES_SEC` | 3600 | packages and package details |
+| `COLLECT_SYSTEMD_UNITS_SEC`, `COLLECT_SUID_SEC`, `COLLECT_KERNEL_MODULES_SEC` | 600 | collector cadence |
 
-That's it. The agent can:
-- Send messages to ONE specific queue.
-
-It cannot:
-- Read from the queue
-- Delete messages
-- List queues
-- Touch S3, IAM, EC2, anything else
-
-Attach this policy to each EC2's instance role. If the role is missing or
-unattached, every `SendMessage` returns `AccessDenied` — the agent
-spools, backs off, and reports loudly in the journal. The install
-script's preflight (`aws sts get-caller-identity` + `sqs
-get-queue-attributes`) catches this at install time.
+### 9.2 Server (`app` and `agent-worker` containers)
+| Variable | Default | Purpose |
+|---|---|---|
+| `BLACKWATCH_AGENT_TOKENS` | none | `instance-id:token,instance-id:token`. The id must equal the agent's instance id. Loaded at startup, never returned by any API. |
+| `BLACKWATCH_AGENT_INGRESS_DIR` | `/app/data/agent-ingress` | admission spool (the `blackwatch_bw_agent_ingress` volume, separate from the database volume) |
+| `BLACKWATCH_AGENT_INGRESS_MAX_FILES` | 10000 | spool file cap |
+| `BLACKWATCH_AGENT_INGRESS_MAX_BYTES` | 1 GiB | spool size cap |
+| `BLACKWATCH_AGENT_INGRESS_MAX_REQUEST_BYTES` | 1 MiB | largest accepted report, compressed and decompressed |
+| `BLACKWATCH_AGENT_INGRESS_LEASE_SECONDS` | 300 | worker claim lease |
 
 ---
 
-## 8. Security model (the hardening)
+## 10. Install, upgrade, remove
 
-### 8.1 Privilege model
+### 10.1 Prerequisites
+A Linux instance (Amazon Linux 2 or 2023, Debian, Ubuntu), `python3`, `journald`,
+and outbound HTTPS to BlackWatch (HTTPS transport) or to
+`sqs.<region>.amazonaws.com` (SQS transport). The installer adds `pip3` if
+missing and installs `boto3>=1.28,<1.35` and `inotify_simple>=1.3,<2.0` into
+`/opt/blackwatch/python-packages` (so a system Python is never modified).
 
-The agent runs as **root**. Non-negotiable — it must:
+### 10.2 One-time setup per transport
 
-- Read `/etc/shadow` (FIM)
-- Read journald (any UID is fine if in `systemd-journal` group, but
-  shadow forces root)
-- Run `find` across `/usr /opt /bin /sbin` for SUID detection
-- Read `/root/.ssh/authorized_keys`
+**HTTPS.** Add `instance-id:token` pairs to `BLACKWATCH_AGENT_TOKENS` on the
+server (`.env` or compose) and recreate `app` and `agent-worker`.
 
-Since we can't drop privileges, we sandbox aggressively instead.
+**SQS.** From `deploy/ec2/` run `setup.ps1` (`$env:REGION="us-west-1"`). It
+creates the queue `blackwatch-ec2-agents` (24 h retention) and its DLQ
+(`maxReceiveCount` 5), creates the managed policy `blackwatch-ec2-agent-send`
+(`sqs:SendMessage` to that one queue, nothing else), and lets the
+`blackwatch-sqs-reader` user receive, delete and get attributes on it. Attach the
+send policy to each instance's role. Then in BlackWatch, **Connectors, Add
+connector, SQS connector**: target module `ec2.host`, the queue URL, the region;
+Test, then Enable.
 
-### 8.2 systemd sandboxing
-
-| Directive | Effect | Min systemd |
-|---|---|---|
-| `NoNewPrivileges=true` | Can't gain new privs via SUID/setcap binaries | 209 ✓ AL2 |
-| `ProtectSystem=full` | `/usr`, `/boot`, `/efi` read-only | 208 ✓ AL2 |
-| `ProtectHome=read-only` | `/home` read-only (need read for `~/.ssh/authorized_keys`) | 217 ✓ AL2 |
-| `PrivateTmp=true` | Private `/tmp` namespace | 199 ✓ AL2 |
-| `PrivateDevices=true` | No raw device access | 209 ✓ AL2 |
-| `SystemCallArchitectures=native` | Only this host's syscall ABI | 209 ✓ AL2 |
-| `SystemCallFilter=@system-service` | seccomp allowlist; blocks `bpf()`, raw sockets, obscure attack surface | 187 ✓ AL2 |
-| `RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK` | No raw sockets, no obscure socket families | 211 ✓ AL2 |
-| `WatchdogSec=180` | systemd kills + restarts if no `WATCHDOG=1` ping in 3 min | 209 ✓ AL2 |
-| **Below: silently ignored on AL2; auto-enable on AL2023 / Ubuntu 22.04** | | |
-| `ProtectKernelTunables=true` | `/proc/sys/*` and `/sys/*` read-only | 232 |
-| `ReadWritePaths=/var/lib/blackwatch-agent /var/log` | With `ProtectSystem=strict`, only these are writable | 231 |
-| `ProtectKernelModules=true` | Block module load/unload | 232 |
-| `ProtectControlGroups=true` | `/sys/fs/cgroup` read-only | 232 |
-| `ProtectClock=true` | Can't change wall clock | 245 |
-| `RestrictNamespaces=true` | Block namespace creation | 233 |
-| `RestrictRealtime=true` | No realtime scheduling | 231 |
-| `RestrictSUIDSGID=true` | Can't create SUID/SGID files | 242 |
-| `LockPersonality=true` | Personality syscall locked | 235 |
-| `LogRateLimitIntervalSec=10` / `LogRateLimitBurst=200` | A bug in the agent can't flood journald | 240 |
-
-### 8.3 Resource limits
-
-| Directive | Limit |
-|---|---|
-| `MemoryLimit=200M` | OOM-killed if exceeded |
-| `CPUQuota=20%` | Throttled if exceeded |
-| `TasksMax=64` | Process count cap |
-| `LimitNOFILE=1024` | Open file descriptor cap |
-| `Nice=10` | De-prioritized vs. workloads |
-
-### 8.4 Secret handling
-
-Sudo command arguments are not transmitted. SSH journal messages use the
-following pattern-based scrubber; this reduces accidental exposure but cannot
-guarantee that every sensitive value in arbitrary SSH log text is removed.
-
-| Pattern | Example match | Replaced with |
-|---|---|---|
-| `mysql -p` flag | `mysql -ppassword` | `mysql -p***` |
-| `--password=` / `--passwd=` / `--pass=` | `--password=secret` | `--password=***` |
-| `MYSQL_PWD=` / `PGPASSWORD=` | `PGPASSWORD=hunter2` | `PGPASSWORD=***` |
-| `--token=` / `--secret=` / `--api-key=` / `--apikey=` / `--key=` | `--token=ABC123` | `--token=***` |
-| Uppercase env-assigned secrets | `AWS_SECRET_KEY=xyz` | `AWS_SECRET_KEY=***` |
-| AWS access key ID | `AKIAIOSFODNN7EXAMPLE` | `AKIA****REDACTED****` |
-| `aws_secret_access_key=` | `aws_secret_access_key=xyz...` | `aws_secret_access_key=***` |
-| `Authorization: Bearer …` / `Basic …` | `Authorization: Bearer eyJabc.def` | `Authorization: Bearer ***` |
-
-False-positive risk: the broad uppercase pattern catches `LDAP_PASSWORD`,
-`MY_API_KEY`, etc. — desired. Doesn't match lowercase generic words.
-Because arbitrary sudo arguments are omitted, command-line quoting no longer
-affects sudo secret handling. Keep SSH event fields limited to parsed access
-details and avoid adding arbitrary message or command text to reports.
-
-### 8.5 Spool permissions
-
-| Path | Mode |
-|---|---|
-| `/var/lib/blackwatch-agent/` | `0700 root:root` (at install + at spool time) |
-| `/var/lib/blackwatch-agent/spool/` | `0700 root:root` |
-| `/var/lib/blackwatch-agent/spool/*.json` | `0600 root:root` (created with explicit `os.open(..., 0o600)`, umask-independent) |
-
-Contains: reduced SSH/sudo events, privacy-safe process inventory, snapshots. Even
-post-scrubbing, treat as sensitive — never `chmod` to anything else.
-
-### 8.6 SQS URL allowlist
-
-At startup, `BLACKWATCH_SQS_URL` is regex-checked against:
-
-```
-^https://sqs\.[a-z0-9-]+\.amazonaws\.com/\d{12}/[A-Za-z0-9_\-]{1,80}$
-```
-
-If it doesn't match, the agent refuses to start. This catches tampered
-systemd units that might point at an attacker-controlled queue. The IAM
-policy (queue ARN-scoped `SendMessage`) is the real defense; this is a
-fail-fast signal so the operator sees the misconfig in seconds, not via
-silently-spooled rejected sends.
-
-### 8.7 Payload size cap
-
-SQS message body limit is 256 KiB. The agent reserves 240 KiB headroom
-(`SQS_BODY_MAX_BYTES`). Pre-flight check on every send; if oversized,
-fields are dropped in priority order until under cap:
-
-1. `snapshots.suid` (huge on package-heavy boxes)
-2. `snapshots.systemd_units`
-3. `snapshots.packages`
-4. `snapshots.kernel_modules`
-5. `snapshots.cron`
-6. `snapshots.processes`
-7. Entire `snapshots` block
-8. `auth_events` (last resort — followers replay next tick)
-
-What was dropped is recorded in `payload.truncated: [field1, field2, ...]`
-and surfaces in BlackWatch under `extra.adapter_truncated` and as the
-`trunc=...` flag in the agent's per-tick journal line.
-
-### 8.8 Send-failure backoff
-
-| Consecutive failures | Extra sleep after spool |
-|---|---|
-| 1–3 | none (treat as transient) |
-| 4–6 | 30 s |
-| 7–9 | 60 s |
-| 10–12 | 90 s |
-| ≥ 13 | 300 s (capped) |
-
-Resets to zero on first successful send. Without this, a permanently
-broken URL or revoked IAM would burn the 5000-file spool cap in 2–3
-hours.
-
-### 8.9 Watchdog
-
-`Type=notify` + `WatchdogSec=180`. The agent sends `READY=1` at startup
-and `WATCHDOG=1` after every tick (`_sd_notify` writes to `$NOTIFY_SOCKET`).
-If a collector hangs and a tick fails to complete in 3 min, systemd
-SIGKILLs + restarts the agent — and the projection emits
-`host.collector.stalled` so the cause shows up in `/iam` /
-`/events` rather than as silent agent death.
-
----
-
-## 9. Installation
-
-### 9.1 Prerequisites
-
-- Linux EC2 instance (Amazon Linux 2, 2023, Debian, Ubuntu — all
-  supported). RPM- and DPKG-based families auto-detected.
-- `python3 >= 3.7` (AL2's default 3.7 works; pin handles boto3 compat).
-- `journald` running.
-- Instance role attached, with the `blackwatch-ec2-agent-send` policy
-  (Section 7).
-- Outbound network access to SQS (`sqs.<region>.amazonaws.com` over
-  HTTPS:443). Internal-only EC2s with full egress: works.
-- One-time AWS bootstrap done (queue + IAM policy created — see
-  `deploy/ec2/setup.ps1`).
-
-### 9.2 Install steps
-
-On your dev machine:
-
-```powershell
-$KEY = "<path to .pem>"
-$BOX = "ec2-user@<instance-ip>"
-
-scp -i $KEY scripts/ec2_agent.py scripts/agent_transport.py ${BOX}:/tmp/
-scp -i $KEY deploy/ec2/install-agent.sh     ${BOX}:/tmp/
-```
-
-On the EC2 box:
+### 10.3 Install on a host (as root)
+Copy `scripts/ec2_agent.py`, `scripts/agent_transport.py` and
+`scripts/fim_engine.py` (all three; without `fim_engine.py` FIM is disabled) and
+`deploy/ec2/install-agent.sh`, then:
 
 ```bash
-sudo BLACKWATCH_SQS_URL="https://sqs.us-west-1.amazonaws.com/<ACCT>/blackwatch-ec2-agents" \
-     AWS_REGION="us-west-1" \
-     INTERVAL="60" \
-     CRITICAL_INTERVAL_SEC="2" \
-     BLACKWATCH_ROLLOUT="phase3-canary" \
+# HTTPS
+sudo BLACKWATCH_TRANSPORT=https \
+     BLACKWATCH_INGEST_URL="https://<blackwatch-host>/api/agent/v1/reports" \
+     BLACKWATCH_AGENT_TOKEN="<token for this instance>" \
      BLACKWATCH_TAGS="env=prod,role=api" \
-     AGENT_SRC=/tmp/ec2_agent.py \
-     bash /tmp/install-agent.sh
+     AGENT_SRC=/tmp/ec2_agent.py bash /tmp/install-agent.sh
+
+# SQS
+sudo BLACKWATCH_SQS_URL="https://sqs.us-west-1.amazonaws.com/<ACCT>/blackwatch-ec2-agents" \
+     AWS_REGION="us-west-1" AGENT_SRC=/tmp/ec2_agent.py bash /tmp/install-agent.sh
 ```
 
-What the install script does (in order):
+To go back to SQS later, rerun with `BLACKWATCH_TRANSPORT=sqs` (or edit the env
+file) and the queue URL. The installer, in order: validates the transport
+settings; installs pip, boto3 and inotify_simple; writes
+`/etc/sysctl.d/99-blackwatch-agent.conf` (inotify limits 16384 watches, 256
+instances); installs auditd if missing and loads `bw_fim.rules`; creates
+`/opt/blackwatch` (0755) and `/var/lib/blackwatch-agent` and `/fim` (0700);
+copies the three scripts; for SQS only, runs an optional role pre-flight; writes
+`/etc/blackwatch-agent.env` (0600); writes and starts the systemd unit. Re-running
+it upgrades in place (it skips copying a script onto itself).
 
-1. Validates `BLACKWATCH_SQS_URL` is set.
-2. Installs `python3-pip` if missing (yum/dnf/apt-get).
-3. `pip3 install 'boto3>=1.28,<1.35'` — pinned to a 3.7-compatible range.
-4. `install -d -m 0755 /opt/blackwatch` and `install -d -m 0700 /var/lib/blackwatch-agent`.
-5. Copies the agent (skipped if `AGENT_SRC` == installed path).
-6. Preflight: `aws sts get-caller-identity` + `aws sqs get-queue-attributes`.
-   Warnings only (non-fatal) — catches missing IAM role before you walk
-   away.
-7. Writes `/etc/systemd/system/blackwatch-agent.service` with the full
-   sandboxing + watchdog config.
-8. `systemctl daemon-reload` → `systemctl enable` → `systemctl restart`.
-9. Prints the first ~8 lines of `systemctl status` for sanity.
+### 10.4 Files on the host
+| Path | Mode | Purpose |
+|---|---|---|
+| `/opt/blackwatch/ec2_agent.py` | 0755 | the agent |
+| `/opt/blackwatch/agent_transport.py`, `fim_engine.py` | 0644 | transport and FIM modules |
+| `/opt/blackwatch/python-packages/` | 0755 | boto3 and inotify_simple |
+| `/etc/blackwatch-agent.env` | 0600 | settings and the HTTPS token |
+| `/etc/systemd/system/blackwatch-agent.service` | | the unit |
+| `/etc/sysctl.d/99-blackwatch-agent.conf` | | inotify limits |
+| `/etc/audit/rules.d/bw_fim.rules` | 0640 | FIM audit rules |
+| `/var/lib/blackwatch-agent/` | 0700 | state; holds `sequence` |
+| `/var/lib/blackwatch-agent/spool/` | 0700 | unsent reports (files 0600) |
+| `/var/lib/blackwatch-agent/fim/baseline.db` | 0600 | FIM baseline |
 
-### 9.3 Upgrade / reinstall
-
-The script is idempotent. Re-run with a new `AGENT_SRC` and it replaces
-the script + rewrites the unit + restarts. **Use `AGENT_SRC=/tmp/...`,
-not the installed path** — `install(1)` refuses copy-onto-self
-(handled gracefully now: the script detects same-path and skips the
-copy, but the rest of the script still runs).
-
-To upgrade ONLY the systemd unit (no code change):
-
+### 10.5 Remove
 ```bash
-sudo BLACKWATCH_SQS_URL="..." AWS_REGION="..." \
-     AGENT_SRC=/opt/blackwatch/ec2_agent.py \
-     bash /tmp/install-agent.sh
-```
-
-The "same file" detection skips the copy; the unit is rewritten and the
-service restarted.
-
-### 9.4 Uninstall
-
-```bash
-sudo systemctl stop blackwatch-agent
-sudo systemctl disable blackwatch-agent
-sudo rm -f /etc/systemd/system/blackwatch-agent.service
+sudo systemctl disable --now blackwatch-agent
+sudo rm -f /etc/systemd/system/blackwatch-agent.service /etc/blackwatch-agent.env \
+           /etc/sysctl.d/99-blackwatch-agent.conf /etc/audit/rules.d/bw_fim.rules
 sudo systemctl daemon-reload
 sudo rm -rf /opt/blackwatch /var/lib/blackwatch-agent
-# Optional: detach the IAM policy from the instance role.
+sudo augenrules --load
 ```
+Detach the IAM send policy if you used SQS, and remove the host's entry from
+`BLACKWATCH_AGENT_TOKENS`. Do not remove `/opt/blackwatch` on the OpenVPN box if
+the VPN agent is installed there; it shares the directory.
 
 ---
 
-## 10. Operational commands
+## 11. Security model
 
-### Status + logs
+### 11.1 Privilege and sandbox
+The agent runs as root (it must read `/etc/shadow`, the journal, SUID files and
+`/root/.ssh`), so everything else is locked down. The unit sets
+`NoNewPrivileges`, `ProtectSystem=full`, `ProtectHome=read-only`, `PrivateTmp`,
+`PrivateDevices`, `SystemCallArchitectures=native`,
+`SystemCallFilter=@system-service` with `SystemCallErrorNumber=EPERM`,
+`RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK`, `Type=notify`
+with `WatchdogSec=180`, `Restart=always`, `RestartSec=10`. It also lists newer
+hardening directives (kernel tunables and modules, control groups, clock,
+namespaces, realtime, SUID/SGID, personality, log rate limits) that older
+systemd, including Amazon Linux 2's version 219, ignores and newer systemd
+enforces.
+
+Resource limits: `MemoryLimit=200M`, `CPUQuota=20%`, `TasksMax=64`,
+`LimitNOFILE=1024`, `Nice=10`.
+
+### 11.2 Watchdog
+The agent sends `READY=1` at start and `WATCHDOG=1` in its main loop at least
+every 0.5 s, including while the network is down. If the loop hangs for 3
+minutes systemd kills and restarts it. The spool survives restarts.
+
+### 11.3 Secret scrubbing
+Applied to SSH journal text: `-p<secret>`, `--password=`, `--passwd=`,
+`--pass=`, `MYSQL_PWD=`, `PGPASSWORD=`, `--token=`, `--secret=`, `--api-key=`,
+`--apikey=`, `--key=`, uppercase `...KEY/TOKEN/SECRET/PASSWORD/PASSWD...=`
+assignments, AWS access key ids (`AKIA`/`ASIA`), `aws_secret_access_key=`, and
+`Authorization: Bearer|Basic`. Matches become `***`. The uppercase rule
+deliberately also catches names like `LDAP_PASSWORD`.
+
+### 11.4 Other controls
+- The HTTPS token lives in `/etc/blackwatch-agent.env` (root only), never in the
+  unit file. Tokens are per agent and bound to that agent's instance id.
+- The agent refuses to start with a malformed SQS URL (section 9.1); the IAM
+  policy scoped to one queue is the real control.
+- The spool and its directories are root-only and hold reduced reports; treat
+  them as sensitive.
+
+### 11.5 Accepted risks
+A compromised host can send events for its own instance id (HTTPS tokens and the
+single-queue IAM policy limit this to that identity, but nothing signs the
+payload). A modified agent binary is not detected. Root on the host can alter its
+own journal. boto3 is fetched from PyPI at install time within a pinned range.
+
+---
+
+## 12. Operating it
 
 ```bash
-# Current state
 sudo systemctl status blackwatch-agent
-
-# Live tail
 sudo journalctl -u blackwatch-agent -f
-
-# Recent activity
-sudo journalctl -u blackwatch-agent --since "10 min ago" --no-pager
-
-# Just the per-tick summary lines
-sudo journalctl -u blackwatch-agent --since "1 hour ago" --no-pager | grep "^reported"
-```
-
-### Per-tick log line — field reference
-
-```
-reported instance=i-03499c8ce39a70d21 auth_lines=24 snaps=yes tick_ms=268 mem=56% load=0.065 sess=0 rpmdb=BAD
-```
-
-| Field | Meaning |
-|---|---|
-| `instance=...` | EC2 instance ID from IMDS |
-| `auth_lines=N` | sshd + sudo lines shipped this tick |
-| `snaps=yes` / `no` | Whether the snapshot block was included (only when changed or hourly resync) |
-| `tick_ms=N` | How long collectors + send took |
-| `mem=X%` | Used memory percentage |
-| `load=X` | Normalized 1-min load (1.0 = saturated) |
-| `sess=N` | Currently logged-in interactive sessions |
-| Optional flags: | |
-| `oom=N` | OOM kills detected this tick |
-| `rpmdb=BAD` | RPM DB has stale locks |
-| `stalled=ports,packages` | Collectors that haven't succeeded in 3× their interval |
-| `errs=ports,packages` | Last-run errored (one-off) |
-| `trunc=snapshots.suid,...` | Payload size cap kicked in; these fields were dropped |
-
-### Force a tick + exit (debug)
-
-```bash
-sudo /usr/bin/python3 /opt/blackwatch/ec2_agent.py --once
-```
-
-Runs one tick to stdout (still sends to SQS). Useful when systemd-managed
-output is hiding something.
-
-### Restart, stop, start
-
-```bash
-sudo systemctl restart blackwatch-agent
-sudo systemctl stop blackwatch-agent
-sudo systemctl start blackwatch-agent
-```
-
-### Inspect spool
-
-```bash
+sudo journalctl -u blackwatch-agent --since "10 min ago" --no-pager | grep "^reported"
+sudo /usr/bin/python3 /opt/blackwatch/ec2_agent.py --once    # one report, prints, sends, exits
+sudo systemctl restart blackwatch-agent                       # also forces an immediate FIM scan within 15 s
 sudo ls -la /var/lib/blackwatch-agent/spool/
-sudo cat /var/lib/blackwatch-agent/spool/<latest>.json | jq .
 ```
 
-Spool is FIFO: oldest gets sent first on next flush. Cap enforcement
-drops oldest first.
+The agent logs one line per accepted send:
 
-### Trigger spool flush manually (boto3 must be reachable)
-
-```bash
-# There's no admin command — the agent flushes on the next successful
-# send() call. To force it now, restart:
-sudo systemctl restart blackwatch-agent
 ```
+reported instance=i-0123... transport=https accept_ms=84 auth_lines=2 snaps=no tick_ms=268 mem=56% load=0.07 sess=1
+```
+
+`accept_ms` is time from send to acknowledgement; `load` is the 1-minute load
+divided by CPU count. Optional trailing flags: `oom=N`, `rpmdb=BAD`,
+`stalled=a,b` (collectors that missed 3 x their interval), `errs=a,b` (last run
+failed), `trunc=a,b` (fields dropped to fit SQS).
+
+Verify hardening: `sudo systemctl cat blackwatch-agent`,
+`sudo stat -c "%a %U" /var/lib/blackwatch-agent` (700 root), and
+`sudo auditctl -l | grep bw_fim` plus `systemctl is-active auditd` for whodata.
+Verify FIM end to end by touching a file in a watched directory that tolerates
+junk, for example `sudo touch /etc/cron.d/bw-fim-test`, waiting two seconds,
+then removing it. Do not test by writing to `/etc/sudoers.d/`: a bad sudoers
+file disables sudo.
+
+### Troubleshooting
+| Symptom | Cause and fix |
+|---|---|
+| Repeated `send failed ... spooling`, HTTPS | `rejected` is 401 or 422: check the token and that the token's id equals the instance id; `backpressure` is 429 or 503: check the ingress volume and the `agent-worker` container; `connection` or `timeout`: reach the host over 443 |
+| Repeated `send failed ... spooling`, SQS | `AccessDenied`: attach `blackwatch-ec2-agent-send` to the instance role; `Could not connect`: allow 443 to `sqs.<region>.amazonaws.com` |
+| Refuses to start: invalid SQS URL, or missing ingest URL/token | fix `/etc/blackwatch-agent.env` and restart |
+| Host shows stale in BlackWatch but the agent logs `reported` | check Collection diagnostics, Agent ingestion on `/hosts` and `GET /api/agents/ingress`: reports may be accepted but retrying or quarantined; check the `agent-worker` logs |
+| `watchdog timeout` in the journal | a collector subprocess hung; systemd restarted the agent; read `stalled` and `errs` on the next lines |
+| `rpmdb=BAD` | stale RPM lock files: `sudo rm -f /var/lib/rpm/__db.*; sudo rpm --rebuilddb` |
+| `trunc=...` every tick (SQS) | host is larger than the SQS cap; raise collector intervals or switch to HTTPS |
+| `fim=startup_failed` or `inotify_simple not installed` | reinstall with the installer; FIM then runs periodic-only without it |
+| No whodata actor on changes | auditd missing, rules not loaded, or the path is not in the audit rule list (section 7.2) |
+| Unknown lvalue ... in the journal at install | expected on older systemd; those directives are ignored |
+
+### Failure and data-loss scenarios
+- The agent restarts within 10 s of any crash; unsent reports survive in the spool.
+- When the spool exceeds its caps the oldest reports are deleted.
+- Deleting `/var/lib/blackwatch-agent` loses the spool, the FIM baseline (the next
+  scan reports every file as created) and the sequence counter.
+- A terminated instance's history stays only in BlackWatch's database.
 
 ---
 
-## 11. Verifying hardening is active
+## 13. Known limitations
 
-```bash
-# Sandboxing — note systemd 219 (AL2) silently omits properties it
-# doesn't recognize from `show`; check the unit file directly if so.
-sudo systemctl show blackwatch-agent \
-  -p NoNewPrivileges -p ProtectSystem -p ProtectHome \
-  -p PrivateTmp -p PrivateDevices \
-  -p WatchdogSec -p RestrictAddressFamilies
-
-# Expected on AL2:
-#   NoNewPrivileges=yes
-#   ProtectSystem=full
-#   ProtectHome=read-only
-#   PrivateTmp=yes
-#   PrivateDevices=yes
-#   WatchdogSec=3min   (may be missing from show; check unit file)
-#   RestrictAddressFamilies=[unprintable]   (set, display quirk on 219)
-
-# Read directly from the unit file to be sure (these are present in the
-# unit file but systemd 219 ignores ProtectKernelTunables and friends —
-# they activate automatically on AL2023+):
-sudo grep -E "^(WatchdogSec|RestrictAddressFamilies|Type|NotifyAccess)=" \
-  /etc/systemd/system/blackwatch-agent.service
-
-# Spool permissions
-sudo stat -c "%a %U %G" /var/lib/blackwatch-agent
-# 700 root root
-
-# Watchdog is alive — silence means working
-sudo journalctl -u blackwatch-agent --since "10 min ago" | grep -i "watchdog timeout" \
-  || echo "no watchdog timeouts (good)"
-```
-
-### Test scrubbing end-to-end
-
-```bash
-# Start a process that lingers long enough to be captured (>= 60s)
-sudo bash -c 'sleep 120 --token=SHOULD_BE_REDACTED --password=SECRETPASS' &
-```
-
-Wait 90s, then on the BlackWatch host:
-
-```powershell
-docker compose exec db psql -U blackwatch -d blackwatch -c "
-SELECT envelope->'extra'->'snapshots'->'processes'
-FROM events
-WHERE module = 'ec2.host' AND action = 'host.state.snapshot'
-ORDER BY event_time DESC LIMIT 1;" | Select-String -Pattern 'SHOULD_BE_REDACTED|SECRETPASS|sleep 120'
-```
-
-You should see `sleep 120` in the output but NOT the literal secret
-strings — they'll appear as `--token=***` and `--password=***`.
+1. **A report that is never accepted blocks everything behind it.** The agent
+   replays the spool before sending a new report and treats any non-2xx as
+   failure. A report the server permanently rejects (422, including a report over 1 MiB
+   of JSON) or that the agent refuses to send (a body over 1 MiB) stays at the front of the
+   spool, so all later reports queue behind it until the spool cap deletes it. A
+   corrupt spool file stops replay of everything after it. Clear it by removing
+   the offending file from `/var/lib/blackwatch-agent/spool/`.
+2. **Spool writes are not atomic.** A crash mid-write can leave a partial file
+   (see 1).
+3. **The agent ignores `Retry-After`** and uses its own backoff.
+4. The HTTPS transport does not trim oversized reports; the SQS transport does.
+5. FIM whodata covers only the audit-rule paths in section 7.2.
+6. `host.process.first_seen` is no longer emitted. Its rule and notification
+   entry still exist but can never fire.
+7. Without `fim_engine.py` on the host, FIM is silently disabled.
 
 ---
 
-## 12. End-to-end pipeline
+## 14. Design decisions in force
 
-```
-[on EC2]                          [AWS]                    [BlackWatch]
-   ec2_agent.py                                              
-   └─ snapshot collectors                                    
-      heartbeat metrics                                      
-      journalctl sshd/sudo                                   
-   └─ scrub()                                                
-   └─ _shrink_for_sqs() cap                                  
-   └─ json.dumps                                             
-   └─ boto3 SendMessage   ───►   SQS queue              ───► aws_sqs.drain()
-                                  blackwatch-ec2-agents      └─ json.loads body
-                                                              └─ pipeline.ingest_payload(
-                                                                    module="ec2.host", ...)
-                                                                 └─ Ec2HostAdapter.parse()
-                                                                    │ type guards
-                                                                    │ size cap (snapshots)
-                                                                    │ build Events
-                                                                 └─ engine.evaluate()  → severity
-                                                                 └─ storage.insert_event()
-                                                                 └─ notifier.dispatch() if new
-                                                                 └─ hosts.projection.project()
-                                                                    └─ diff vs last snapshot
-                                                                    └─ emit derived events
-                                                                       (port.opened, key.added,
-                                                                        agent.stale, etc.)
-```
-
-### Dedup model
-
-Two layers:
-
-1. **Per-line journal cursor** in event_id (`uuid5(NAMESPACE_URL,
-   f"host-auth:{instance_id}:{__CURSOR}")`). Re-reads of overlapping
-   `read_auth_events` windows always produce the same event_id →
-   `ON CONFLICT (event_id) DO NOTHING` at insert.
-2. **Insert-time gated dispatch** (added in v1.2 of the pipeline):
-   notifications fire ONLY when `insert_event()` returned `True` (a new
-   row was created). Re-shipped lines don't double-notify.
+- Process **command lines are not collected**; they can hold secrets and
+  scrubbing cannot guarantee safety. Process inventory (user, PID, name) is
+  context only.
+- Sudo arguments are not collected; auditd `PROCTITLE` is ignored.
+- `host.process.first_seen` was removed: a new process name is inventory churn,
+  not a threat signal.
+- Package inventory is hourly and supporting only.
+- Delivery is judged by server receive time, and acceptance and processing are
+  tracked separately, so transport or database delay is never reported as an
+  agent outage.
+- An absent FIM actor means unknown. A collector that fails keeps its last value
+  visible but marked old, with the error shown.
+- Database changes for this feature are additive only; events, snapshots,
+  delivery rows and FIM evidence are never deleted by a code change.
 
 ---
 
-## 13. Failure modes & recovery
+## 15. Related documents
 
-### Common operational failures
-
-| Symptom | Diagnosis | Recovery |
-|---|---|---|
-| `send failed, spooling: An error occurred (AccessDenied)` repeating | Instance role missing the `blackwatch-ec2-agent-send` policy, or queue ARN mismatch | Attach the policy; verify `aws sqs get-queue-attributes --queue-url $URL` succeeds from the box |
-| `send failed: Could not connect to the endpoint URL` | Egress to SQS blocked (security group, NACL, VPC endpoint misconfig) | Allow outbound 443 to `sqs.<region>.amazonaws.com` |
-| `ERROR: BLACKWATCH_SQS_URL doesn't look like a valid SQS URL` at startup | Typo in env var or tampered unit | Fix in `/etc/systemd/system/blackwatch-agent.service`, `daemon-reload`, restart |
-| `watchdog timeout (limit 3min)` in journal | Agent tick hung >3 min — usually a collector subprocess blocking | systemd auto-restarts; check `collector_errors` and `stalled_collectors` on next ticks |
-| `rpmdb=BAD` flag persists across ticks | Stale RPM lock files (`/var/lib/rpm/__db.*`) | `sudo rm -f /var/lib/rpm/__db.*; sudo rpm --rebuilddb` |
-| `trunc=snapshots.suid,...` flag every tick | Box is bigger than the SQS body cap | Expected on large boxes; the truncation is recorded. To reduce: raise per-collector intervals, or accept the dropped fields. |
-| `stalled=ports,packages` in flag set | A collector errored once and hasn't recovered | Check `collector_errors`, often a missing binary or perms issue. Restart agent if env changed. |
-| Spool hits its cap (`Dropped oldest spool file`) | SQS unreachable for hours | Once SQS recovers, the oldest backlog is gone — accepted trade-off for not filling `/var` |
-| No `reported` lines but unit is active | Most likely IAM-related; check journal for `AccessDenied` | Same as first row |
-
-### Boot-time recovery
-
-The unit has `Restart=always` + `RestartSec=10`. Any crash (OOM kill,
-unhandled exception, watchdog timeout) results in a 10-second restart.
-Spool survives — pending payloads are sent on the next successful tick.
-
-### Total data loss scenarios
-
-- Spool dir wiped (`rm -rf /var/lib/blackwatch-agent`) → that backlog
-  is gone, agent recreates the dir on next spool.
-- EC2 instance terminated → that box's history is gone. No agent
-  state on BW survives the box, except whatever events have already
-  been received and stored in BW's database.
-
----
-
-## 14. Known limitations / accepted risk
-
-### Accepted today
-
-| Risk | Mitigation today | Future fix |
-|---|---|---|
-| Compromised box could spoof events under another `instance_id` | IAM policy on instance roles restricts to ONE queue (single-tenant queue per BW deployment); adapter validates `instance_id` regex but can't verify sender identity from SQS body | Per-instance HMAC signing using a key in SSM Parameter Store; BW-side key store verifies before adapter runs |
-| Tampered agent binary at `/opt/blackwatch/ec2_agent.py` not detected | File installed `0755 root:root`; non-root can't modify | Code-signing + signature check at startup |
-| boto3 fetched from PyPI at install time | Pin range `>=1.28,<1.35`; reasonably stable | Vendored wheel in `deploy/ec2/` |
-| Local journal can be tampered with by root on the box | None — root on the box can do anything | Forwarder to remote journald (rsyslog) for tamper-evident log of last-known-good lines |
-| sd_notify not supported on systemd <209 | Doesn't apply to any actively supported distro | n/a |
-| Many sandboxing directives no-op on AL2 systemd 219 | Compatibility documented; activate automatically on AL2023+ | Move to AL2023 |
-
-### Out of scope (different feature, not a fix)
-
-- Outbound network connection monitoring (DNS, established TCP) — handled
-  by VPC Flow Logs path (planned).
-- Per-process syscall auditing — would need auditd integration.
-- File integrity at content level (current FIM only hashes a fixed
-  whitelist of paths).
-- Container introspection (cgroup, namespaces) — agent runs at host
-  level only.
-
----
-
-## 15. Quick reference card
-
-```
-INSTALL:        sudo BLACKWATCH_SQS_URL=... AWS_REGION=... AGENT_SRC=/tmp/ec2_agent.py bash /tmp/install-agent.sh
-LOGS LIVE:      sudo journalctl -u blackwatch-agent -f
-LOGS RECENT:    sudo journalctl -u blackwatch-agent --since "10 min ago" --no-pager
-STATUS:         sudo systemctl status blackwatch-agent
-FORCE TICK:     sudo /usr/bin/python3 /opt/blackwatch/ec2_agent.py --once
-RESTART:        sudo systemctl restart blackwatch-agent
-SPOOL DIR:      /var/lib/blackwatch-agent/spool/
-UNIT FILE:      /etc/systemd/system/blackwatch-agent.service
-AGENT BINARY:   /opt/blackwatch/ec2_agent.py
-IAM POLICY:     blackwatch-ec2-agent-send (sqs:SendMessage to blackwatch-ec2-agents)
-SQS QUEUE:      blackwatch-ec2-agents (region: us-west-1)
-TARGET MODULE:  ec2.host (BlackWatch SQS connector)
-PIPELINE:       agent → SQS → aws_sqs.drain → Ec2HostAdapter → pipeline → events table + hosts projection
-```
-
----
-
-*Document version: v1.5 (matches agent version). Update on any agent or
-install-script change.*
-
----
-
-## Related docs
-
-- [`docs/fim.md`](fim.md) — File Integrity Monitoring deep dive (Parts 1-3, the FIM engine, all UI surfaces, troubleshooting)
-- [`docs/vpn-agent.md`](vpn-agent.md) — sister doc for the OpenVPN agent (same hardening playbook)
-- [`docs/EVENT_SCHEMA.md`](EVENT_SCHEMA.md) — Event envelope schema
-- [`deploy/ec2/README.md`](../deploy/ec2/README.md) — Quick-start (5 min)
+- [`vpn-agent.md`](vpn-agent.md): the OpenVPN agent (SQS only, same sandbox approach).
+- [`EVENT_SCHEMA.md`](EVENT_SCHEMA.md): the event envelope.
+- [`ui-design.md`](ui-design.md): the Hosts and FIM pages.

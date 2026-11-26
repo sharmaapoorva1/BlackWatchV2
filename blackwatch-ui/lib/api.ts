@@ -38,6 +38,8 @@ import type {
   ApiGwAlertsResponse,
   ApiGwFailuresResponse,
   IamViewResponse,
+  AwsTimelineResponse,
+  AwsTimelineUserResponse,
   NotificationChannel,
   NotificationChannelsResponse,
   NotificationRule,
@@ -580,6 +582,20 @@ export async function fetchIam(): Promise<IamViewResponse> {
   const res = await bwFetch(`/api/iam`);
   if (!res.ok) throw new Error(`fetchIam failed: ${res.status}`);
   return (await res.json()) as IamViewResponse;
+}
+
+// --- AWS timeline ---------------------------------------------------------
+
+export async function fetchAwsTimeline(tab: "critical" | "high" | "all", hours: number): Promise<AwsTimelineResponse> {
+  const res = await bwFetch(`/api/aws-timeline?tab=${tab}&hours=${hours}&limit=200`);
+  if (!res.ok) throw new Error(`fetchAwsTimeline failed: ${res.status}`);
+  return (await res.json()) as AwsTimelineResponse;
+}
+
+export async function fetchAwsTimelineUser(principal: string, hours: number): Promise<AwsTimelineUserResponse> {
+  const res = await bwFetch(`/api/aws-timeline/user?principal=${encodeURIComponent(principal)}&hours=${hours}&limit=1000`);
+  if (!res.ok) throw new Error(`fetchAwsTimelineUser failed: ${res.status}`);
+  return (await res.json()) as AwsTimelineUserResponse;
 }
 
 // --- VPN ------------------------------------------------------------------

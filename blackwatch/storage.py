@@ -134,6 +134,59 @@ def query_events(
     return [row[0] for row in rows]
 
 
+_SEVERITY_RANK_SQL = (
+    "CASE severity WHEN 'critical' THEN 5 WHEN 'high' THEN 4 WHEN 'medium' THEN 3 "
+    "WHEN 'low' THEN 2 WHEN 'informational' THEN 1 ELSE 0 END"
+)
+_SEVERITY_BY_RANK = {5: "critical", 4: "high", 3: "medium", 2: "low", 1: "informational"}
+
+
+def aws_activity_severity_counts(*, module: str, since: datetime) -> dict[str, int]:
+    """Event counts per severity for one module since `since`. Events no rule has
+    scored are counted under "none"."""
+    with get_pool().connection() as conn:
+        rows = conn.execute(
+            "SELECT COALESCE(severity, 'none'), count(*) FROM events "
+            "WHERE module = %s AND event_time >= %s GROUP BY 1",
+            (module, since),
+        ).fetchall()
+    return {str(sev): int(n) for sev, n in rows}
+
+
+def aws_activity_users(*, module: str, since: datetime, limit: int = 200) -> list[dict[str, Any]]:
+    """One row per actor principal for a module since `since`, most recently
+    active first. Read-only aggregate over the existing events table."""
+    sql = f"""
+        SELECT actor_principal,
+               count(*) AS events,
+               max(event_time) AS last_seen,
+               count(*) FILTER (WHERE outcome <> 'success') AS failed,
+               count(DISTINCT actor_source_ip) FILTER (WHERE actor_source_ip IS NOT NULL) AS source_ips,
+               max({_SEVERITY_RANK_SQL}) AS top_rank,
+               COALESCE(bool_or(actor_is_root), false) AS is_root
+        FROM events
+        WHERE module = %s AND event_time >= %s
+          AND actor_principal IS NOT NULL AND actor_principal <> ''
+        GROUP BY actor_principal
+        ORDER BY max(event_time) DESC
+        LIMIT %s
+    """
+    with get_pool().connection() as conn:
+        rows = conn.execute(sql, (module, since, min(max(limit, 1), 1000))).fetchall()
+    return [
+        {
+            "principal": r[0],
+            "events": int(r[1]),
+            "last_seen": r[2].isoformat() if hasattr(r[2], "isoformat") else r[2],
+            "failed": int(r[3]),
+            "source_ips": int(r[4]),
+            "top_severity": _SEVERITY_BY_RANK.get(int(r[5] or 0)),
+            "is_root": bool(r[6]),
+        }
+        for r in rows
+    ]
+
+
 def get_event(event_id: str) -> dict[str, Any] | None:
     with get_pool().connection() as conn:
         row = conn.execute(

@@ -8,6 +8,7 @@ import {
   FileLock2,
   Globe,
   HardDrive,
+  History,
   Key,
   LayoutDashboard,
   Lock,
@@ -74,6 +75,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/aws-posture", label: "AWS posture", icon: Shield, keywords: "findings drift misconfiguration", chord: "p" },
       { href: "/iam", label: "IAM", icon: Key, keywords: "cloudtrail identity logins" },
+      { href: "/aws-timeline", label: "AWS Timeline", icon: History, keywords: "cloudtrail users activity history who did what" },
       { href: "/fim", label: "File integrity", icon: FileLock2, keywords: "fim files changes" },
       { href: "/ueba", label: "UEBA", icon: UserSearch, keywords: "anomalies baselines behavior" },
       { href: "/rules", label: "Rules", icon: ScrollText, keywords: "detections severity", chord: "r" },

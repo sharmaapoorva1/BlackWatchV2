@@ -1884,6 +1884,91 @@ def iam_view() -> dict[str, Any]:
     }
 
 
+# ---------- AWS timeline (CloudTrail activity by severity and by user) -------
+
+_AWS_TIMELINE_MODULE = "aws.cloudtrail"
+_AWS_TIMELINE_TABS = {"critical": ["critical"], "high": ["high"], "all": None}
+
+
+@router.get("/aws-timeline")
+def aws_timeline_view(
+    tab: Literal["critical", "high", "all"] = "all",
+    hours: int = Query(default=24, ge=1, le=720),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> dict[str, Any]:
+    """Read-only AWS activity: latest CloudTrail events by severity tab, plus
+    one row per user. Only what BlackWatch ingests from CloudTrail appears here
+    (the EventBridge filter decides which API calls arrive). Events no rule has
+    scored have no severity and show under "all" only."""
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    counts = storage.aws_activity_severity_counts(module=_AWS_TIMELINE_MODULE, since=since)
+    events = storage.query_events(
+        module=_AWS_TIMELINE_MODULE,
+        severities=_AWS_TIMELINE_TABS[tab],
+        since=since,
+        limit=limit,
+    )
+    users = storage.aws_activity_users(module=_AWS_TIMELINE_MODULE, since=since)
+    return {
+        "tab": tab,
+        "hours": hours,
+        "counts": {
+            "critical": counts.get("critical", 0),
+            "high": counts.get("high", 0),
+            "all": sum(counts.values()),
+        },
+        "events": events,
+        "users": users,
+    }
+
+
+@router.get("/aws-timeline/user")
+def aws_timeline_user(
+    principal: str = Query(min_length=1, max_length=512),
+    hours: int = Query(default=168, ge=1, le=720),
+    limit: int = Query(default=500, ge=1, le=1000),
+) -> dict[str, Any]:
+    """Everything BlackWatch holds for one CloudTrail principal, newest first,
+    with a short summary (first/last seen, failures, source IPs, top actions)."""
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    events = storage.query_events(
+        module=_AWS_TIMELINE_MODULE,
+        actor_principal=principal,
+        since=since,
+        limit=limit,
+    )
+    times = [str(e.get("event_time")) for e in events if e.get("event_time")]
+    ips: dict[str, int] = {}
+    actions: dict[str, int] = {}
+    severities: dict[str, int] = {}
+    failed = 0
+    for e in events:
+        ip = (e.get("actor") or {}).get("source_ip")
+        if ip:
+            ips[ip] = ips.get(ip, 0) + 1
+        action = e.get("action") or ""
+        actions[action] = actions.get(action, 0) + 1
+        sev = e.get("severity") or "none"
+        severities[sev] = severities.get(sev, 0) + 1
+        if e.get("outcome") not in (None, "success"):
+            failed += 1
+    return {
+        "principal": principal,
+        "hours": hours,
+        "truncated": len(events) >= limit,
+        "summary": {
+            "events": len(events),
+            "failed": failed,
+            "first_seen": min(times) if times else None,
+            "last_seen": max(times) if times else None,
+            "source_ips": sorted(ips.items(), key=lambda kv: -kv[1])[:10],
+            "top_actions": sorted(actions.items(), key=lambda kv: -kv[1])[:10],
+            "severities": severities,
+        },
+        "events": events,
+    }
+
+
 @router.get("/rds")
 def rds_view() -> dict[str, Any]:
     """Single endpoint that powers the Next.js /rds page.

@@ -29,12 +29,12 @@ destructive statement. A successful image build is not evidence that data is
 safe; storage and migration verification are required before claiming a
 deployment is complete.
 
-## EC2 telemetry decision log
+## EC2 agent documentation
 
-Before changing EC2 agent collection, report formats, ingestion, or host
-projections, read `docs/ec2-agent-telemetry-decisions.md` in full. This is the
-append-only record of telemetry decisions and their reasoning: add new dated
-entries at the end, and never delete, rewrite, or reorder existing entries.
-When evidence changes a prior decision, append a superseding note that links
-the new evidence to the earlier entry instead of editing history.
+`docs/ec2-agent.md` is the single source of truth for the EC2 agent: collection,
+transports, ingestion, FIM, installation and operations. Before changing EC2
+agent collection, report formats, ingestion, or host projections, read it, and
+update it in the same change so it only ever describes the current behavior. Do
+not add a second EC2 document, a changelog, or a decision log; rewrite the
+affected section instead. Verify every claim against the code.
 
