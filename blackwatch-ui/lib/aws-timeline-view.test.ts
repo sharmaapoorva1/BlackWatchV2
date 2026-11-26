@@ -7,6 +7,7 @@ import {
   groupByDay,
   parseAwsTimelineHours,
   parseAwsTimelineTab,
+  toAwsActivityRow,
 } from "./aws-timeline-view.ts";
 import type { EventEnvelope } from "./types.ts";
 
@@ -37,6 +38,22 @@ test("cards mark root activity critical and zero counts ok", () => {
   });
   assert.equal(root[0].tone, "critical");
   assert.equal(root[2].tone, "critical");
+});
+
+test("cards link to the matching tab and keep the chosen window", () => {
+  const cards = buildAwsTimelineCards({ counts: { critical: 1, high: 0, all: 3 }, users: [], hours: 168 });
+  assert.equal(cards[0].href, "/aws-timeline?tab=critical&hours=168#activity");
+  assert.equal(cards[2].href, "/aws-timeline?tab=users&hours=168#activity");
+});
+
+test("activity row flags failures and tolerates missing fields", () => {
+  const row = toAwsActivityRow(ev("x", "2026-11-25T10:00:00Z", { outcome: "failure", target: { id: "arn:t" } }));
+  assert.equal(row.failed, true);
+  assert.equal(row.target, "arn:t");
+  assert.equal(row.severity, null);
+  const bare = toAwsActivityRow({ event_id: "y", event_time: "2026-11-25T10:00:00Z", action: "a" });
+  assert.equal(bare.failed, false);
+  assert.equal(bare.principal, null);
 });
 
 test("csv is oldest first, quotes commas and neutralizes formulas", () => {

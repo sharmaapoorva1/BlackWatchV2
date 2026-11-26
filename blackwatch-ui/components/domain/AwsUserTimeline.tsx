@@ -1,13 +1,15 @@
 "use client";
 
 import clsx from "clsx";
-import { format } from "date-fns";
+import { format, formatDistanceToNowStrict } from "date-fns";
 import { Download } from "lucide-react";
 import type { EventEnvelope } from "@/lib/types";
 import { eventsToCsv, groupByDay } from "@/lib/aws-timeline-view";
 import { Button } from "@/components/ui/Button";
+import { Subsection } from "@/components/layout/Subsection";
 import { EventLink } from "./EventPeek";
-import { SeverityBadge, severityBorderBg } from "./SeverityBadge";
+import { IpCell } from "./IpCell";
+import { severityBorderBg } from "./SeverityBadge";
 
 export function DownloadCsvButton({ events, principal }: { events: EventEnvelope[]; principal: string }) {
   function download() {
@@ -27,43 +29,58 @@ export function DownloadCsvButton({ events, principal }: { events: EventEnvelope
   );
 }
 
-/** Vertical history of one user: days newest first, each event a line with its time. */
+const OPEN_DAYS = 3;
+
+/** One collapsible block per day, newest first. Each line: time, action, target, IP. */
 export function UserTimeline({ events }: { events: EventEnvelope[] }) {
   const days = groupByDay(events);
-  if (days.length === 0) return null;
   return (
-    <div className="flex flex-col gap-6">
-      {days.map((day) => (
-        <section key={day.day} aria-label={day.day}>
-          <h3 className="mb-2 font-mono text-xs uppercase tracking-wide text-fg-subtle">
-            {day.day} · {day.events.length} event{day.events.length === 1 ? "" : "s"}
-          </h3>
-          <ol className="flex flex-col border-l border-line-soft">
+    <div className="flex flex-col gap-3">
+      {days.map((day, index) => (
+        <Subsection
+          key={day.day}
+          id={`day-${day.day}`}
+          title={day.day}
+          count={day.events.length}
+          defaultOpen={index < OPEN_DAYS}
+        >
+          <ul className="flex flex-col divide-y divide-line-soft rounded-md border border-line-soft bg-surface-1">
             {day.events.map((e) => {
+              const when = new Date(e.event_time);
               const ip = (e.actor as { source_ip?: string } | undefined)?.source_ip;
               const target = e.target?.id ?? e.target?.name;
               const failed = e.outcome !== undefined && e.outcome !== "success";
               return (
-                <li key={e.event_id} className="relative flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 py-1.5 pl-4">
+                <li
+                  key={e.event_id}
+                  className="relative grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)] items-baseline gap-x-3 gap-y-0.5 px-3 py-2 sm:grid-cols-[4.5rem_minmax(0,1fr)_minmax(0,14rem)_8rem]"
+                >
                   <span
                     aria-hidden
-                    className={clsx("absolute -left-[3px] top-3 h-1.5 w-1.5 rounded-full", severityBorderBg(e.severity as string | null))}
+                    className={clsx("pointer-events-none absolute left-0 top-0 h-full w-0.5", severityBorderBg(e.severity as string | null))}
                   />
-                  <time dateTime={e.event_time} className="font-mono text-xs text-fg-muted">
-                    {format(new Date(e.event_time), "HH:mm:ss")}
+                  <time
+                    dateTime={e.event_time}
+                    title={`${format(when, "yyyy-MM-dd HH:mm:ss")} · ${formatDistanceToNowStrict(when, { addSuffix: true })}`}
+                    className="font-mono text-xs text-fg-muted"
+                  >
+                    {format(when, "HH:mm:ss")}
                   </time>
-                  <EventLink eventId={e.event_id} className="break-all font-mono text-xs text-fg hover:text-signal">
-                    {e.action}
-                  </EventLink>
-                  {failed && <span className="text-xs text-sev-critical">FAILED</span>}
-                  <SeverityBadge severity={(e.severity as string | null | undefined) ?? null} />
-                  {target && <span className="break-all text-xs text-fg-muted">{String(target)}</span>}
-                  {ip && <span className="font-mono text-xs text-fg-subtle">{ip}</span>}
+                  <span className="min-w-0 break-all">
+                    <EventLink eventId={e.event_id} className="font-mono text-xs text-fg transition-colors hover:text-signal">
+                      {e.action}
+                    </EventLink>
+                    {failed && <span className="ml-2 text-xs text-sev-critical">failed</span>}
+                  </span>
+                  <span className="col-start-2 min-w-0 break-all text-xs text-fg-muted sm:col-start-auto">{target ? String(target) : ""}</span>
+                  <span className="col-start-2 text-xs sm:col-start-auto sm:text-right">
+                    <IpCell value={ip ?? null} className="text-xs text-fg-subtle" />
+                  </span>
                 </li>
               );
             })}
-          </ol>
-        </section>
+          </ul>
+        </Subsection>
       ))}
     </div>
   );

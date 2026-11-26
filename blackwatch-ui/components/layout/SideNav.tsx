@@ -80,13 +80,10 @@ export function SideNav({ mobileOpen = false, onCloseMobile }: { mobileOpen?: bo
         />
       )}
       <aside
-        className={`${desktop ? "relative shrink-0" : "fixed inset-y-0 left-0 z-50 w-64 shadow-2xl"} ${compact ? "w-14" : "w-60"} border-r border-line bg-canvas text-fg`}
+        className={`${desktop ? "relative shrink-0" : "fixed inset-y-0 left-0 z-50 w-64 shadow-2xl"} ${compact ? "w-16" : "w-60"} flex flex-col border-r border-line bg-canvas text-fg`}
       >
-        <nav
-          id="mobile-navigation"
-          aria-label="Primary"
-          className="flex h-full min-h-0 flex-col overflow-y-auto bg-canvas"
-        >
+        {/* Only the list scrolls. The collapse button below sits outside it, so it is always pinned. */}
+        <nav id="mobile-navigation" aria-label="Primary" className={`min-h-0 flex-1 overflow-y-auto bg-canvas ${compact ? "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden" : ""}`}>
           <div className="py-2">
             {NAV_GROUPS.map((group, index) => {
               // The group holding the current page is always shown open so the
@@ -123,17 +120,25 @@ export function SideNav({ mobileOpen = false, onCloseMobile }: { mobileOpen?: bo
               );
             })}
           </div>
-          {desktop && (
-            <button
-              type="button"
-              onClick={toggle}
-              aria-label={compact ? "Expand sidebar" : "Collapse sidebar"}
-              className="mt-auto flex h-11 shrink-0 cursor-pointer items-center justify-center border-t border-line-soft text-fg-muted transition-colors hover:bg-surface-1 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal/70 md:h-10"
-            >
-              {compact ? <ChevronsRight size={14} /> : <ChevronsLeft size={14} />}
-            </button>
-          )}
         </nav>
+        {desktop && (
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={compact ? "Expand sidebar" : "Collapse sidebar"}
+            title={compact ? "Expand sidebar" : "Collapse sidebar"}
+            className="flex h-11 w-full shrink-0 cursor-pointer items-center justify-center gap-2 border-t border-line bg-canvas text-xs text-fg-muted transition-colors hover:bg-surface-1 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal/70"
+          >
+            {compact ? (
+              <ChevronsRight size={20} strokeWidth={1.75} />
+            ) : (
+              <>
+                <ChevronsLeft size={20} strokeWidth={1.75} />
+                <span>Collapse</span>
+              </>
+            )}
+          </button>
+        )}
       </aside>
     </>
   );
@@ -147,10 +152,12 @@ function NavItem({ item, pathname, collapsed }: { item: NavEntry; pathname: stri
       href={item.href}
       title={collapsed ? item.label : undefined}
       aria-current={active ? "page" : undefined}
-      className={`relative mx-2 flex min-h-11 cursor-pointer items-center gap-3 rounded px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70 md:min-h-9 ${collapsed ? "justify-center px-0" : ""} ${active ? "bg-signal/10 text-fg" : "text-fg-muted hover:bg-surface-1 hover:text-fg"}`}
+      className={`relative mx-2 flex min-h-11 cursor-pointer items-center gap-3 rounded px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/70 md:min-h-10 ${collapsed ? "justify-center px-0 md:min-h-11" : ""} ${active ? "bg-signal/10 text-fg" : "text-fg-muted hover:bg-surface-1 hover:text-fg"}`}
     >
       {active && <span aria-hidden="true" className="absolute inset-y-1.5 left-0 w-0.5 rounded bg-signal" />}
-      <Icon size={15} strokeWidth={1.5} />
+      <span aria-hidden="true" className="flex shrink-0">
+        <Icon size={collapsed ? 22 : 18} strokeWidth={1.75} />
+      </span>
       <span className={collapsed ? "sr-only" : "truncate"}>{item.label}</span>
     </Link>
   );

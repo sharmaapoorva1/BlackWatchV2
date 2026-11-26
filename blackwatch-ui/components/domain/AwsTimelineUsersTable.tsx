@@ -3,12 +3,14 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import type { AwsTimelineUser } from "@/lib/types";
+import { userTimelineHref } from "@/lib/aws-timeline-view";
 import { DataTable, type ColumnDef } from "@/components/ui/DataTable";
 import { SeverityBadge } from "./SeverityBadge";
 import { TimestampCell } from "./TimestampCell";
 
 const SEVERITY_RANK: Record<string, number> = { critical: 5, high: 4, medium: 3, low: 2, informational: 1 };
 
+/** One row per user. The name opens that user's timeline. */
 export function AwsTimelineUsersTable({ rows, hours }: { rows: AwsTimelineUser[]; hours: number }) {
   const columns = useMemo<ColumnDef<AwsTimelineUser, unknown>[]>(
     () => [
@@ -21,25 +23,21 @@ export function AwsTimelineUsersTable({ rows, hours }: { rows: AwsTimelineUser[]
         cell: ({ row }) => (
           <span className="inline-flex flex-wrap items-center gap-2">
             <Link
-              href={`/aws-timeline/user?principal=${encodeURIComponent(row.original.principal)}&hours=${hours}`}
+              href={userTimelineHref(row.original.principal, hours)}
               className="text-fg underline-offset-2 hover:text-signal hover:underline"
             >
               {row.original.principal}
             </Link>
-            {row.original.is_root && (
-              <span className="inline-flex h-5 items-center rounded-sm border border-sev-critical/40 bg-sev-critical/10 px-1.5 font-mono text-xs text-sev-critical">
-                root
-              </span>
-            )}
+            {row.original.is_root && <span className="text-xs text-sev-critical">root</span>}
           </span>
         ),
       },
       {
         id: "last",
-        header: "Last activity",
+        header: "Last active",
         accessorFn: (r) => Date.parse(r.last_seen) || 0,
         sortDescFirst: true,
-        meta: { label: "Last activity", className: "whitespace-nowrap" },
+        meta: { label: "Last active", className: "whitespace-nowrap" },
         cell: ({ row }) => <TimestampCell value={row.original.last_seen} />,
       },
       {
@@ -64,14 +62,6 @@ export function AwsTimelineUsersTable({ rows, hours }: { rows: AwsTimelineUser[]
           ),
       },
       {
-        id: "ips",
-        header: "Source IPs",
-        accessorFn: (r) => r.source_ips,
-        sortDescFirst: true,
-        meta: { label: "Source IPs", className: "font-mono text-xs" },
-        cell: ({ row }) => row.original.source_ips,
-      },
-      {
         id: "severity",
         header: "Highest severity",
         accessorFn: (r) => SEVERITY_RANK[r.top_severity ?? ""] ?? 0,
@@ -86,12 +76,12 @@ export function AwsTimelineUsersTable({ rows, hours }: { rows: AwsTimelineUser[]
   return (
     <DataTable
       tableId="aws-timeline-users"
-      ariaLabel="AWS users and roles seen in CloudTrail"
+      ariaLabel="AWS users"
       columns={columns}
       data={rows}
       getRowId={(r) => r.principal}
       initialSorting={[{ id: "last", desc: true }]}
-      emptyMessage="No users seen in this window."
+      emptyMessage="No users."
     />
   );
 }
